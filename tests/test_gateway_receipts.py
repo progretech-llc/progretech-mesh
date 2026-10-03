@@ -50,7 +50,8 @@ class ReceiptTests(unittest.TestCase):
             main.DEV_AGENT_REGISTRY.clear();main.DEV_AGENT_REGISTRY['host']=self.host
             payload={'agents':[{'id':'host--coder','name':'Mak'}],'enrollment_restore_version':1}
             main.update_from_gateway('host',{'type':'control_center_roster','payload':payload})
-            self.assertNotIn('host--coder',main.DEV_AGENT_REGISTRY)
+            self.assertTrue(main.DEV_AGENT_REGISTRY['host--coder']['gateway_linked'])
+            self.assertNotIn('public_key',main.DEV_AGENT_REGISTRY['host--coder'])
             receipt=issue_receipt(self.role,self.host,main.device_credential_secret())
             with patch('main.verify_runtime_agent_identity',side_effect=self.verifier):
                 main.update_from_gateway('host',{'type':'control_center_roster','payload':{**payload,'enrollment_receipts':[receipt]}})

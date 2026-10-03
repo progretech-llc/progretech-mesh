@@ -120,19 +120,23 @@ def register_gateway_agents(gateway_id, payload, registry):
         accepted.pop(gateway_id+'--'+host_runtime, None)
     host['identified_agents'] = [{'id': aid, 'name': item['name'], 'role': item.get('role', '')}
         for aid, item in accepted.items()]
-    # Retire old automatically linked records. Explicitly signed agents survive
-    # roster refresh/removal with their own PEM, seal and fingerprint intact.
+    # The authenticated gateway owns discovered roles. Keep them usable as
+    # host-linked fleet entries; a separate CodeSeal enrollment can upgrade each
+    # role to an independent identity without changing its runtime binding.
     for aid, record in list(registry.items()):
-        if record.get('control_center_gateway') == gateway_id and not record.get('gateway_enrollment'):
+        if (record.get('control_center_gateway') == gateway_id and record.get('gateway_linked')
+                and aid not in accepted):
             del registry[aid]
     for aid, item in accepted.items():
         record = registry.get(aid)
-        if item.get('office_worker') is True and not record:
+        if not record:
             record = registry[aid] = {'id':aid, 'name':item['name'], 'role':item.get('role',''),
                 'owner_id':host['owner_id'], 'control_center_gateway':gateway_id,
-                'trust_state':'verified', 'office_worker':True, 'runtime':'Factory worker',
-                'phase':'Host-owned office worker', 'task':'Office worker', 'model':'Office execution model'}
-        if not record or not (record.get('gateway_enrollment') or record.get('office_worker')):
+                'trust_state':'verified', 'gateway_linked':True,
+                'office_worker':item.get('office_worker') is True,
+                'runtime':'OpenClaw role', 'phase':'Linked through verified gateway',
+                'task':'Gateway role', 'model':'Unknown'}
+        if not (record.get('gateway_enrollment') or record.get('gateway_linked') or record.get('office_worker')):
             continue
         activity = item.get('activity') if isinstance(item.get('activity'), dict) else {}
         observed = activity.get('state', item.get('state', 'unknown'))

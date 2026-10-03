@@ -1808,8 +1808,8 @@
       <dl class="identity-grid">
         <dt>Name</dt><dd>${escapeHtml(agent.name)}</dd>
         <dt>Role</dt><dd>${escapeHtml(agent.role)}</dd>
-        <dt>Trust state</dt><dd><span class="trust-badge ${escapeHtml(agent.trust_state)}">${trustLabel(agent.trust_state)}</span></dd>
-        <dt>Fingerprint</dt><dd><code>${escapeHtml(agent.fingerprint)}</code></dd>
+        <dt>Trust state</dt><dd><span class="trust-badge ${escapeHtml(agent.trust_state)}">${agent.gateway_linked ? 'Linked through verified host' : trustLabel(agent.trust_state)}</span></dd>
+        <dt>Fingerprint</dt><dd><code>${escapeHtml(agent.fingerprint || (agent.gateway_linked ? 'Independent identity not enrolled' : 'Unavailable'))}</code></dd>
         <dt>Transport</dt><dd>${escapeHtml(agent.transport)}</dd>
         <dt>Last heartbeat</dt><dd>${escapeHtml(agent.last_heartbeat || "Never")}</dd>
       </dl>

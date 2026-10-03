@@ -200,11 +200,13 @@ class CloudTests(unittest.TestCase):
         for aid in ['lyra--taken','rend--worker','../../worker']:
             self.assertFalse(cloud.register_gateway_agents('lyra',{'agents':[{'id':aid,'name':'Worker'}]},self.registry))
         self.assertEqual(self.registry['lyra--taken']['owner_id'],'other')
-    def test_roster_discovers_without_enrolling_and_preserves_signed_identity(self):
+    def test_roster_links_runtime_without_independent_enrollment_and_preserves_signed_identity(self):
         self.login()
         payload={'agents':[{'id':'lyra--worker','name':'Worker','mesh_runtime':{'sleeping':True,'controls_available':True,'model':'ollama/fixture'}}]}
         cloud.register_gateway_agents('lyra',payload,self.registry)
-        self.assertNotIn('lyra--worker',self.registry)
+        self.assertTrue(self.registry['lyra--worker']['gateway_linked'])
+        self.assertFalse(self.registry['lyra--worker'].get('gateway_enrollment',False))
+        self.assertEqual(self.registry['lyra--worker']['runtime_id'],'worker')
         candidates=self.client.get('/api/gateways/identified-agents').json['candidates']
         self.assertEqual(candidates[0]['id'],'lyra--worker')
         self.registry['lyra--worker']={'id':'lyra--worker','owner_id':'owner','control_center_gateway':'lyra','gateway_enrollment':True,'fingerprint':'own-key','public_key':'own-pem','codeseal_evidence':{'seal':'own'}}
@@ -215,6 +217,21 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/gateways/identified-agents').json['candidates'],[])
         cloud.register_gateway_agents('lyra',{'agents':[]},self.registry)
         self.assertIn('lyra--worker',self.registry)
+
+    def test_roster_removes_missing_host_link_but_retains_signed_role(self):
+        cloud.register_gateway_agents('lyra',{'agents':[{'id':'lyra--worker','name':'Worker'}]},self.registry)
+        self.assertIn('lyra--worker',self.registry)
+        cloud.register_gateway_agents('lyra',{'agents':[]},self.registry)
+        self.assertNotIn('lyra--worker',self.registry)
+    def test_host_linked_role_uses_verified_gateway_and_loses_access_when_removed(self):
+        self.login()
+        cloud.register_gateway_agents('lyra',{'agents':[{'id':'lyra--worker','name':'Worker'}]},self.registry)
+        response=self.client.post('/api/agents/lyra--worker/control-center',json={'action':'profile.get','args':{}},headers={'Origin':'http://localhost'})
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(self.sent[-1][0],'lyra')
+        self.assertEqual(self.sent[-1][1]['payload']['agent_id'],'lyra--worker')
+        cloud.register_gateway_agents('lyra',{'agents':[]},self.registry)
+        self.assertEqual(self.client.post('/api/agents/lyra--worker/control-center',json={'action':'profile.get','args':{}},headers={'Origin':'http://localhost'}).status_code,404)
 
     def test_roster_relays_only_memory_receipt_metadata_for_host_and_signed_role(self):
         self.registry['lyra--worker']={'id':'lyra--worker','owner_id':'owner',

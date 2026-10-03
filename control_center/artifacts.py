@@ -12,7 +12,7 @@ from pathlib import Path
 
 MAX_FILE = 10 * 1024 * 1024
 CHUNK = 32768
-ROLES = {'main':'rend','researcher':'lyra','coder':'mak','designer':'designer','reviewer':'reviewer','architect':'architect','progre':'progre','fast':'fast'}
+ROLES = {'main':'rend','researcher':'lyra','coder':'mak','designer':'designer','reviewer':'reviewer','architect':'architect','progre':'progre','fast':'fast','imagen':'imagen','codex':'codex'}
 EXTENSIONS = {'.txt','.md','.csv','.json','.pdf','.png','.jpg','.jpeg','.webp','.gif','.svg','.zip','.py','.js','.ts','.html','.css','.yaml','.yml','.docx','.xlsx','.pptx','.mp3','.wav','.mp4'}
 _LOCK = threading.RLock()
 

@@ -19,6 +19,13 @@ class ArtifactsTests(unittest.TestCase):
         r=self.call('designer','files.finish',upload_id=uid,sha256=hashlib.sha256(data).hexdigest())
         self.assertEqual(Path(r['path']).read_bytes(),data);self.assertEqual(Path(r['path']).stat().st_mode&0o777,0o600)
         self.assertEqual(self.call('main','files.list')['files'],[])
+    def test_current_visual_role_can_receive_reference_image(self):
+        data=b'fixture image bytes'
+        upload=self.call('imagen','files.begin',name='reference.png',size=len(data))
+        self.call('imagen','files.chunk',upload_id=upload['upload_id'],offset=0,data=base64.b64encode(data).decode())
+        receipt=self.call('imagen','files.finish',upload_id=upload['upload_id'],sha256=hashlib.sha256(data).hexdigest())
+        self.assertEqual(Path(receipt['path']).read_bytes(),data)
+        self.assertIn('/imagen/',receipt['path'])
     def test_shared_publish_download_references_and_changed_file(self):
         p=self.home/'Rend/artifacts/designer/icon.svg';p.parent.mkdir(parents=True);p.write_text('<svg/>')
         rows=self.call('main','files.list')['files'];self.assertEqual(rows[0]['producer'],'designer');self.assertNotIn('path',rows[0])

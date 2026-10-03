@@ -475,13 +475,18 @@ def update_from_gateway(agent_id: str, message: dict[str, Any]) -> None:
             restored_count = rejected_count = 0
             for receipt in receipts:
                 try:
+                    independently_enrolled = {key: value for key, value in DEV_AGENT_REGISTRY.items()
+                                              if not value.get('gateway_linked')}
                     restored = restore_receipt(receipt, agent_id, record, device_credential_secret(),
-                                               candidates, verify_runtime_agent_identity, DEV_AGENT_REGISTRY)
+                                               candidates, verify_runtime_agent_identity, independently_enrolled)
                     with LIVE_LOCK:
                         if (DEV_AGENT_REGISTRY.get(agent_id) is not record or record.get('owner_id') != restored['owner_id']
                                 or not any(item['id'] == restored['id'] for item in record.get('identified_agents', []))):
                             continue
-                        if restored['id'] in DEV_AGENT_REGISTRY:
+                        previous = DEV_AGENT_REGISTRY.get(restored['id'])
+                        if previous and not (previous.get('gateway_linked')
+                                             and previous.get('control_center_gateway') == agent_id
+                                             and previous.get('owner_id') == record['owner_id']):
                             continue
                         key = public_bytes(restored['public_key'])
                         if any(other.get('public_key') and public_bytes(other['public_key']) == key
