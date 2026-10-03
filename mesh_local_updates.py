@@ -39,6 +39,12 @@ class LocalUpdates:
     def installation(self):
         data=read(self.state/'installed.json')
         if not isinstance(data,dict):raise ValueError('installation_not_configured')
+        # Older manual installs recorded abbreviated object IDs. Resolve only
+        # bounded hexadecimal commit IDs; a different HEAD still fails closed.
+        commit=data.get('commit','')
+        if not isinstance(commit,str) or not re.fullmatch('[a-f0-9]{7,40}',commit):raise ValueError('invalid_installed_revision')
+        if len(commit)<40:
+            data=dict(data,commit=git(data['source'],'rev-parse','--verify',commit+'^{commit}'))
         return data
     def status(self):
         installed=self.installation();offer=read(self.state/'offer.json',{})
@@ -67,6 +73,7 @@ class LocalUpdates:
         if offer.get('target')!=target or not offer.get('available') or offer.get('current')!=installed['commit']:raise ValueError('check_for_updates_first')
         if read(self.state/'job.json',{}).get('phase') in {'queued','preparing','installing','waiting_for_idle','restarting'}:raise ValueError('update_already_running')
         if git(installed['source'],'status','--porcelain'):raise ValueError('local_changes_preserved_update_blocked')
+        if git(installed['source'],'rev-parse','HEAD')!=installed['commit']:raise ValueError('installation_source_changed')
         helper=Path(__file__).resolve().parent/'install/update-local-mesh.py'
         write(self.state/'job.json',{'phase':'queued','target':target})
         result=subprocess.run(['systemd-run','--user','--collect','--unit=mesh-local-update-'+target[:12],

@@ -1004,7 +1004,7 @@
       <article tabindex="0" data-agent-card="${escapeHtml(agent.id)}" class="agent-card ${selectedAgentId === agent.id ? "active" : ""}">
         <div class="agent-top">
           <div class="agent-id">
-            <div class="avatar ${["rend","lyra","mak"].includes(agent.id) ? agent.id : "rend"}"></div>
+            ${MeshAvatar.source(agent) ? `<img class="avatar" src="${MeshAvatar.source(agent)}" alt="" style="object-fit:cover">` : `<div class="avatar ${["rend","lyra","mak"].includes(agent.id) ? agent.id : "rend"}"></div>`}
             <div class="agent-name">
               <strong>${escapeHtml(agent.name)}</strong>
               <span>${escapeHtml(agent.role)}${agent.is_orchestrator?" · Orchestrator":""}</span>
@@ -1715,6 +1715,7 @@
     }
 
     if (type === "file_offer_ready" && message.file) appendTerminalFileCard(item, message.file);
+    if(payload.attachments?.length)FactoryFiles.links(item,selectedAgentId,payload.attachments);
     eventList.appendChild(item);
     if (type === "message_response" && track) speakAgentReply(message.message || "");
 
@@ -1722,10 +1723,20 @@
     eventList.lastElementChild?.scrollIntoView({block:"nearest"});
   }
 
+  const chatInFlight=new Set(),originAttachments=new Map();
+  async function syncSelectedConversation(){
+    const id=selectedAgentId;if(!id || chatInFlight.has(id))return;
+    try{const feed=await MeshRuntime.history(id);if(id!==selectedAgentId || !feed.enabled || chatInFlight.has(id))return;
+      const rows=feed.events.map(m=>({type:m.speaker==='user'?'user_message':m.speaker==='status'?'message_error':'message_response',message:m.text,timestamp:new Date(m.created*1000).toISOString(),payload:{sender:m.speaker==='user'?'You':m.agent,source:m.origin,event_id:m.seq,attachments:originAttachments.get(m.seq)||[]}}));
+      roleConversations.set(id,rows);renderEvents(rows);
+    }catch{/* Retain the last observed feed on disconnect. */}
+  }
+  setInterval(syncSelectedConversation,4000);
   async function sendDirectMessage(text) {
     const agent=fleet.find((a)=>a.id===selectedAgentId);
     if (!agent) { showToast("Select an agent first."); return; }
     if (agent.transport!=="connected") { showToast(`${agent.name}'s gateway is offline.`); return; }
+    chatInFlight.add(agent.id);
     const messages = roleConversations.get(agent.id) || [];
     roleConversations.set(agent.id, messages);
     const sent = {type:'user_message',message:text,timestamp:new Date().toISOString(),payload:{sender:'You'}};
@@ -1741,6 +1752,8 @@
         reply.payload={sender:agent.name,phase:job.phase,milestones:job.milestones};
         if(selectedAgentId===agent.id)renderEvents(agent.control_center_gateway ? messages : liveEvents);
       });
+      if(result.sync_event_id)originAttachments.set(result.sync_event_id,result.attachments||[]);
+      reply.payload.attachments=result.attachments||[];
       agent.mesh_runtime={...agent.mesh_runtime,last_result:{severity:'success'}};
       renderFleet();
       Object.assign(reply, {type:'message_response',message:result.reply,timestamp:new Date().toISOString()});
@@ -1751,7 +1764,7 @@
       Object.assign(reply, {type:'message_error',message:`Message failed: ${error.message}. No automatic retry was sent.`,payload:{sender:agent.name,severity:'error'}});
       if (selectedAgentId === agent.id) renderEvents(agent.control_center_gateway ? messages : liveEvents);
       showToast(`${agent.name}: ${reply.message}`);
-    }
+    } finally {chatInFlight.delete(agent.id);syncSelectedConversation();}
 
   }
 

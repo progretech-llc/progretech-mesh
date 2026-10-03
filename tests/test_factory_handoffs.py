@@ -19,24 +19,24 @@ class FakeMesh:
 class HandoffTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.home=Path(self.tmp.name)
-        self.mesh=FakeMesh();self.provider=SimpleNamespace(bindings={'host':'main','host--designer':'designer','host--reviewer':'reviewer'})
+        self.mesh=FakeMesh();self.provider=SimpleNamespace(bindings={'host':'main','host--imagen':'imagen','host--researcher':'researcher','host--progre':'progre'})
         self.addCleanup(patch.stopall)
         patch('control_center.chatter_admission.resources',return_value=(True,'Capacity confirmed')).start()
         patch('control_center.office.engine',return_value={'snapshot':{'paused':False}}).start()
         self.h=Handoffs(self.provider,self.home,self.mesh);self.notices=[];self.h.notify=lambda t:self.notices.append(t) or True
     def publish(self):
-        p=self.home/'Rend/artifacts/designer/icon.svg';p.parent.mkdir(parents=True,exist_ok=True);p.write_text('<svg/>');return p
-    def create(self):return self.h.dispatch('host--reviewer','handoff.create',{'source':'designer','text':'Review the generated icon.'})
+        p=self.home/'Rend/artifacts/imagen/icon.svg';p.parent.mkdir(parents=True,exist_ok=True);p.write_text('<svg/>');return p
+    def create(self):return self.h.dispatch('host--researcher','handoff.create',{'source':'imagen','text':'Review the generated icon.'})
     def test_dependency_waits_for_new_artifact_then_runs_once_and_notifies_director(self):
         self.publish();self.h.tick();r=self.create();self.h.tick();self.assertEqual(self.mesh.calls,[])
-        time.sleep(.01);p=self.publish();self.h.tick();self.assertEqual(len(self.mesh.calls),1);self.assertEqual(self.mesh.calls[0][0],'host--reviewer');self.assertIn(str(p),self.mesh.calls[0][1])
+        time.sleep(.01);p=self.publish();self.h.tick();self.assertEqual(len(self.mesh.calls),1);self.assertEqual(self.mesh.calls[0][0],'host--researcher');self.assertIn(str(p),self.mesh.calls[0][1])
         self.h.tick();self.assertEqual(len(self.mesh.calls),1)
-        self.mesh.jobs[('host--reviewer','0')].update(done=True,result={'reply':'Reviewed icon; contrast needs work.'})
+        self.mesh.jobs[('host--researcher','0')].update(done=True,result={'reply':'Reviewed icon; contrast needs work.'})
         self.h.tick();row=self.h.data['rules'][0];self.assertEqual(row['state'],'delivered');self.assertTrue(row['director_notified']);self.assertTrue(any('contrast' in t for t in self.notices))
     def test_owner_pause_cancel_and_target_bound_controls(self):
-        r=self.create();self.h.dispatch('host--reviewer','handoff.control',{'id':r['id'],'state':'paused'});self.publish();self.h.tick();self.assertEqual(self.mesh.calls,[])
-        with self.assertRaises(ValueError):self.h.dispatch('host--designer','handoff.control',{'id':r['id'],'state':'waiting'})
-        self.h.dispatch('host--reviewer','handoff.control',{'id':r['id'],'state':'cancelled'});self.h.tick();self.assertEqual(self.mesh.calls,[])
+        r=self.create();self.h.dispatch('host--researcher','handoff.control',{'id':r['id'],'state':'paused'});self.publish();self.h.tick();self.assertEqual(self.mesh.calls,[])
+        with self.assertRaises(ValueError):self.h.dispatch('host--imagen','handoff.control',{'id':r['id'],'state':'waiting'})
+        self.h.dispatch('host--researcher','handoff.control',{'id':r['id'],'state':'cancelled'});self.h.tick();self.assertEqual(self.mesh.calls,[])
     def test_sleep_and_restart_do_not_replay_started_work(self):
         self.create();self.publish();self.mesh.asleep=True;self.h.tick();self.assertFalse(self.mesh.calls)
         self.mesh.asleep=False;self.h.tick();self.assertEqual(len(self.mesh.calls),1)
@@ -86,13 +86,13 @@ class HandoffTests(unittest.TestCase):
 
     def test_pair_topic_and_resource_wait_preserve_request(self):
         self.h.dispatch('host','chatter.configure',{'enabled':True})
-        c=self.h.dispatch('host','chatter.pair',{'a':'host--designer','b':'host--reviewer','topic':''})
+        c=self.h.dispatch('host','chatter.pair',{'a':'host--imagen','b':'host--researcher','topic':''})
         self.h.dispatch('host','chatter.topic',{'id':c['id'],'topic':'Icon accessibility'})
         self.h.chatter_tick();c=self.h.data['chatter']['conversations'][0];c['approach_until']=0
         with patch('control_center.chatter_admission.resources',return_value=(False,'Waiting for RAM headroom')):self.h.chatter_tick()
         self.assertFalse(self.mesh.calls);self.assertEqual(c['state'],'approaching');self.assertIn('RAM',c['note'])
         self.h.chatter_tick();self.assertIn('Icon accessibility',self.mesh.calls[0][1])
-        with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.pair',{'a':'other--designer','b':'host--reviewer','topic':''})
+        with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.pair',{'a':'other--imagen','b':'host--researcher','topic':''})
     def test_owner_requests_preempt_chatter(self):
         self.h.dispatch('host','chatter.configure',{'enabled':True})
         self.mesh.jobs['owner']={'agent_id':'host','done':False}
@@ -121,19 +121,19 @@ class HandoffTests(unittest.TestCase):
         self.assertTrue(restored.data['chatter']['experimental_group_chat'])
 
     def test_concurrent_pairs_never_share_participants(self):
-        self.provider.bindings.update({'host--architect':'architect','host--fast':'fast','host--progre':'progre','host--coder':'coder'})
+        self.provider.bindings.update({'host--codex':'codex','host--progre':'progre','host--coder':'coder'})
         self.h.dispatch('host','chatter.configure',{'enabled':True,'max_conversations':3})
         self.h.chatter_tick()
         rows=self.h.data['chatter']['conversations']
-        self.assertEqual(len(rows),3)
+        self.assertEqual(len(rows),2)
         people=[a for c in rows for a in self.h.participants(c)]
         self.assertEqual(len(people),len(set(people)))
-        self.h.chatter_tick();self.assertEqual(len(rows),3)
+        self.h.chatter_tick();self.assertEqual(len(rows),2)
         self.h.dispatch('host','chatter.configure',{'enabled':False})
         self.assertTrue(all(c['state']=='stopped' for c in rows))
 
     def test_group_three_ordered_turns_and_proposal_notification(self):
-        self.provider.bindings['host--architect']='architect'
+        self.provider.bindings['host--codex']='codex'
         self.h.dispatch('host','chatter.configure',{'enabled':True,'experimental_group_chat':True})
         self.h.chatter_tick();row=self.h.data['chatter']['conversations'][0]
         row['approach_until']=0
@@ -152,8 +152,8 @@ class HandoffTests(unittest.TestCase):
         self.assertTrue(any('Lyra and Director' in n for n in self.notices))
 
     def test_group_queue_requires_opt_in_distinct_bound_participants(self):
-        self.provider.bindings['host--architect']='architect'
-        args={'a':'host--designer','b':'host--reviewer','c':'host--architect','topic':'PWA preview proposal'}
+        self.provider.bindings['host--codex']='codex'
+        args={'a':'host--imagen','b':'host--researcher','c':'host--codex','topic':'PWA preview proposal'}
         self.h.dispatch('host','chatter.configure',{'enabled':True})
         with self.assertRaisesRegex(ValueError,'group_chat_disabled'):self.h.dispatch('host','chatter.group',args)
         self.h.dispatch('host','chatter.configure',{'enabled':True,'experimental_group_chat':True})
@@ -161,11 +161,11 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(row['state'],'queued');self.assertEqual(row['c'],args['c'])
         self.assertEqual(self.h.dispatch('host','chatter.group',args)['id'],row['id'])
         with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.group',{**args,'c':args['a']})
-        with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.group',{**args,'c':'other--architect'})
+        with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.group',{**args,'c':'other--codex'})
 
     def test_restart_does_not_replay_third_turn(self):
-        self.provider.bindings['host--architect']='architect'
-        row=self.h.conversation('host--designer','host--reviewer',c='host--architect')
+        self.provider.bindings['host--codex']='codex'
+        row=self.h.conversation('host--imagen','host--researcher',c='host--codex')
         row['state']='third';self.h.data['chatter']['conversations'].append(row);self.h.save()
         restored=Handoffs(self.provider,self.home,self.mesh)
         self.assertEqual(restored.data['chatter']['conversations'][0]['state'],'unconfirmed')

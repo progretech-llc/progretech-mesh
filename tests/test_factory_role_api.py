@@ -16,7 +16,7 @@ class RoleAPITests(unittest.TestCase):
         response=self.client.get('/v1/models',headers=self.headers)
         self.assertEqual(response.status_code,200)
         models={x['id'] for x in response.json['data']}
-        self.assertTrue({'rend','lyra','mak','progre','designer','architect','reviewer','fast','rend-code','rend-fast','rend-llama-review','rend-architect','rend-research'}<=models)
+        self.assertTrue({'rend','lyra','mak','progre','imagen','codex','odexi','rend-code','rend-research'}<=models)
     def test_auth_and_owner_binding(self):
         self.assertEqual(self.client.get('/v1/models').status_code,401)
         main.DEV_AGENT_REGISTRY['rend']['owner_id']='someone-else'
@@ -27,7 +27,7 @@ class RoleAPITests(unittest.TestCase):
     def test_alias_dispatch_preserves_messages_and_tools(self):
         completion={'id':'x','choices':[{'message':{'role':'assistant','content':'ok'},'finish_reason':'stop'}]}
         with patch.object(main,'dispatch_ide_chat',return_value=(True,'ok',{'payload':{'ok':True,'completion':completion}})) as dispatch:
-            for model in ['rend','lyra','mak','progre','designer','architect','reviewer','fast']:
+            for model in ['rend','lyra','mak','progre','imagen','codex','odexi']:
                 body={'model':model,'messages':[{'role':'system','content':'Instructions'},{'role':'user','content':'Hi'}], 'tools':[{'type':'function','function':{'name':'lookup'}}]}
                 response=self.client.post('/v1/chat/completions',headers=self.headers,json=body)
                 self.assertEqual(response.status_code,200)

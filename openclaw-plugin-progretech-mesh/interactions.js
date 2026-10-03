@@ -1,6 +1,6 @@
 import {readFileSync,writeFileSync,renameSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
-const roles={main:'rend',researcher:'lyra',coder:'mak',architect:'architect',reviewer:'reviewer',fast:'fast',progre:'progre',designer:'designer'};
+const roles={main:'rend',researcher:'lyra',coder:'mak',progre:'progre',imagen:'imagen',codex:'odexi'};
 export function recordInteraction(root,event,ctx) {
   if(event?.toolName!=='sessions_send' || event.error || event.result?.isError || ['error','forbidden','timeout'].includes(event.result?.status))return;
   const from=roles[ctx?.agentId || String(ctx?.sessionKey||'').split(':')[1]];

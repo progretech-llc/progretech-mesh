@@ -35,6 +35,10 @@
     if(preview)return (await blob.text()).slice(0,32768);
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
+  function links(container,agent,files) {
+    for(const file of files||[]){const button=document.createElement('button');button.type='button';button.textContent='Download '+file.name;
+      button.onclick=async()=>{button.disabled=true;try{await download(agent,file);}catch(e){button.textContent=e.message;}finally{button.disabled=false;}};container.appendChild(button);}
+  }
   function brief(text,references) {const value=[text,...references].filter(Boolean).join('\n');if(value.length>4000)throw Error('The prompt plus file references exceeds 4,000 characters. Shorten the prompt.');return value;}
-  window.FactoryFiles={attach,download,brief};
+  window.FactoryFiles={attach,download,brief,links};
 })();

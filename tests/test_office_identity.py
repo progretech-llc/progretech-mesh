@@ -55,12 +55,13 @@ class IdentityTests(unittest.TestCase):
         task = self.call('task.create',{'title':'Ongoing work','description':'Keep assignment',
                          'assignee':'orchestrator','dependsOn':[],'needsApproval':False})['result']['id']
         before = self.call('snapshot')['snapshot']
-        updated = dict(first, role='Project manager, teacher and second-in-command')
+        updated = dict(first, name='Renamed coordinator', role='Project manager, teacher and second-in-command')
         after = self.call('runtime.sync',{'agents':[updated]})['snapshot']
         self.assertEqual(after['orchestratorId'], before['orchestratorId'])
         self.assertEqual(after['tasks'], before['tasks'])
         self.assertEqual(after['agents'][0]['id'], before['agents'][0]['id'])
         self.assertEqual(after['agents'][0]['role'], updated['role'])
+        self.assertEqual(after['agents'][0]['name'], updated['name'])
         identity = Path(self.home)/'.progretech-mesh/factory-offices/scope/hive/agents/orchestrator/identity.md'
         self.assertIn(updated['role'], identity.read_text())
         self.assertEqual(self.call('snapshot')['snapshot']['agents'][0]['role'], updated['role'])

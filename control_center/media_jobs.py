@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import fcntl
 from pathlib import Path
 import psutil
-from control_center.artifacts import ROLES, MAX_FILE, safe, read_regular
+from control_center.artifacts import ROLES, MAX_FILE, safe, read_regular, output_directory
 
 
 def image_request(text):
@@ -56,7 +56,7 @@ def generate(mesh,agent,text,ident):
                 dimensions=list(image.size);alpha='A' in image.getbands()
         except (OSError,SyntaxError):raise ValueError('mesh_image_validation_failed')
         role=ROLES[mesh.provider.bindings[agent]]
-        directory=safe(mesh.home,mesh.home/'Rend/artifacts'/role);directory.mkdir(parents=True,exist_ok=True,mode=0o700)
+        directory=safe(mesh.home,output_directory(mesh.home,mesh.provider.bindings[agent]));directory.mkdir(parents=True,exist_ok=True,mode=0o700)
         target=directory/('image-'+ident+'.png');temp=directory/('.image-'+secrets.token_hex(8)+'.tmp')
         out=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(out,'wb') as stream:stream.write(data);stream.flush();os.fsync(stream.fileno())
@@ -111,7 +111,7 @@ def review(mesh,agent,text,ident,paths):
     from PIL import Image
     with Image.open(path) as image:has_alpha='A' in image.getbands()
     result.update(source=str(path),source_sha256=digest,model=model,alpha_channel=has_alpha,scope='host-mediated visual review; model judgments require owner review')
-    directory=safe(mesh.home,mesh.home/'Rend/artifacts'/role);directory.mkdir(parents=True,exist_ok=True,mode=0o700)
+    directory=safe(mesh.home,output_directory(mesh.home,mesh.provider.bindings[agent]));directory.mkdir(parents=True,exist_ok=True,mode=0o700)
     target=directory/('review-'+ident+'.json');write(target,result)
     activity=record_activity(mesh.home,role,ident,target,hashlib.sha256(read_regular(mesh.home,target)).hexdigest(),model,kind='review')
     return {'role':mesh.provider.bindings[agent],'model':chosen,'activity':activity,'review':result,'reply':'Visual review: '+result['verdict']+'\nObserved: '+ '; '.join(result['observations'])+'\nConcerns: '+('; '.join(result['concerns']) or 'None reported by model')+'\nFile inspection: '+('alpha channel present; transparency coverage requires review' if has_alpha else 'opaque image; no alpha channel')+'\nReview report: '+str(target)+'\nMemPalace activity: '+activity['status']}

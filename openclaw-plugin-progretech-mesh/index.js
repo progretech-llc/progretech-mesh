@@ -1509,8 +1509,13 @@ async function runMeshConversation(api, body) {
   const sessionKey = `agent:${agentId}:mesh:${sessionId}`;
   const runId = crypto.randomUUID();
   appendEvent({event_type:"message",channel:"mesh",state:"received",direction:"input",summary:text,payload:{session_key:sessionKey,run_id:runId,transport:body?.transport || "mesh"}});
+  const syncPath=path.join(os.homedir(),'.openclaw/extensions/progretech-conversation-sync/client.js');
+  const sync=fs.existsSync(syncPath)?await import(syncPath):null;
+  const common={agent:agentId,origin:'mesh',session:sessionKey};
+  if(sync)await sync.publish({...common,event_key:'mesh-direct:'+runId+':user',speaker:'user',text});
   const result = await runGatewayConversation(cfg, {agentId, sessionKey, text});
   const responseText = extractResultText(result);
+  if(sync)await sync.publish({...common,event_key:'mesh-direct:'+runId+':assistant',speaker:'assistant',text:responseText});
   appendEvent({event_type:"message",channel:"mesh",state:"sent",direction:"output",summary:responseText || "Mesh agent turn completed",payload:{session_key:sessionKey,run_id:runId,transport:body?.transport || "mesh"}});
   return {ok:true,text:responseText,session_id:sessionId,session_key:sessionKey,run_id:runId};
 }

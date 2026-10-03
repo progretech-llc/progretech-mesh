@@ -38,7 +38,7 @@ def validate_office(args):
             raise ValueError('invalid_office_args')
     if len(json.dumps(args)) > 16384: raise ValueError('invalid_office_args')
     if op == 'workday.control':
-        if body['action'] not in {'stop','pause','resume','sleep'} or body['role'] not in {'all','rend','lyra','mak','fast','reviewer','architect','designer','progre'}:
+        if body['action'] not in {'stop','pause','resume','sleep'} or body['role'] not in {'all','rend','lyra','mak','imagen','progre'}:
             raise ValueError('invalid_workday_control')
         if not re.fullmatch(r'\d+(s|m|h|d)',body['duration']): raise ValueError('invalid_workday_duration')
 
@@ -69,6 +69,9 @@ def engine(home, role, operation, args=None):
             if code in result.stderr: raise ValueError(code)
         raise ValueError('office_coordination_failed')
     payload=json.loads(result.stdout)
+    from control_center.conversation_sync import tasks
+    try:tasks(home,role,payload.get('snapshot',{}),payload.get('result',{}).get('id') if operation=='task.create' else None)
+    except (ValueError,OSError):payload['conversation_sync_error']='task_sync_unavailable'
     if SPECKLET_OBSERVER:
         try:SPECKLET_OBSERVER(role,payload.get('snapshot',{}))
         except (ValueError,OSError):payload['specklet_error']='specklet_office_sync_failed'

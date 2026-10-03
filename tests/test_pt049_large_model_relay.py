@@ -8,16 +8,13 @@ class TestPT049LargeModelRelay(unittest.TestCase):
             [
                 "rend",
                 "rend-code",
-                "rend-fast",
-                "rend-llama-review",
-                "rend-architect",
                 "rend-research",
             ],
         )
 
     def test_other_agents_do_not_inherit_rend_specialists(self):
-        self.assertEqual(main.ide_models("mak"), ["mak", "mak-code", "mak-fast"])
-        self.assertEqual(main.ide_models("lyra"), ["lyra", "lyra-code", "lyra-fast"])
+        self.assertEqual(main.ide_models("mak"), ["mak", "mak-code"])
+        self.assertEqual(main.ide_models("lyra"), ["lyra", "lyra-code"])
         self.assertNotIn("rend-research", main.ide_models("mak"))
 
     def test_research_alias_is_allowlisted_only_as_explicit_model_name(self):

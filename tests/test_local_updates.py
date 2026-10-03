@@ -41,9 +41,20 @@ class LocalGitUpdateTests(unittest.TestCase):
     def test_install_launches_fixed_helper_with_exact_checked_target(self):
         target=self.new_release();self.updater.check()
         with patch('mesh_local_updates.subprocess.run',return_value=subprocess.CompletedProcess([],0,'')) as run:
-            with patch('mesh_local_updates.git',return_value=''):
+            with patch('mesh_local_updates.git',side_effect=['',self.initial]):
                 result=self.updater.apply(target)
         args=run.call_args.args[0];self.assertEqual(args[0],'systemd-run');self.assertEqual(args[-1],target);self.assertEqual(result['job']['phase'],'queued')
+    def test_abbreviated_installed_revision_is_resolved_without_false_source_mismatch(self):
+        record=json.loads((self.state/'installed.json').read_text());record['commit']=self.initial[:7]
+        write(self.state/'installed.json',record)
+        target=self.new_release();result=self.updater.check()
+        self.assertTrue(result['offer']['available']);self.assertEqual(result['offer']['current'],self.initial)
+        self.assertEqual(result['offer']['target'],target)
+    def test_actual_source_change_still_blocks_check_and_install(self):
+        target=self.new_release();self.updater.check()
+        git(self.source,'checkout','--detach',target)
+        with self.assertRaisesRegex(ValueError,'installation_source_changed'):self.updater.check()
+        with self.assertRaisesRegex(ValueError,'installation_source_changed'):self.updater.apply(target)
     def test_rejects_diverged_remote_instead_of_downgrading(self):
         self.new_release();git(self.repo,'checkout','--orphan','alternate');(self.repo/'app.py').write_text('unrelated');git(self.repo,'add','app.py');git(self.repo,'commit','-m','Unrelated history');git(self.repo,'push','--force','origin','HEAD:releases/mesh-local')
         with self.assertRaisesRegex(ValueError,'diverged'):self.updater.check()

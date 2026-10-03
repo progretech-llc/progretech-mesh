@@ -83,7 +83,9 @@ def dispatch(provider, agent_id, action, args):
             if asleep:raise ValueError('mesh_agent_sleeping')
         inventory = provider.discover(runtime)
         if action == 'communication.get':
-            return {'settings': current, 'roles': inventory.get('communication_roles', [runtime]), 'models': ['default', *inventory.get('communication_models', inventory.get('models', []))], 'runtime_id': runtime}
+            from control_center.conversation_sync import history
+            conversation=history(getattr(provider,'home',__import__('pathlib').Path.home()),runtime)
+            return {'conversation':conversation,'settings': current, 'roles': inventory.get('communication_roles', [runtime]), 'models': ['default', *inventory.get('communication_models', inventory.get('models', []))], 'runtime_id': runtime}
         if action in {'communication.save', 'enrollment.remove'}:
             if action == 'communication.save':
                 if args['role'] not in inventory.get('communication_roles', [runtime]) or args['model'] not in ['default', *inventory.get('communication_models', inventory.get('models', []))]:

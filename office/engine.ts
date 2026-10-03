@@ -101,6 +101,11 @@ switch (body.operation) {
       // The host identity is authoritative for a bound runtime's display role.
       // Refresh existing records too, without respawning or changing ownership.
       const current = hive.registry().agents[id];
+      if (current && current.name !== row.name) {
+        const renamed = hive.registry();
+        renamed.agents[id].name = row.name;
+        hive.atomicWriteJson(join(hive.root(), "registry.json"), renamed);
+      }
       const role = row.role || row.name;
       if (current && current.role !== role) {
         const previousRole = current.role;

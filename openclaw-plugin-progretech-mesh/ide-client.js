@@ -1,10 +1,10 @@
 import {createHash, randomUUID} from 'node:crypto';
 
 export const IDE_ROLE_ALIASES = Object.freeze({
-  rend:'main', lyra:'researcher', mak:'coder', progre:'progre', designer:'designer',
-  architect:'architect', reviewer:'reviewer', fast:'fast',
-  'rend-code':'coder', 'rend-fast':'fast', 'rend-llama-review':'reviewer',
-  'rend-architect':'architect', 'rend-research':'researcher',
+  rend:'main', lyra:'researcher', mak:'coder', progre:'progre',
+  imagen:'imagen', codex:'codex', odexi:'codex',
+  'rend-code':'coder',
+  'rend-research':'researcher',
 });
 const FIELDS = new Set(['model','messages','stream','temperature','top_p','max_tokens','max_completion_tokens',
   'tools','tool_choice','parallel_tool_calls','response_format','seed','user','stop','presence_penalty','frequency_penalty']);

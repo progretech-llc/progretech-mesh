@@ -8,6 +8,7 @@
   const tasks=snapshot.tasks.filter(t=>snapshot.orchestratorId===agent.office_agent_id || t.assignee===agent.office_agent_id);
   let text=tasks.map(t=>`${t.title} · ${t.status}\n${t.result||t.description||''}`).join('\n\n');
   if(!agent.office_worker){const c=await MeshRuntime.request(id,'context.read');text=[c.text&&`Reviewed handoff · ${c.author} · ${c.updated_at}\n${c.text}`,text].filter(Boolean).join('\n\n');}
+  if(!agent.office_worker){const feed=await MeshRuntime.history(id);if(feed.enabled)$('output').textContent=feed.events.map(m=>`${new Date(m.created*1000).toLocaleTimeString()} ${m.speaker==='user'?'You':m.agent} · ${m.origin}\n${m.text}\n`).join('\n');}
   $('context').textContent=text||'No reviewed handoff or mission result recorded.';$('status').textContent=MeshRuntime.indicator(agent).detail;
  }catch(e){$('status').textContent=e.message;}}
  $('input').onsubmit=async e=>{e.preventDefault();if(busy||!agent)return;busy=true;const text=$('prompt').value,button=e.target.querySelector('button');button.disabled=true;write('OUT',text);$('prompt').value='';

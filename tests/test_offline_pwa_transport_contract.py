@@ -11,7 +11,7 @@ class TestOfflinePwaTransport(unittest.TestCase):
  def test_pwa_lna(self):
   self.assertIn('targetAddressSpace:"local"',self.js); self.assertIn('navigator.permissions.query({name:"local-network"})',self.js); self.assertIn('findReachableLocalRoute',self.js)
  def test_offline_shell_no_operational_cache(self):
-  self.assertIn('url.pathname.startsWith("/api/")',self.sw); self.assertIn('url.pathname.startsWith("/ws/")',self.sw); self.assertIn('progretech-mesh-shell-v10-runtime-health',self.sw); self.assertIn('url.pathname.startsWith("/agents/")',self.sw)
+  self.assertIn('url.pathname.startsWith("/api/")',self.sw); self.assertIn('url.pathname.startsWith("/ws/")',self.sw); self.assertIn('progretech-mesh-shell-v13-all-avatars',self.sw); self.assertIn('url.pathname.startsWith("/agents/")',self.sw)
  def test_how_it_works(self):
   for value in ('Same network','Different networks','Restrictive networks','Direct only','Offline PWA behavior'): self.assertIn(value,self.how)
  def test_acceptance_surface(self): self.assertIn('/api/transport/acceptance',self.main); self.assertIn('offline_same_lan_reconnect',self.main)

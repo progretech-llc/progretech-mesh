@@ -26,6 +26,7 @@
     if(!r.ok || !d.ok) throw Error(errors[d.error] || d.error || 'Host request failed');
     return d.result;
   }
+  async function history(agent) { return (await request(agent,'communication.get')).conversation || {enabled:false,events:[]}; }
   async function run(agent,action,args={},progress=()=>{}) {
     let job=await request(agent,action,args);
     const deadline=Date.now()+(job.capability==='image_generation'?40:21)*60*1000;
@@ -108,5 +109,5 @@
     const result=await run(agent,'runtime.recover',{},progress);
     return (result.steps || []).map(s=>s.name+' · '+s.state+': '+s.detail).join('\n')+'\n'+result.note;
   }
-  window.MeshRuntime={request,run,errors,indicator,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice};
+  window.MeshRuntime={history,request,run,errors,indicator,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice};
 })();

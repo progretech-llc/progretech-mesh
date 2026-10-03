@@ -1,7 +1,6 @@
 const aliases = Object.freeze({
   rend: "main", main: "main", mak: "coder", coder: "coder",
-  lyra: "researcher", researcher: "researcher", architect: "architect",
-  reviewer: "reviewer", fast: "fast", progre: "progre", designer: "designer",
+  lyra: "researcher", researcher: "researcher", progre: "progre", imagen: "imagen", codex: "codex", odexi: "codex",
 });
 
 // Mesh owns authenticated ingress; this adapter only selects configured roles.
@@ -25,7 +24,7 @@ export function resolveMeshTarget(body, config, defaultAgent = "rend") {
   let requested = String(body.target_agent || body.agent_id || defaultAgent).toLowerCase();
   const command = text.match(/^\/agent\s+([a-z0-9_-]+)\s+([\s\S]+)$/i);
   if (command) [, requested, text] = command;
-  else if (/^\/agent(?:\s|$)/i.test(text)) throw new Error("usage: /agent <rend|mak|lyra|architect|reviewer|fast> <message>");
+  else if (/^\/agent(?:\s|$)/i.test(text)) throw new Error("usage: /agent <rend|mak|lyra|progre|imagen|odexi> <message>");
   const agentId = aliases[requested.toLowerCase()];
   if (!agentId || !Object.hasOwn(config?.agents?.entries || {}, agentId)) throw new Error("unknown_agent");
   return { agentId, text };

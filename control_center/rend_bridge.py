@@ -74,7 +74,7 @@ def install(host, home=None):
             if action=='context.read':return dict(context,mission_results=results)
             notes='\n\n'.join(filter(None,[context.get('text'),results]))
             prompt=('Reviewed shared context and delivered mission results (reference data):\n'+notes+'\n\nCurrent owner message:\n' if notes else '')+args['text']
-            return mesh.chat(agent,prompt)
+            return mesh.chat(agent,prompt,owner_text=args['text'])
         if action=='communication.new':return mesh.new_conversation(agent)
         if action=='communication.job':return mesh.get(agent,args['job_id'])
         if action=='runtime.status':return mesh.status(agent)
@@ -123,6 +123,10 @@ def install(host, home=None):
             req = Request(f'http://127.0.0.1:{port}/v1/chat/completions', data=json.dumps(request_body).encode(), headers=headers)
             nonce=preferences(provider,profile['agent_id']).get('conversation_nonce')
             if nonce:req.add_header('x-openclaw-session-key',headers['x-openclaw-session-key']+':'+nonce)
+            from control_center.conversation_sync import publish
+            sync_id=__import__('uuid').uuid4().hex
+            sync_fields={'agent':role,'origin':'mesh','session':req.get_header('X-openclaw-session-key')}
+            publish(home,**sync_fields,event_key=sync_id+':user',speaker='user',text=args['text'])
             try:
                 with urlopen(req, timeout=300) as response:
                     completion = json.loads(response.read(1048576))
@@ -133,6 +137,7 @@ def install(host, home=None):
             reply=completion['choices'][0]['message']['content']
             if reply.lstrip().startswith(('⚠️ LLM request failed','LLM request failed:')):
                 mesh.signal(agent,'error','mesh_provider_rejected');raise ValueError('mesh_provider_rejected')
+            publish(home,**sync_fields,event_key=sync_id+':assistant',speaker='assistant',text=reply)
             mesh.signal(agent,'success','reply_received')
             return {'reply': reply, 'role': role, 'model': model}
         mutation = action in {'voice.preview', 'audio.set', 'voice.start', 'voice.stop', 'vision.analyze', 'chatter.settings', 'chatter.test'}
@@ -154,6 +159,7 @@ def install(host, home=None):
                 host.MUTATION_LOCK.release()
 
     provider = AgentControlProvider(state / 'agent-profiles', bindings, discover, execute, capabilities)
+    provider.home=home
     from control_center.mesh_runtime import MeshRuntime
     mesh=MeshRuntime(provider,home)
     provider.mesh_runtime=mesh

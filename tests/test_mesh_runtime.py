@@ -19,12 +19,12 @@ class RuntimeTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.home=Path(self.tmp.name)
         (self.home/'.openclaw').mkdir();(self.home/'.progretech-mesh').mkdir()
-        (self.home/'.openclaw/openclaw.json').write_text(json.dumps({'agents':{'entries':{'main':{'model':'remote/model'},'architect':{'model':'remote/model'}}},'gateway':{'port':18789,'auth':{'token':'fixture'}}}))
-        self.provider=AgentControlProvider(self.home/'profiles',{'host':'main','host--main':'main','host--architect':'architect'},lambda r:{},lambda *a:{})
+        (self.home/'.openclaw/openclaw.json').write_text(json.dumps({'agents':{'entries':{'main':{'model':'remote/model'},'coder':{'model':'remote/model'}}},'gateway':{'port':18789,'auth':{'token':'fixture'}}}))
+        self.provider=AgentControlProvider(self.home/'profiles',{'host':'main','host--main':'main','host--coder':'coder'},lambda r:{},lambda *a:{})
         self.runtime=MeshRuntime(self.provider,self.home)
         self.runtime.idle=lambda:True
         self.runtime.health=lambda a:{"state":"unknown","checked_at":time.time()}
-        self.rows={'rend':{'mode':'running','until':None},'architect':{'mode':'running','until':None}}
+        self.rows={'rend':{'mode':'running','until':None},'mak':{'mode':'running','until':None}}
         self.controls=patch('control_center.mesh_runtime.role_controls',side_effect=lambda *a,**k:self.rows);self.controls.start();self.addCleanup(self.controls.stop)
     def done(self,agent,job):
         deadline=time.monotonic()+2
@@ -76,7 +76,7 @@ class RuntimeTests(unittest.TestCase):
         hold=threading.Event();self.addCleanup(hold.set)
         def worker(j):self.runtime.mark(j,'processing','Waiting for reply text');hold.wait(2);return {'reply':'private fixture'}
         job=self.runtime.start('host','chat',worker)
-        with self.assertRaisesRegex(ValueError,'not_found'):self.runtime.get('host--architect',job['job_id'])
+        with self.assertRaisesRegex(ValueError,'not_found'):self.runtime.get('host--coder',job['job_id'])
         with self.assertRaisesRegex(ValueError,'busy'):self.runtime.start('host--main','chat',worker)
         with self.assertRaisesRegex(ValueError,'busy'):self.runtime.new_conversation('host--main')
         self.assertNotIn('private fixture',str(self.runtime.snapshot('host','terminal')))
@@ -104,16 +104,16 @@ class RuntimeTests(unittest.TestCase):
     def test_active_context_is_bound_to_observed_role_and_not_replayed(self):
         directory=self.home/'.local/state/progretech-workday';directory.mkdir(parents=True)
         file=directory/'activity.json'
-        file.write_text(json.dumps({'agents':{'architect':{'state':'active','session':'agent:architect:workday:fixture'}}}))
+        file.write_text(json.dumps({'agents':{'mak':{'state':'active','session':'agent:coder:workday:fixture'}}}))
         with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout='{"status":"accepted"}')) as run:
-            result=self.runtime.context('host--architect','Owner context')
-            params=json.loads(run.call_args.args[0][-2]);self.assertEqual(params['agentId'],'architect');self.assertEqual(params['queueMode'],'steer');self.assertEqual(params['sessionKey'],'agent:architect:workday:fixture');self.assertTrue(result['accepted']);self.assertEqual(run.call_count,1)
-        file.write_text(json.dumps({'agents':{'architect':{'state':'active','session':'agent:main:workday:fixture'}}}))
+            result=self.runtime.context('host--coder','Owner context')
+            params=json.loads(run.call_args.args[0][-2]);self.assertEqual(params['agentId'],'coder');self.assertEqual(params['queueMode'],'steer');self.assertEqual(params['sessionKey'],'agent:coder:workday:fixture');self.assertTrue(result['accepted']);self.assertEqual(run.call_count,1)
+        file.write_text(json.dumps({'agents':{'mak':{'state':'active','session':'agent:main:workday:fixture'}}}))
         with patch('control_center.mesh_runtime.subprocess.run') as run:
-            with self.assertRaisesRegex(ValueError,'session_unavailable'):self.runtime.context('host--architect','Owner context')
+            with self.assertRaisesRegex(ValueError,'session_unavailable'):self.runtime.context('host--coder','Owner context')
             run.assert_not_called()
-        file.write_text(json.dumps({'agents':{'architect':{'state':'idle'}}}))
-        with self.assertRaisesRegex(ValueError,'no_active_work'):self.runtime.context('host--architect','Owner context')
+        file.write_text(json.dumps({'agents':{'mak':{'state':'idle'}}}))
+        with self.assertRaisesRegex(ValueError,'no_active_work'):self.runtime.context('host--coder','Owner context')
     def test_recovery_defers_busy_work_and_never_replays_a_chat(self):
         self.runtime.signal('host','error','mesh_context_limit')
         self.runtime.chat=lambda *a:self.fail('Recovery must not replay a task')
@@ -133,7 +133,7 @@ class RuntimeTests(unittest.TestCase):
             result=self.done('host',self.runtime.recover('host'))
         self.assertEqual(result['result']['outcome'],'checks_passed');self.assertIn('conversation_nonce',self.runtime.settings('host'))
         self.assertEqual(self.runtime.status('host')['last_result']['severity'],'error')
-        self.assertNotIn('conversation_nonce',self.runtime.settings('host--architect'))
+        self.assertNotIn('conversation_nonce',self.runtime.settings('host--coder'))
     def test_shared_model_is_retained_on_sleep(self):
         self.runtime.model=lambda a:'shared'
         self.runtime.control=lambda a,awake:self.rows['rend'].update(mode='paused')
@@ -148,10 +148,10 @@ class RuntimeTests(unittest.TestCase):
             def read(self,size):return json.dumps({'choices':[{'message':{'content':'actual answer','reasoning_content':'hidden fixture'},'finish_reason':'stop'}]}).encode()
         requests=[]
         self.runtime.open=lambda req,**k:requests.append(req) or Response()
-        value=self.done('host--architect',self.runtime.chat('host--architect','fixture request'))
+        value=self.done('host--coder',self.runtime.chat('host--coder','fixture request'))
         self.assertEqual(value['result']['reply'],'actual answer')
         self.assertIn('writing',[m['phase'] for m in value['milestones']])
-        self.assertNotIn('hidden fixture',str(value));self.assertEqual(requests[0].get_header('X-openclaw-agent-id'),'architect');self.assertFalse(json.loads(requests[0].data)['stream'])
+        self.assertNotIn('hidden fixture',str(value));self.assertEqual(requests[0].get_header('X-openclaw-agent-id'),'coder');self.assertFalse(json.loads(requests[0].data)['stream'])
     def test_failed_job_finishes_even_if_signal_write_fails(self):
         self.runtime.signal=lambda *a:(_ for _ in ()).throw(OSError('fixture'))
         value=self.done('host',self.runtime.start('host','chat',lambda j:(_ for _ in ()).throw(ValueError('mesh_context_limit'))))

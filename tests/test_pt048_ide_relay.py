@@ -32,7 +32,7 @@ class TestPT048IdeRelay(unittest.TestCase):
         allowed=client.get("/v1/models",headers={"Authorization":f"Bearer {token}"})
         self.assertEqual(allowed.status_code,200)
         ids=[item["id"] for item in allowed.get_json()["data"]]
-        self.assertTrue({"rend","rend-code","rend-fast","rend-llama-review","rend-architect","rend-research"}.issubset(ids))
+        self.assertTrue({"rend","rend-code","rend-research"}.issubset(ids))
 
     def test_nonstream_chat_roundtrip(self):
         token=main.issue_ide_token("owner-a","rend")["token"]

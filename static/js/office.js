@@ -44,7 +44,7 @@
       const indicator=a.native?MeshRuntime.indicator(a.native):a.factoryObserved?MeshRuntime.indicator(a):null;
       const state = indicator?indicator.state:blocked?'blocked':a.state;
       const p = positions[a.id];
-      return `<button class="floor-node ${a.isDirector?'director':''} ${state==='active'?'working':escape(state)} ${a.id===selected?'selected':''}" data-agent="${escape(a.id)}" ${a.factoryObserved?'data-factory-role="'+escape(a.id.slice(8))+'"':''} style="left:${p.x}px;top:${p.y}px" title="${escape(indicator?.detail||a.role)}" aria-label="${escape(a.name)}, ${escape(a.role)}, ${escape(indicator?.detail||state)}"><span class="node-orb">${a.isDirector?'◈':escape(a.name.slice(0,2).toUpperCase())}</span><span class="node-state" aria-hidden="true"></span><span class="node-name">${escape(a.name)} · ${escape(indicator?.label||state)}</span><span class="node-role">${escape(a.role)}</span></button>`;
+      return `<button class="floor-node ${a.isDirector?'director':''} ${state==='active'?'working':escape(state)} ${a.id===selected?'selected':''}" data-agent="${escape(a.id)}" ${a.factoryObserved?'data-factory-role="'+escape(a.id.slice(8))+'"':''} style="left:${p.x}px;top:${p.y}px" title="${escape(indicator?.detail||a.role)}" aria-label="${escape(a.name)}, ${escape(a.role)}, ${escape(indicator?.detail||state)}"><span class="node-orb">${MeshAvatar.source(a)?`<img src="${MeshAvatar.source(a)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:a.isDirector?'◈':escape(a.name.slice(0,2).toUpperCase())}</span><span class="node-state" aria-hidden="true"></span><span class="node-name">${escape(a.name)} · ${escape(indicator?.label||state)}</span><span class="node-role">${escape(a.role)}</span></button>`;
     }).join('');
     // Preserve live nodes, focus, pointer capture and CSS animation timelines.
     // Polling updates metadata, rather than resetting the animated coordinates.
@@ -153,7 +153,7 @@
     const labels={todo:'Queued',doing:'In progress',blocked:'Needs you',done:'Delivered'};
     $('officeBoard').innerHTML=Object.entries(labels).map(([state,label])=>{
       const tasks=snapshot.tasks.filter(t=>t.status===state).sort((a,b)=>(b.priority||0)-(a.priority||0));
-      return `<div class="office-column"><h3>${label}<span>${tasks.length}</span></h3>${tasks.map(t=>{
+      return `<div class="office-column" tabindex="0" role="region" aria-label="${label} missions"><h3>${label}<span>${tasks.length}</span></h3>${tasks.map(t=>{
         const dependencies=t.dependsOn.filter(id=>!snapshot.tasks.some(d=>d.id===id&&d.status==='done'));
         const assignee=snapshot.agents.find(a=>a.id===t.assignee)?.name || 'Director';
         return `<article class="mission-card ${state}"><strong>${escape(t.title)}</strong><p>${escape(assignee)}${dependencies.length?' · waiting on '+dependencies.length+' dependencies':''}</p><details><summary>Brief & result</summary><pre>${escape(t.description || '')}</pre>${t.result?'<pre>'+escape(t.result)+'</pre>':''}${(t.humanQA||[]).map(qa=>'<p>'+escape(qa.q)+(qa.a?'<br>'+escape(qa.a):'')+'</p>').join('')}</details>${state==='todo'?`<button data-run="${escape(t.id)}" ${!online||!snapshot.runtimeReady||snapshot.paused||dependencies.length||snapshot.agents.length<2?'disabled':''}>Start mission</button>`:state==='blocked'?`<button data-approve="${escape(t.id)}" ${!online?'disabled':''}>Approve & queue</button>`:''}</article>`;
@@ -180,11 +180,20 @@
     return fleet.find(a=>(a.control_center_gateway===host()||a.id===host()) && a.runtime_id===row?.runtime_id)?.id;
   }
   async function loadRuntime() {
+    syncConversation();
     const id=selected;try{const response=await fetch('/api/status');const data=await response.json();fleet=data.agents||[];const aid=selectedRuntime();if(!aid)throw Error('Enroll this signed agent in the fleet to use live chat and wake controls.');const state=await MeshRuntime.request(aid,'runtime.status');if(selected===id){runtimeState=state;renderInspector();}}
     catch(e){if(selected===id){$('factoryPower').disabled=true;$('factoryPowerStatus').textContent=e.message;}}
   }
+  const originAttachments=new Map();
+  async function syncConversation() {
+    const id=selected,aid=selectedRuntime();if(!aid || $('factoryMessage').querySelector('button').disabled)return;
+    try{const feed=await MeshRuntime.history(aid);if(selected!==id || !feed.enabled || $('factoryMessage').querySelector('button').disabled)return;
+      conversations.set(id,feed.events.map(m=>({sender:(m.speaker==='user'?'You':m.agent)+' · '+m.origin,text:m.text,files:originAttachments.get(m.seq)||[],error:m.speaker==='status'})));renderConversation();
+    }catch{/* Existing history remains visible on a disconnect. */}
+  }
   function renderConversation() {
-    $('factoryConversation').innerHTML=(conversations.get(selected)||[]).map(m=>`<li class="${m.error?'chat-error':''}"><strong>${escape(m.sender)}</strong><br>${escape(m.text)}</li>`).join('') || '<li>No conversation in this tab yet.</li>';
+    $('factoryConversation').innerHTML=(conversations.get(selected)||[]).map(m=>`<li class="${m.error?'chat-error':''}"><strong>${escape(m.sender)}</strong><br>${escape(m.text)}</li>`).join('') || '<li>No synchronized conversation yet.</li>';
+    [...$('factoryConversation').children].forEach((node,i)=>FactoryFiles.links(node,selectedRuntime(),(conversations.get(selected)||[])[i]?.files));
   }
   $('handoffSource').onchange=()=>{$('factoryMessage').querySelector('button').textContent=$('handoffSource').value?'Queue conditional instruction':'Send chat';};
   $('factoryMessage').onsubmit=async e=>{
@@ -196,7 +205,7 @@
     if(epoch!==hostEpoch){say('Execution host changed; prompt was not sent.');button.disabled=false;return;}
     if(source){try{const rule=await MeshRuntime.request(aid,'handoff.create',{source,text});say(rule.note);if(selected===id)e.target.reset();await loadShared();}catch(error){say(error.message);}finally{button.disabled=false;}return;}
     const rows=conversations.get(id)||[];conversations.set(id,rows);rows.push({sender:'You',text});const reply={sender:snapshot.agents.find(a=>a.id===id)?.name || id.slice(8),text:'Requesting host…'};rows.push(reply);if(rows.length>80)rows.splice(0,rows.length-80);if(selected===id){e.target.reset();renderConversation();}
-    try{const result=await MeshRuntime.run(aid,'communication.start',{text},job=>{reply.text=job.detail;if(selected===id)renderConversation();});reply.text=result.reply;}
+    try{const result=await MeshRuntime.run(aid,'communication.start',{text},job=>{reply.text=job.detail;if(selected===id)renderConversation();});reply.text=result.reply;reply.files=result.attachments||[];if(result.sync_event_id)originAttachments.set(result.sync_event_id,reply.files);}
     catch(e){reply.text=e.message;reply.error=true;}
     button.disabled=false;if(selected===id)renderConversation();refresh();
   };
@@ -297,7 +306,7 @@
   $('chatterMinutes').onchange=async()=>{const input=$('chatterMinutes');if(!chatter?.enabled)return;if(!input.reportValidity())return;input.disabled=true;try{await MeshRuntime.request(host(),'chatter.configure',{enabled:true,session_minutes:Number(input.value)});await loadShared();}catch(e){input.value=chatter?.session_minutes||15;say(e.message);}finally{input.disabled=false;}};
   async function loadArtifacts() {
     const epoch=hostEpoch,aid=host();$('artifactStatus').textContent='Loading host files…';
-    try{const r=await MeshRuntime.request(aid,'files.list');if(epoch!==hostEpoch)return;artifacts=r.files;renderArtifacts();$('artifactStatus').textContent=`${artifacts.length} files · attachments/downloads up to 10 MB. Publish new files under ~/Rend/artifacts/<agent>/ or a job’s deliverables folder.`;}
+    try{const r=await MeshRuntime.request(aid,'files.list');if(epoch!==hostEpoch)return;artifacts=r.files;renderArtifacts();$('artifactStatus').textContent=`${artifacts.length} files · attachments/downloads up to 10 MB. New files are published under /mnt/pt-context/deliverables/mesh-<agent>/.`;}
     catch(e){if(epoch===hostEpoch)$('artifactStatus').textContent=e.message;}
   }
   function renderArtifacts() {
@@ -328,5 +337,5 @@
   $('rosterCounter').onclick=()=>showCounter('agents');$('missionCounter').onclick=()=>showCounter('missions');$('messageCounter').onclick=()=>showCounter('messages');
 
   try{manualPositions=JSON.parse(sessionStorage.getItem('mesh-office-layout:'+host())||'{}');}catch{}
-  refresh();loadShared();const sharedTimer=setInterval(loadShared,6000);const timer=setInterval(refresh,4000);window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(sharedTimer);cancelAnimationFrame(animation);});
+  refresh();loadShared();setInterval(syncConversation,4000);const sharedTimer=setInterval(loadShared,6000);const timer=setInterval(refresh,4000);window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(sharedTimer);cancelAnimationFrame(animation);});
 })();

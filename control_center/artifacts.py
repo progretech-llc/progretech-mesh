@@ -12,7 +12,7 @@ from pathlib import Path
 
 MAX_FILE = 10 * 1024 * 1024
 CHUNK = 32768
-ROLES = {'main':'rend','researcher':'lyra','coder':'mak','designer':'designer','reviewer':'reviewer','architect':'architect','progre':'progre','fast':'fast','imagen':'imagen','codex':'codex'}
+ROLES = {'main':'rend','researcher':'lyra','coder':'mak','imagen':'imagen','progre':'progre','codex':'odexi'}
 EXTENSIONS = {'.txt','.md','.csv','.json','.pdf','.png','.jpg','.jpeg','.webp','.gif','.svg','.zip','.py','.js','.ts','.html','.css','.yaml','.yml','.docx','.xlsx','.pptx','.mp3','.wav','.mp4'}
 _LOCK = threading.RLock()
 
@@ -34,11 +34,26 @@ def allowed(name):
     return Path(name).suffix.lower() in EXTENSIONS and not name.startswith('.') and not any(w in name.lower() for w in ('credential','secret','private','token','password','backup','mempalace'))
 
 
+def storage(home):
+    # Tests use an isolated synthetic mount. Production must have the owner drive.
+    if Path(home).resolve()!=Path.home().resolve():return Path(home)/'pt-context'
+    if not os.path.ismount('/mnt/pt-context'):raise ValueError('pt_context_unavailable')
+    return Path('/mnt/pt-context')
+
+
+def output_directory(home,role):
+    return storage(home)/'deliverables'/('mesh-'+ROLES[role])
+
+
 def safe(home,path):
     home=Path(home).resolve();path=Path(path)
-    try:parts=path.relative_to(home).parts
-    except ValueError:raise ValueError('artifact_path_unavailable')
     current=home
+    try:parts=path.relative_to(home).parts
+    except ValueError:
+        base=storage(home)
+        if not any(path.is_relative_to(base/folder) for folder in ('deliverables','job-artifacts')):raise ValueError('artifact_path_unavailable')
+        parts=path.relative_to(base).parts;current=base
+    if '..' in parts:raise ValueError('artifact_path_unavailable')
     for part in parts:
         current=current/part
         if current.is_symlink():raise ValueError('artifact_path_unavailable')
@@ -56,6 +71,7 @@ def read_regular(home,path,offset=0,limit=MAX_FILE):
 def catalog(home):
     home=Path(home);roots=[]
     for role in ROLES.values():roots.append((home/'Rend/artifacts'/role,role,'published'))
+    for runtime,role in ROLES.items():roots.append((output_directory(home,runtime),role,'published'))
     jobs=home/'Rend/jobs'
     if jobs.is_dir() and not jobs.is_symlink():
         for job in sorted(jobs.iterdir(),key=lambda p:p.name,reverse=True)[:200]:
@@ -76,7 +92,7 @@ def catalog(home):
                 try:
                     st=p.stat()
                     if not stat.S_ISREG(st.st_mode):continue
-                    rel=str(p.relative_to(home));fid=hashlib.sha256(f'{rel}:{st.st_mtime_ns}:{st.st_size}'.encode()).hexdigest()[:32]
+                    rel=str(p);fid=hashlib.sha256(f'{rel}:{st.st_mtime_ns}:{st.st_size}'.encode()).hexdigest()[:32]
                     rows.append({'id':fid,'name':name,'relative_path':str(p.relative_to(root)),'producer':role,'source':source,'size':st.st_size,'modified':st.st_mtime,'downloadable':0<st.st_size<=MAX_FILE,'path':str(p)})
                 except OSError:continue
             if scanned>2000:break
@@ -90,11 +106,10 @@ def public(row):return {k:v for k,v in row.items() if k!='path'}
 def dispatch(home,role,action,args):
     validate(action,args);home=Path(home)
     if role not in ROLES:raise ValueError('artifact_role_unavailable')
-    root=safe(home,home/'.progretech-mesh/prompt-attachments'/role)
+    root=safe(home,storage(home)/'job-artifacts'/('mesh-attachments-'+role))
     with _LOCK:
-        for label in ROLES.values():
-            safe(home,home/'Rend/artifacts'/label).mkdir(parents=True,exist_ok=True,mode=0o700)
-        if action=='files.list':return {'files':[public(r) for r in catalog(home)],'output_directory':str(home/'Rend/artifacts'/ROLES[role]),'max_bytes':MAX_FILE}
+        safe(home,output_directory(home,role)).mkdir(parents=True,exist_ok=True,mode=0o700)
+        if action=='files.list':return {'files':[public(r) for r in catalog(home)],'output_directory':str(output_directory(home,role)),'max_bytes':MAX_FILE}
         if action in {'files.read','files.reference'}:
             row=next((r for r in catalog(home) if r['id']==args['id']),None)
             if not row:raise ValueError('artifact_not_found_or_changed')

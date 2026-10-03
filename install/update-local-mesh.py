@@ -44,6 +44,7 @@ def install(state,target):
     offer=read(state/'offer.json',{})
     if offer.get('target')!=target or offer.get('current')!=previous['commit']:raise ValueError('update_offer_changed')
     if git(previous['source'],'status','--porcelain'):raise ValueError('local_changes_preserved_update_blocked')
+    if git(previous['source'],'rev-parse','HEAD')!=previous['commit']:raise ValueError('installation_source_changed')
     repo=Path(cfg['repository']);ref='refs/remotes/origin/'+cfg['channel']
     if git(repo,'rev-parse',ref)!=target:raise ValueError('update_offer_changed')
     update_dir=Path(cfg['release_root'])/target
@@ -70,16 +71,17 @@ def install(state,target):
         if time.monotonic()>=deadline:raise ValueError('active_mesh_work_update_deferred')
         time.sleep(2)
     if git(previous['source'],'status','--porcelain'):raise ValueError('local_changes_preserved_update_blocked')
+    if git(previous['source'],'rev-parse','HEAD')!=previous['commit']:raise ValueError('installation_source_changed')
     next_install={'source':str(update_dir),'python':str(interpreter),'commit':target,'version':version}
     write(state/'previous.json',previous)
     write(state/'installed.json',next_install)
     write(state/'job.json',{'phase':'restarting','target':target})
     try:
-        subprocess.run(['systemctl','--user','restart','progretech-mesh-local.service'],check=True,timeout=30)
+        subprocess.run(['systemctl','--user','restart','progretech-mesh-local.service','rend-control-center.service'],check=True,timeout=30)
         if not health(target):raise ValueError('updated_service_health_failed')
     except (ValueError,subprocess.SubprocessError):
         write(state/'installed.json',previous)
-        subprocess.run(['systemctl','--user','restart','progretech-mesh-local.service'],check=True,timeout=30)
+        subprocess.run(['systemctl','--user','restart','progretech-mesh-local.service','rend-control-center.service'],check=True,timeout=30)
         if not health(previous['commit']):raise ValueError('previous_release_health_unconfirmed')
         raise ValueError('update_failed_previous_release_restored')
     write(state/'offer.json',{'current':target,'target':target,'available':False,'commits':[]})

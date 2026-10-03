@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 _CONTROL_CACHE = {}
 _CONTROL_LOCK = threading.Lock()
-ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','architect':'architect','reviewer':'reviewer','fast':'fast','progre':'progre','designer':'designer','imagen':'imagen','codex':'codex'}
+ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','progre':'progre','imagen':'imagen','codex':'codex'}
 
 
 def role_controls(home, refresh=False):
@@ -396,13 +396,14 @@ class MeshRuntime:
         except (OSError,subprocess.TimeoutExpired,json.JSONDecodeError):raise ValueError('mesh_context_delivery_unconfirmed')
         return {'scope':'agent','accepted':True,'delivery':receipt['status'],'note':'Runtime accepted this instruction for the observed work session. Processing or completion is not yet confirmed.'}
 
-    def chat(self, agent, text, admission=None, background=None, image_paths=None):
-        from control_center.artifacts import ROLES, safe
+    def chat(self, agent, text, admission=None, background=None, image_paths=None, owner_text=None):
+        original_text=owner_text if owner_text is not None else text
+        from control_center.artifacts import ROLES, safe, output_directory
         role=ROLES.get(self.provider.bindings[agent])
         from control_center.media_jobs import image_request
-        media=not background and not image_paths and image_request(text)
+        media=not background and not image_paths and '\nAttached file ' not in text and '\nPublished artifact ' not in text and image_request(text)
         if role and not background and not media:
-            output=safe(self.home,self.home/'Rend/artifacts'/role)
+            output=safe(self.home,output_directory(self.home,self.provider.bindings[agent]))
             output.mkdir(parents=True,exist_ok=True,mode=0o700)
             text+='\nIf generating a deliverable for the owner, publish a non-secret copy under '+str(output)+'. Report the actual path; a reply alone is not a published file. Keep private memory and credentials out of shared artifacts.'
         def worker(ident):
@@ -445,7 +446,25 @@ class MeshRuntime:
             self.mark(ident,'writing','Reply generated; preparing delivery')
             if answer.lstrip().startswith(('⚠️ LLM request failed','LLM request failed:')):raise ValueError('mesh_provider_rejected')
             return {'reply':answer,'role':role,'model':chosen}
-        return self.start(agent,'chat',worker,background=bool(background),queue_timeout=1200 if media else 600,capability='image_generation' if media else None,track=not background)
+        def synchronized_worker(ident):
+            if background:return worker(ident)
+            from control_center.conversation_sync import publish
+            runtime=self.provider.bindings[agent]
+            session='agent:'+runtime+':mesh-chat:'+agent
+            nonce=self.settings(agent).get('conversation_nonce')
+            if nonce:session+=':'+nonce
+            common={'agent':runtime,'origin':'mesh','session':session}
+            publish(self.home,**common,event_key='mesh:'+ident+':user',speaker='user',text=original_text)
+            try:
+                result=worker(ident)
+            except Exception:
+                publish(self.home,**common,event_key='mesh:'+ident+':status',speaker='status',text='Request failed or completion is unconfirmed. Check Mesh task status before retrying.')
+                raise
+            result['sync_event_id']=publish(self.home,**common,event_key='mesh:'+ident+':assistant',speaker='assistant',text=result.get('reply',''))
+            from control_center.artifacts import catalog, public
+            result['attachments']=[public(row) for row in catalog(self.home) if row['path'] in result.get('reply','') and row['downloadable']]
+            return result
+        return self.start(agent,'chat',synchronized_worker,background=bool(background),queue_timeout=1200 if media else 600,capability='image_generation' if media else None,track=not background)
 
     def snapshot(self, agent, kind):
         state=self.status(agent)

@@ -44,3 +44,11 @@ test('both transport handlers use the tested normalization path', () => {
   assert.match(source, /meshConversationBody\(payload, meshIdentity\?\.agent_id, "mesh-websocket"\)/);
   assert.match(source, /meshConversationBody\(message,meshIdentity\?\.agent_id,"webrtc-direct"\)/);
 });
+
+test('consolidated aliases preserve IDs and retired roles fail closed', () => {
+  const cfg={agents:{entries:{coder:{},researcher:{},imagen:{},codex:{}}}};
+  for (const [name,id] of [['mak','coder'],['lyra','researcher'],['imagen','imagen'],['odexi','codex']]) {
+    assert.equal(resolveMeshTarget({target_agent:name,text:'check'},cfg).agentId,id);
+  }
+  for (const name of ['designer','fast','tec','architect','revie','reviewer']) assert.throws(()=>resolveMeshTarget({target_agent:name,text:'check'},cfg),/unknown_agent/);
+});
