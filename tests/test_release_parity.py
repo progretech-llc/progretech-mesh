@@ -40,5 +40,7 @@ class ReleaseParityTests(unittest.TestCase):
         self.assertNotIn("chatter?.enabled&&id.startsWith('factory-')",office)
         self.assertIn('.floor-node.working,.floor-node.busy{color:#6fb7ff}',css)
         self.assertIn('.floor-node.sleeping,.floor-node.offline{color:#8198aa',css)
+        self.assertIn('.floor-link.instruction{stroke:#62d6ed;stroke-dasharray:none}',css)
+        self.assertIn('.floor-link.conversation{stroke:#b38cf3;stroke-dasharray:3 6}',css)
         self.assertIn('agent?.native?.runtime_id',avatars)
         self.assertIn('moxy.png?v=2',avatars)

@@ -3,7 +3,7 @@ const context={window:{},Date,setTimeout};vm.runInNewContext(readFileSync(new UR
 test('fleet and Factory use identical state and last-event color',()=>{
  const fleet=[{id:'rend--coder',runtime_id:'coder',state:'idle',transport:'connected',mesh_runtime:{sleeping:false},last_event:{type:'heartbeat',payload:{}}}];
  const floor=api.factoryAgent({id:'mak',runtime_id:'coder',state:'unknown'},fleet,'rend');
- assert.equal(api.indicator(floor).state,api.indicator(fleet[0]).state);assert.equal(api.indicator(floor).state,'monitoring');
+ assert.equal(api.indicator(floor).state,api.indicator(fleet[0]).state);assert.equal(api.indicator(floor).state,'idle');
  assert.equal(api.terminalDirection(fleet[0].last_event).label,'SYS');
 });
 test('offline and asleep do not show misleading successful activity',()=>{
@@ -12,7 +12,7 @@ test('offline and asleep do not show misleading successful activity',()=>{
  assert.equal(api.indicator({state:'unknown'}).label,'Activity unknown');
 });
 test('terminal and lamp use the same direction classification',()=>{
- for(const [event,label,state] of [[{type:'heartbeat'},'SYS','monitoring'],[{type:'message_response'},'IN','success'],[{type:'user_message'},'OUT','busy'],[{type:'direct_error'},'ERR','error'],[{type:'file_offer'},'FILE','warning']]){
+ for(const [event,label,state] of [[{type:'heartbeat'},'SYS','idle'],[{type:'message_response'},'IN','idle'],[{type:'user_message'},'OUT','busy'],[{type:'direct_error'},'ERR','error'],[{type:'file_offer'},'FILE','idle']]){
   assert.equal(api.terminalDirection(event).label,label);assert.equal(api.indicator({state:'idle',transport:'connected',last_event:event}).state,state);
  }
 });
@@ -35,4 +35,10 @@ test('unified office keeps saved IDs but removes native aliases and uses native 
 test('current work label ignores connection boilerplate and exposes real task ids',()=>{
  assert.equal(api.workLabel({state:'unknown',transport:'connected',task:'Local host connected',phase:'Authenticated local host'}),'No active task reported');
  assert.equal(api.workLabel({state:'working',transport:'connected',task_id:'PT-2026-101'}),'PT-2026-101');
+});
+test('pulse colors strictly map current work, idle, error and sleep',()=>{
+ assert.equal(api.indicator({state:'unknown',transport:'connected',gateway_agent:true}).state,'idle');
+ assert.equal(api.indicator({state:'working',transport:'connected'}).state,'busy');
+ assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout'}}).state,'error');
+ assert.equal(api.indicator({state:'idle',transport:'connected',mesh_runtime:{sleeping:true}}).state,'sleeping');
 });

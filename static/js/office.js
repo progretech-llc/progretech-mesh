@@ -7,7 +7,7 @@
   const host = () => $('officeHost').value;
   const say = text => { $('officeStatus').textContent = text; };
   const legend=document.querySelector('.floor-legend');
-  if(legend)legend.innerHTML='<span class="cyan">Director ring</span><span class="blue">Working</span><span class="green">Idle</span><span class="gray">Sleeping / offline</span><span class="pink">Needs you</span><span class="red">Error</span><span>··· instruction</span><span>∿ shared task</span>';
+  if(legend)legend.innerHTML='<span class="cyan">Director ring</span><span class="blue">Working</span><span class="green">Idle</span><span class="gray">Sleeping / offline</span><span class="pink">Needs you</span><span class="red">Error</span><span>··· chatter</span><span>— agents working together</span>';
   const activeChatterStates=new Set(['queued','approaching','first','second','third','reply_wait']);
   const pairCooldown=new Map();
   function officeRow(id) {
@@ -200,7 +200,7 @@
     $('officeAgentCount').textContent=snapshot.agents.length+(snapshot.factoryAgents?.length||0);
     $('officeTaskCount').textContent=snapshot.tasks.filter(t=>t.status!=='done').length;
     $('officeMessageCount').textContent=snapshot.messages.length;
-    $('officeRuntimeNotice').textContent=document.body.dataset.offline?snapshot.runtimeReady?'Your local GGUF model runs through the bundled inference engine. Linked workers can delegate to your imported agents. Pausing stops work at the next agent step.':'Choose a GGUF model in Mission Control to execute missions. You can hire workers and organize missions now.':snapshot.runtimeReady?'CrewAI is configured on this host. Missions use its model and approved workspace. Pausing stops work at the next agent step.':'CrewAI execution needs setup on this host. Office coordination is available; see docs/FACTORY_OFFICE.md.';
+    $('officeRuntimeNotice').textContent=document.body.dataset.offline?snapshot.runtimeReady?'Your local GGUF model runs through the bundled inference engine. Linked workers can delegate to your imported agents. Pausing stops work at the next agent step.':'Choose a GGUF model in Mission Control to execute missions. You can hire workers and organize missions now.':snapshot.nativeRuntimeReady?'Missions run through the assigned connected OpenClaw role. Pausing stops work at the next agent step.':snapshot.runtimeReady?'CrewAI is configured on this host. Missions use its model and approved workspace. Pausing stops work at the next agent step.':'Connect the assigned native role or configure CrewAI before starting a mission.';
     if(document.activeElement!==$('maxIterations'))$('maxIterations').value=snapshot.maxIterations;
     const current=$('handoffSource').value;
     const sources=[...snapshot.agents.map(a=>a.native).filter(Boolean),...(snapshot.factoryAgents||[])].filter((a,i,all)=>a.id&&all.findIndex(row=>row.id===a.id)===i);
