@@ -6,6 +6,7 @@ REGION="${REGION:-us-east1}"
 SERVICE="${SERVICE:-progretech-mesh}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-}"
 DEPLOYMENT_TIER="${MESH_DEPLOYMENT_TIER:-staging}"
+PUBLIC_ORIGIN="${MESH_PUBLIC_ORIGIN:-https://mesh.progretech.com}"
 
 SESSION_SECRET_NAME="${SESSION_SECRET_NAME:-progretech-mesh-session-key}"
 ACTIVATION_SECRET_NAME="${ACTIVATION_SECRET_NAME:-progretech-mesh-activation-secret}"
@@ -64,7 +65,7 @@ ENV_VARS+=",MESH_FIREBASE_APP_ID=${FIREBASE_APP_ID}"
 ENV_VARS+=",MESH_FIREBASE_AUTH_READY=${FIREBASE_AUTH_READY}"
 ENV_VARS+=",MESH_CODESEAL_READY=${MESH_CODESEAL_READY:-0}"
 ENV_VARS+=",MESH_IDENTITY_REPLAY_MODE=${MESH_IDENTITY_REPLAY_MODE:-single-process-bounded}"
-ENV_VARS+=",MESH_PUBLIC_ORIGIN=${MESH_PUBLIC_ORIGIN:-https://mesh.progretech.com}"
+ENV_VARS+=",MESH_PUBLIC_ORIGIN=${PUBLIC_ORIGIN}"
 
 ARGS=(
   run deploy "${SERVICE}"
@@ -97,5 +98,5 @@ URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" --format='
 echo
 echo "Deployment submitted."
 echo "Service URL: ${URL}"
-echo "Custom origin target: ${MESH_PUBLIC_ORIGIN:-https://mesh.progretech.com}"
-echo "Run: SERVICE_URL='${URL}' ./scripts/verify-cloud-run.sh"
+echo "Public origin target: ${PUBLIC_ORIGIN}"
+echo "Run: SERVICE_URL='${PUBLIC_ORIGIN}' ./scripts/verify-cloud-run.sh"

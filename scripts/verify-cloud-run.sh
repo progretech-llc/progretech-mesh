@@ -41,8 +41,8 @@ if [[ "${AUTH_CODE}" != "302" ]]; then
   exit 4
 fi
 
-curl -fsSI "${SERVICE_URL}/static/manifest.webmanifest" >/dev/null
-curl -fsSI "${SERVICE_URL}/static/sw.js" >/dev/null
+curl -fsSI "${SERVICE_URL}/manifest.webmanifest" >/dev/null
+curl -fsSI "${SERVICE_URL}/sw.js" >/dev/null
 echo "PWA shell endpoints: reachable"
 
 if [[ "${READY_CODE}" != "200" ]]; then
