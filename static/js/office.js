@@ -171,6 +171,10 @@
     $('officeMessageCount').textContent=snapshot.messages.length;
     $('officeRuntimeNotice').textContent=document.body.dataset.offline?snapshot.runtimeReady?'Your local GGUF model runs through the bundled inference engine. Linked workers can delegate to your imported agents. Pausing stops work at the next agent step.':'Choose a GGUF model in Mission Control to execute missions. You can hire workers and organize missions now.':snapshot.runtimeReady?'CrewAI is configured on this host. Missions use its model and approved workspace. Pausing stops work at the next agent step.':'CrewAI execution needs setup on this host. Office coordination is available; see docs/FACTORY_OFFICE.md.';
     if(document.activeElement!==$('maxIterations'))$('maxIterations').value=snapshot.maxIterations;
+    const current=$('handoffSource').value;
+    const sources=[...snapshot.agents.map(a=>a.native).filter(Boolean),...(snapshot.factoryAgents||[])].filter((a,i,all)=>a.id&&all.findIndex(row=>row.id===a.id)===i);
+    $('handoffSource').innerHTML='<option value="">Send now</option>'+sources.map(a=>`<option value="${escape(a.id)}">${escape(a.name||a.id)}</option>`).join('');
+    if(sources.some(a=>a.id===current))$('handoffSource').value=current;
     renderFloor();renderBoard();renderInspector();
   }
   function selectedRuntime() {

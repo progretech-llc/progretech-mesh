@@ -12,7 +12,30 @@ from urllib.request import Request, urlopen
 
 _CONTROL_CACHE = {}
 _CONTROL_LOCK = threading.Lock()
-ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','progre':'progre','imagen':'imagen','codex':'codex'}
+ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','progre':'progre','imagen':'imagen','codex':'codex','moxy':'moxy'}
+SIGNAL_TTL_SECONDS = 900
+
+
+def sync_gateway_status_file(home):
+    """Persist a bounded, credential-free OpenClaw status snapshot for Mesh."""
+    try:
+        result=subprocess.run(['openclaw','gateway','call','status','--json'],capture_output=True,text=True,timeout=12)
+        if result.returncode:raise ValueError('gateway_status_unavailable')
+        raw=json.loads(result.stdout)
+        snapshot={'observed_at':time.time(),'runtimeVersion':raw.get('runtimeVersion'),
+            'tasks':raw.get('tasks',{}),'taskAudit':raw.get('taskAudit',{}),
+            'heartbeat':raw.get('heartbeat',{}),'sessions':raw.get('sessions',{}),
+            'degradedSecretOwners':raw.get('degradedSecretOwners',[]),
+            'degradedPlugins':raw.get('degradedPlugins',[])}
+        path=Path(home)/'.progretech-mesh/gateway-status.json';path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+        temporary=path.with_name(path.name+'.'+secrets.token_hex(8)+'.tmp')
+        import os
+        fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'w') as stream:json.dump(snapshot,stream);stream.flush();os.fsync(stream.fileno())
+        temporary.replace(path)
+        return snapshot
+    except (OSError,ValueError,subprocess.SubprocessError,json.JSONDecodeError):
+        return None
 
 
 def role_controls(home, refresh=False):
@@ -51,7 +74,11 @@ def read_signals(home):
     try:data=json.loads((Path(home)/'.progretech-mesh/agent-signals.json').read_text())
     except (OSError,ValueError):data={}
     for role in ROLE_NAMES:
-        try:data[role]=json.loads((Path(home)/'.progretech-mesh/agent-signals'/f'{role}.json').read_text())
+        try:
+            row=json.loads((Path(home)/'.progretech-mesh/agent-signals'/f'{role}.json').read_text())
+            if isinstance(row,dict) and isinstance(row.get('at'),(int,float)) and time.time()-row['at']>SIGNAL_TTL_SECONDS and row.get('severity')=='error':
+                row={'severity':'unknown','code':'stale_signal','at':row['at'],'stale':True,'previous_severity':'error','previous_code':row.get('code')}
+            data[role]=row
         except (OSError,ValueError):pass
     return data
 
@@ -63,6 +90,30 @@ class MeshRuntime:
         self.health_cache = {}
         self.lock = threading.RLock()
         self.inference = threading.Lock()
+        self.gateway_status_checked = 0.0
+
+    def sync_gateway_status(self):
+        """Persist a bounded, credential-free OpenClaw status snapshot for Mesh."""
+        now=time.time()
+        if now-self.gateway_status_checked<10:return
+        self.gateway_status_checked=now
+        try:
+            result=subprocess.run(['openclaw','gateway','call','status','--json'],capture_output=True,text=True,timeout=12)
+            if result.returncode:raise ValueError('gateway_status_unavailable')
+            raw=json.loads(result.stdout)
+            snapshot={'observed_at':now,'runtimeVersion':raw.get('runtimeVersion'),
+                'tasks':raw.get('tasks',{}),'taskAudit':raw.get('taskAudit',{}),
+                'heartbeat':raw.get('heartbeat',{}),'sessions':raw.get('sessions',{}),
+                'degradedSecretOwners':raw.get('degradedSecretOwners',[]),
+                'degradedPlugins':raw.get('degradedPlugins',[])}
+            path=self.home/'.progretech-mesh/gateway-status.json';path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+            temporary=path.with_name(path.name+'.'+secrets.token_hex(8)+'.tmp')
+            import os
+            fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(fd,'w') as stream:json.dump(snapshot,stream);stream.flush();os.fsync(stream.fileno())
+            temporary.replace(path)
+        except (OSError,ValueError,subprocess.SubprocessError,json.JSONDecodeError):
+            return
 
     def settings(self, agent):
         from control_center.management import preferences

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from mesh_gateway_agents import enrollment_binding
-from offline.registry import Registry, runtime_executable
+from offline.registry import MAX_GATEWAY_ROSTER_BYTES, Registry, runtime_executable
 
 
 def pem():
@@ -114,14 +114,14 @@ class LocalGatewayTests(unittest.TestCase):
 
     def test_inline_avatars_fit_bounded_inventory_but_are_not_returned(self):
         public={'id':'codex','name':'Odexi','workspace':str(self.home),
-                'identity':{'avatar':'data:image/jpeg;base64,'+'A'*300000}}
+                'identity':{'avatar':'data:image/jpeg;base64,'+'A'*(5*1024*1024)}}
         def run(args,**kwargs):return subprocess.CompletedProcess(args,0,json.dumps({'agents':[public]}),'')
         with patch('offline.registry.shutil.which',return_value=str(self.exe)):
             result=self.registry.discover_gateway(self.home,run)
         self.assertTrue(result['available'])
         self.assertEqual(result['candidates'][0]['name'],'Odexi')
         self.assertNotIn('avatar',json.dumps(result))
-        public['identity']['avatar']='A'*(4*1024*1024)
+        public['identity']['avatar']='A'*MAX_GATEWAY_ROSTER_BYTES
         with patch('offline.registry.shutil.which',return_value=str(self.exe)):
             self.assertFalse(self.registry.discover_gateway(self.home,run)['available'])
 

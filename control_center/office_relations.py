@@ -30,8 +30,15 @@ def interactions(snapshot, home):
     try:
         rows=json.loads((Path(home)/'.progretech-mesh/agent-interactions.json').read_text())
         for row in rows[-40:]:
-            if 0<=time.time()-row['at']<180:
-                output.append({**row,'from':'factory-'+row['from'],'to':'factory-'+row['to']})
+            # Keep a recent handoff visible long enough for the owner to inspect it;
+            # historical rows remain persisted but do not become permanent links.
+            if 0<=time.time()-row['at']<900:
+                # Older Mesh plugin releases called Codex's stable runtime
+                # identity "odexi". Normalize it only at render time so the
+                # historical event remains intact while links target the
+                # current factory-codex floor node.
+                aliases={'odexi':'codex'}
+                output.append({**row,'from':'factory-'+aliases.get(row['from'],row['from']),'to':'factory-'+aliases.get(row['to'],row['to'])})
     except (OSError,ValueError,KeyError,TypeError):pass
     try:
         state=json.loads((Path(home)/'.progretech-mesh/artifact-handoffs.json').read_text())

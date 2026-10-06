@@ -251,6 +251,7 @@ class Handoffs:
         def run():
             while True:
                 try:
+                    self.mesh.sync_gateway_status()
                     self.tick()
                     self.chatter_tick()
                 except Exception:

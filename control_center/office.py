@@ -127,6 +127,13 @@ def dispatch_office(home, role, args, agent_id=None):
         if row['sleeping']:row['state']='sleeping'
     from control_center.office_relations import interactions
     result['snapshot']['interactions']=interactions(result['snapshot'],home)
+    from control_center.mesh_runtime import sync_gateway_status_file
+    sync_gateway_status_file(home)
+    try:
+        gateway_status=json.loads((Path(home)/'.progretech-mesh/gateway-status.json').read_text())
+        result['snapshot']['gatewayStatus']=gateway_status
+    except (OSError,ValueError):
+        result['snapshot']['gatewayStatus']={'state':'unavailable','note':'Gateway status snapshot not yet available.'}
     from control_center.factory_jobs import _config
     settings = _config(home).get('crewai', {})
     result['snapshot']['runtimeReady'] = bool(settings.get('enabled') and role in settings.get('roles', []) and Path(settings.get('python', '')).is_file())
