@@ -45,7 +45,7 @@ steps:
       - update
       - progretech-mesh
       - --image=us-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/progretech-mesh:$COMMIT_SHA
-      - --update-env-vars=BUILD_ID=$COMMIT_SHA,MESH_VERSION=1.18.2-avatars-local-updates,MESH_AUTH_MODE=progretech-shared,PROGRETECH_SECURITY_ENFORCED=1
+      - --update-env-vars=BUILD_ID=$COMMIT_SHA,MESH_VERSION=1.18.3-e2e-stability,MESH_AUTH_MODE=progretech-shared,PROGRETECH_SECURITY_ENFORCED=1
       - --update-secrets=PROGRETECH_SECURITY_STATUS_TOKEN=progretech-security-status-token:latest
       - --region=us-east1
       - --project=$PROJECT_ID

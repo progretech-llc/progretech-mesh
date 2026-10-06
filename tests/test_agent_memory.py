@@ -52,6 +52,27 @@ class AgentMemoryTests(unittest.TestCase):
         with patch.object(h,'call',side_effect=OSError):h.refresh(reg,gateways)
         self.assertNotIn('rend',gateways);self.assertEqual(reg['rend']['transport'],'not-connected')
 
+    def test_local_transport_forwards_bounded_mission_control_requests(self):
+        from mesh_factory_control import FactoryRelay
+        import mesh_factory_control
+        h=LocalHost(self.home)
+        relay=FactoryRelay(timeout=.01)
+        prior=mesh_factory_control.factory_relay
+        mesh_factory_control.factory_relay=relay
+        self.addCleanup(setattr,mesh_factory_control,'factory_relay',prior)
+        with patch.object(h,'call',return_value={'ok':True,'result':{'agents':[]}}) as call:
+            result,status=relay.dispatch('rend','factory.status',{},h.send)
+        self.assertEqual(status,200)
+        self.assertTrue(result['ok'])
+        call.assert_called_once_with('/api/factory/control',{'action':'factory.status','args':{}})
+        self.assertEqual(relay.pending,{})
+
+    def test_local_transport_rejects_non_host_factory_target(self):
+        h=LocalHost(self.home)
+        message={'type':'factory_control_request','request_id':'fixture',
+                 'payload':{'action':'factory.status','args':{}}}
+        self.assertEqual(h.send('rend--lyra',message),(False,'local_control_only'))
+
 class CloudMemoryTests(unittest.TestCase):
     def test_authenticated_memory_relay_is_ephemeral_and_origin_scoped(self):
         import main

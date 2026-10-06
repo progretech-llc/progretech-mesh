@@ -1,10 +1,16 @@
 """Both Mesh front ends must ship the common memory surface and controls."""
+import json
 import unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 
 class ReleaseParityTests(unittest.TestCase):
+    def test_release_version_matches_all_hosted_and_local_entrypoints(self):
+        version=json.loads((ROOT/'mesh-release.json').read_text())['version']
+        for name in ('main.py','cloudbuild.yaml','scripts/deploy-cloud-run.sh'):
+            self.assertIn(version,(ROOT/name).read_text(),name)
+
     def test_shared_memory_ui_shipped_to_every_surface(self):
         for name in ('index','office','offline','control_center'):
             self.assertIn('/static/js/agent-memory.js',(ROOT/f'templates/{name}.html').read_text())
