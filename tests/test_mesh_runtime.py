@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from urllib.error import HTTPError
 from unittest.mock import patch
 from control_center.provider import AgentControlProvider
-from control_center.mesh_runtime import MeshRuntime, provider_error
+from control_center.mesh_runtime import MeshRuntime, gateway_activity_idle, provider_error
 from control_center.management import validate_management
 from control_center.office import engine, validate_office
 from control_center.office_relations import interactions
@@ -33,6 +33,18 @@ class RuntimeTests(unittest.TestCase):
             if value['done']:return value
             time.sleep(.01)
         self.fail('Job did not finish')
+
+    def test_gateway_activity_supports_current_and_legacy_status_schemas(self):
+        current={'shutdownBudget':{'activeWork':{'rootRequests':0,'cronRuns':0}}}
+        self.assertTrue(gateway_activity_idle(current))
+        self.assertFalse(gateway_activity_idle({'shutdownBudget':{'activeWork':{'rootRequests':1}}}))
+        self.assertTrue(gateway_activity_idle({**current,'tasks':{'active':0}}))
+        self.assertFalse(gateway_activity_idle({**current,'tasks':{'active':1}}))
+        for invalid in ({}, {'shutdownBudget':{'activeWork':{}}},
+                        {'shutdownBudget':{'activeWork':{'rootRequests':-1}}},
+                        {**current,'tasks':{}}, {**current,'tasks':{'active':True}}):
+            with self.assertRaisesRegex(ValueError,'runtime_activity_unavailable'):
+                gateway_activity_idle(invalid)
     def test_imagen_wakes_from_paused_state_without_affecting_other_roles(self):
         self.provider.bindings['host--imagen'] = 'imagen'
         self.rows['imagen'] = {'mode':'paused','until':None}
