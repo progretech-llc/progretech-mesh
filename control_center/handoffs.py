@@ -193,7 +193,10 @@ class Handoffs:
                 except ValueError:row.update(state='unconfirmed',note='Runtime receipt unavailable; no replay.');continue
                 if not job.get('done'):continue
                 if job.get('error'):
-                    row.update(state='reply_wait' if row['messages'] else 'approaching',approach_until=now+10,note='Admission changed; waiting for capacity.') if job['error']=='mesh_chatter_deferred' else row.update(state='failed',note=job['error'])
+                    retryable={'mesh_chatter_deferred','model_preload_not_confirmed','model_memory_headroom_required'}
+                    if job['error'] in retryable:
+                        row.update(state='reply_wait' if row['messages'] else 'approaching',approach_until=now+30,note='Runtime preparation deferred; waiting for capacity.')
+                    else:row.update(state='failed',note=job['error'])
                     continue
                 row['messages'].append({'agent':ROLES[self.provider.bindings[agent]],'text':job.get('result',{}).get('reply','')[:4000],'at':now})
                 if len(row['messages'])>=len(self.participants(row)):
