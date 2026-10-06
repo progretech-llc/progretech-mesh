@@ -243,11 +243,12 @@ class MeshRuntime:
         return is_sleeping(rows[role])
 
     def chat_sleeping(self, agent):
-        # Codex is a bound OpenClaw runtime but is not managed by the local-model
-        # workday scheduler. Missing scheduler controls do not disable its chat.
+        # Codex and Moxy are bound OpenClaw runtimes but are not managed by the
+        # local-model workday scheduler. Missing scheduler controls do not
+        # disable their owner chat or low-priority chatter.
         try:return self.sleeping(agent)
         except ValueError as exc:
-            if self.provider.bindings.get(agent)=='codex' and str(exc)=='runtime_controls_unavailable':return False
+            if self.provider.bindings.get(agent) in {'codex','moxy'} and str(exc)=='runtime_controls_unavailable':return False
             raise
 
     def control(self, agent, awake):

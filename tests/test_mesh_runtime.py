@@ -60,10 +60,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(result['result']['sleeping'])
         self.assertEqual(self.rows['rend']['mode'],'running')
 
-    def test_unscheduled_codex_can_chat_without_claiming_scheduler_availability(self):
-        self.provider.bindings['host--codex']='codex'
-        self.assertFalse(self.runtime.chat_sleeping('host--codex'))
-        self.assertIsNone(self.runtime.status('host--codex')['sleeping'])
+    def test_unscheduled_codex_and_moxy_can_chat_without_claiming_scheduler_availability(self):
+        self.provider.bindings.update({'host--codex':'codex','host--moxy':'moxy'})
+        for agent in ('host--codex','host--moxy'):
+            self.assertFalse(self.runtime.chat_sleeping(agent))
+            self.assertIsNone(self.runtime.status(agent)['sleeping'])
         self.rows['codex']={'mode':'paused','until':None}
         self.assertTrue(self.runtime.chat_sleeping('host--codex'))
 

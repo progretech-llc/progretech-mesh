@@ -11,6 +11,7 @@ class FakeMesh:
     def __init__(self):self.calls=[];self.jobs={};self.asleep=False;self.native_idle=True;self.inference=threading.Lock();self.lock=threading.RLock()
     def status(self,a):return {'sleeping':self.asleep}
     def sleeping(self,a):return self.asleep
+    def chat_sleeping(self,a):return self.asleep
     def idle(self):return self.native_idle
     def chat(self,a,text,**kwargs):
         j={'job_id':str(len(self.calls)),'done':False,'agent_id':a};self.calls.append((a,text));self.jobs[(a,j['job_id'])]=j;return j
@@ -136,6 +137,10 @@ class HandoffTests(unittest.TestCase):
         self.provider.bindings.update({'host--codex':'codex','host--moxy':'moxy'})
         row=self.h.conversation('host--codex','host--moxy')
         self.assertEqual((row['a_role'],row['b_role']),('codex','moxy'))
+        self.mesh.sleeping=lambda _: (_ for _ in ()).throw(ValueError('runtime_controls_unavailable'))
+        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.chatter_tick()
+        self.assertTrue(self.h.data['chatter']['conversations'])
 
     def test_group_three_ordered_turns_and_proposal_notification(self):
         self.provider.bindings['host--codex']='codex'
