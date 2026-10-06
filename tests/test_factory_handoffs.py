@@ -58,6 +58,13 @@ class HandoffTests(unittest.TestCase):
         with patch('control_center.office.engine',return_value={'snapshot':{'paused':False}}):self.h.chatter_tick()
         chat=self.h.data['chatter']['conversations'][0];chat['approach_until']=0;self.h.chatter_tick();self.h.dispatch('host','chatter.configure',{'enabled':False});self.mesh.jobs[(chat['a'],'0')].update(done=True,result={'reply':'Suggestion'})
         self.h.chatter_tick();self.assertEqual(chat['state'],'stopped');self.assertEqual(len(self.mesh.calls),1)
+    def test_transient_preload_failure_preserves_replies_and_retries_turn(self):
+        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.chatter_tick();chat=self.h.data['chatter']['conversations'][0];chat['approach_until']=0;self.h.chatter_tick()
+        self.mesh.jobs[(chat['a'],'0')].update(done=True,result={'reply':'First reply'})
+        self.h.chatter_tick();self.mesh.jobs[(chat['b'],'1')].update(done=True,error='model_preload_not_confirmed')
+        self.h.chatter_tick();self.assertEqual(chat['state'],'reply_wait');self.assertEqual(len(chat['messages']),1);self.assertIn('deferred',chat['note'])
+        chat['approach_until']=0;self.h.chatter_tick();self.assertEqual(len(self.mesh.calls),3);self.assertEqual(chat['state'],'second')
     def test_serial_conversations_repeat_inside_and_after_windows(self):
         self.h.dispatch('host','chatter.configure',{'enabled':True})
         self.h.chatter_tick();c=self.h.data['chatter']['conversations'][0];c['approach_until']=0
