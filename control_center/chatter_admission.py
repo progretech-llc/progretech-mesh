@@ -32,7 +32,11 @@ def resources(mesh, agents):
             total = int(total_file.read_text())
             if total < 2*GiB: continue  # Shared-memory GPU is covered by RAM.
             used = int((device/'mem_info_vram_used').read_text())
-            if total-used < added + max(GiB, total*.1):
+            # Ollama can split weights between VRAM and system RAM. Requiring
+            # every non-resident model file to fit wholly in VRAM permanently
+            # blocks otherwise safe serial chatter on smaller GPUs; the RAM
+            # check above already reserves the full weights and context budget.
+            if total-used < max(GiB, total*.1):
                 return False, 'Waiting for GPU memory headroom'
             busy = device/'gpu_busy_percent'
             if busy.is_file() and int(busy.read_text()) > 80:

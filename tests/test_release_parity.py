@@ -42,6 +42,8 @@ class ReleaseParityTests(unittest.TestCase):
         self.assertIn('MeshRuntime.workLabel',office)
         self.assertIn('MeshRuntime.workLabel',fleet)
         self.assertIn('chatterEligible',office)
+        self.assertIn("binding.startsWith(host()+'--')",office)
+        self.assertIn('first===second',office)
         self.assertIn('d<90',office)
         self.assertNotIn("chatter?.enabled&&id.startsWith('factory-')",office)
         self.assertIn('.floor-node.working,.floor-node.busy{color:#6fb7ff}',css)

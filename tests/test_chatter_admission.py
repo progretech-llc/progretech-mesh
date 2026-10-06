@@ -29,6 +29,12 @@ class AdmissionTests(unittest.TestCase):
             device=Path(d)
             for name,value in [('mem_info_vram_total',16*GiB),('mem_info_vram_used',15*GiB)]: (device/name).write_text(str(value))
             with patch('control_center.chatter_admission.Path.glob',return_value=[device]):self.assertEqual(resources(self.mesh,['a','b']),(False,'Waiting for GPU memory headroom'))
+    def test_models_may_split_between_gpu_and_reserved_system_ram(self):
+        self.mesh.api=lambda p:{'models':[{'name':'a','size':10*GiB},{'name':'b','size':10*GiB}]} if p=='tags' else {'models':[]}
+        with tempfile.TemporaryDirectory() as d:
+            device=Path(d)
+            for name,value in [('mem_info_vram_total',16*GiB),('mem_info_vram_used',GiB)]: (device/name).write_text(str(value))
+            with patch('control_center.chatter_admission.Path.glob',return_value=[device]):self.assertTrue(resources(self.mesh,['a','b'])[0])
     def test_memory_scope_and_attribution_before_limit(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'memory.db'
