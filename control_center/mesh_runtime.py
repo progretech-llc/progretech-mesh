@@ -456,7 +456,9 @@ class MeshRuntime:
         except (OSError,subprocess.TimeoutExpired,json.JSONDecodeError):raise ValueError('mesh_context_delivery_unconfirmed')
         return {'scope':'agent','accepted':True,'delivery':receipt['status'],'note':'Runtime accepted this instruction for the observed work session. Processing or completion is not yet confirmed.'}
 
-    def chat(self, agent, text, admission=None, background=None, image_paths=None, owner_text=None):
+    def chat(self, agent, text, admission=None, background=None, image_paths=None, owner_text=None, response_timeout=300):
+        if type(response_timeout) is not int or not 30 <= response_timeout <= 7200:
+            raise ValueError('invalid_response_timeout')
         original_text=owner_text if owner_text is not None else text
         from control_center.artifacts import ROLES, safe, output_directory
         role=ROLES.get(self.provider.bindings[agent])
@@ -492,7 +494,7 @@ class MeshRuntime:
             self.mark(ident,'processing','Processing your request; waiting for reply text')
             # OpenClaw postprocessing can replace output after its token events.
             # Retrieve one final response; progress remains an asynchronous host job.
-            with self.open(req,timeout=300) as response:
+            with self.open(req,timeout=response_timeout) as response:
                 raw=response.read(4194305)
             if len(raw)>4194304:raise ValueError('mesh_reply_too_large')
             payload=json.loads(raw)

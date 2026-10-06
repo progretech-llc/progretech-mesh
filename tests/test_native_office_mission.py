@@ -22,9 +22,14 @@ class NativeOfficeMissionTests(unittest.TestCase):
             'description': 'Inspect the production behavior.', 'assignee': 'orchestrator'
         }, 'agents': [{'id': 'orchestrator', 'runtime_id': 'codex'}]}}
         provider = SimpleNamespace(bindings={'rend': 'main', 'rend--codex': 'codex'})
-        mesh = SimpleNamespace(chat=lambda agent, text, owner_text=None: {'job_id': 'job-1'})
+        calls = []
+        def chat(agent, text, owner_text=None, response_timeout=None):
+            calls.append((agent, response_timeout))
+            return {'job_id': 'job-1'}
+        mesh = SimpleNamespace(chat=chat)
         result = dispatch_native_mission('/tmp/home', 'main', 'task-123456789abc', 'rend', provider, mesh)
         self.assertEqual(result, {'job_id': 'job-1', 'state': 'queued', 'provider': 'openclaw'})
+        self.assertEqual(calls, [('rend--codex', 7200)])
         thread.assert_called_once()
         thread.return_value.start.assert_called_once()
 
