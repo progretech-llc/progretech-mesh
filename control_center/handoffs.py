@@ -159,7 +159,7 @@ class Handoffs:
         with self.mesh.lock:
             if any(not j['done'] and not j.get('background') and k!=ident for k,j in self.mesh.jobs.items()):return False,'Owner requests take priority'
         if ident is None and self.mesh.inference.locked():return False,'Waiting for the shared model slot'
-        if any(a not in self.provider.bindings or self.mesh.sleeping(a) for a in self.participants(active)):return False,'Waiting for awake participants'
+        if any(a not in self.provider.bindings or self.mesh.chat_sleeping(a) for a in self.participants(active)):return False,'Waiting for awake participants'
         return resources(self.mesh,self.participants(active))
 
     def prompt(self,row,agent):
@@ -217,7 +217,7 @@ class Handoffs:
             while len(active)<chatter['max_conversations']:
                 row=next((c for c in chatter['conversations'] if c['state']=='queued' and not occupied.intersection(self.participants(c))),None)
                 if row is None:
-                    candidates=[a for a,r in self.provider.bindings.items() if '--' in a and r in ROLES and r!='imagen' and a not in occupied and not self.mesh.sleeping(a)]
+                    candidates=[a for a,r in self.provider.bindings.items() if '--' in a and r in ROLES and r!='imagen' and a not in occupied and not self.mesh.chat_sleeping(a)]
                     size=3 if chatter['experimental_group_chat'] else 2
                     if len(candidates)<size:break
                     people=random.sample(candidates,size)
