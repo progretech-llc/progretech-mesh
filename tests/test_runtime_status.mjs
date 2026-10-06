@@ -42,3 +42,9 @@ test('pulse colors strictly map current work, idle, error and sleep',()=>{
  assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout'}}).state,'error');
  assert.equal(api.indicator({state:'idle',transport:'connected',mesh_runtime:{sleeping:true}}).state,'sleeping');
 });
+test('a recovered or historical failure does not pin an idle agent red',()=>{
+ const now=Date.now()/1000;
+ assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout',at:now-360}}).state,'idle');
+ assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout',at:now-30},health:{checked_at:now,gateway_reachable:true,model_provider_reachable:true,configured_model_installed:true}}).state,'idle');
+ assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout',at:now-30},health:{checked_at:now-60,gateway_reachable:true,model_provider_reachable:true}}).state,'error');
+});

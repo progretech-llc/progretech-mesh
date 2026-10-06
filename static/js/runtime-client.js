@@ -86,17 +86,21 @@
     if(['active','working','processing'].includes(agent.state))return {state:'busy',label:'Working',detail:'Blue: the host reports active work.'+(last?' Previous result: '+last:'')};
     const health=runtime.health;
     const current=health?' Current check: gateway '+(health.gateway_reachable?'reachable':'unavailable')+', model provider '+(health.model_provider_reachable===true?'reachable':health.model_provider_reachable===false?'unavailable':'not verified')+(health.configured_model_installed===false?', configured model missing':'')+'.':'';
-    if(result.severity==='error')return {state:'error',label:'Last action failed',detail:'Red: '+(last || 'The last Mesh request failed; see its error in this conversation.')+current};
+    const resultAt=Number(result.at || 0);
+    const healthyAfterError=result.severity==='error' && resultAt>0 && Number(health?.checked_at || 0)>=resultAt && health?.gateway_reachable===true && health?.model_provider_reachable!==false && health?.configured_model_installed!==false;
+    const recentError=result.severity==='error' && (!resultAt || Date.now()/1000-resultAt<300);
+    if(result.severity==='error' && !healthyAfterError && recentError)return {state:'error',label:'Last action failed',detail:'Red: '+(last || 'The last Mesh request failed; see its error in this conversation.')+current};
+    const previousFailure=result.severity==='error' ? ' Previous failure: '+(last || 'A prior Mesh request failed.')+current : '';
     if(agent.transport && agent.transport!=='connected')return {state:'offline',label:'Offline',detail:'Gray: the gateway is offline.'+(last?' Previous result: '+last:'')};
-    if((monitoring || agent.gateway_agent) && agent.transport==='connected')return {state:'idle',label:'Idle',detail:'Green: the gateway is connected and no active work is currently observed.'+(last?' Last result: '+last:'')};
+    if((monitoring || agent.gateway_agent) && agent.transport==='connected')return {state:'idle',label:'Idle',detail:'Green: the gateway is connected and no active work is currently observed.'+(previousFailure || (last?' Last result: '+last:''))};
     if(agent.last_event){
       const direction=terminalDirection(agent.last_event),state={SYS:'idle',IN:'idle',OUT:'busy',ERR:'error',FILE:'idle'}[direction.label];
       return {state,label:direction.label+' activity',detail:'Latest stream event: '+direction.label+'. The light matches the terminal.'};
     }
     if(agent.state==='unknown' && !result.code && agent.transport!=='connected')return {state:'offline',label:'Activity unknown',detail:'Gray: no current gateway observation is available.'};
-    if(agent.state==='unknown' && !result.code)return {state:'idle',label:'Idle',detail:'Green: the agent is connected and no active work is currently observed.'};
+    if(agent.state==='unknown' && (!result.code || previousFailure))return {state:'idle',label:'Idle',detail:'Green: the agent is connected and no active work is currently observed.'+previousFailure};
     if(result.severity==='success')return {state:'idle',label:'Idle',detail:'Green: '+(last || 'The last reply completed; no current work is reported.')};
-    return {state:'idle',label:'Idle',detail:'Green: the agent is connected and no current work is reported.'};
+    return {state:'idle',label:'Idle',detail:'Green: the agent is connected and no current work is reported.'+previousFailure};
   }
   function workLabel(agent) {
     const runtime=agent.mesh_runtime || agent;
