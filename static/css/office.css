@@ -34,6 +34,7 @@
 .floor-node.warning .node-orb{border-color:#eac36c;color:#eac36c;box-shadow:0 0 24px #eac36c22}.floor-node.warning .node-state{background:#eac36c}.runtime-status{padding:12px;border:1px solid #2a3d51;border-radius:8px;line-height:1.5;overflow-wrap:anywhere}.runtime-status.warning{border-color:#eac36c;color:#eac36c}.runtime-status.error{border-color:#e76868;color:#ffa3a3}
 
 .floor-node.monitoring{color:#b18bff}.floor-node.monitoring .node-state{background:#b18bff}.floor-node.monitoring .node-orb{border-color:#b18bff;box-shadow:0 0 24px #b18bff55}.floor-node.monitoring .node-orb:before{animation:office-breathe 1.8s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.floor-node.monitoring .node-orb:before{animation:none}}
+.blue{color:#6fb7ff}.gray{color:#8198aa}.floor-node.working,.floor-node.busy{color:#6fb7ff}.floor-node.working .node-orb,.floor-node.busy .node-orb{border-color:#6fb7ff;box-shadow:0 0 30px #6fb7ff33}.floor-node.idle{color:#54efaa}.floor-node.sleeping,.floor-node.offline{color:#8198aa;opacity:.72}.floor-node.sleeping .node-orb,.floor-node.offline .node-orb{border-color:#577285;box-shadow:none}.floor-node.director .node-orb{border-color:#78e9fa;box-shadow:0 0 30px #78e9fa33}.floor-node.director .node-orb:after{border-color:#78e9fa}.floor-node.director .node-state{background:currentColor}
 
 /* Keep mission history within each column instead of growing the whole page. */
 .office-column{height:clamp(240px,50vh,560px);min-height:0;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable}

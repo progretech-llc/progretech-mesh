@@ -27,3 +27,18 @@ class ReleaseParityTests(unittest.TestCase):
             self.assertIn('runtime-client.js',(ROOT/f'templates/{page}.html').read_text())
         self.assertIn('MeshRuntime.unifiedOffice', (ROOT/'static/js/office.js').read_text())
         self.assertIn('MeshRuntime.terminalDirection', (ROOT/'static/js/app.js').read_text())
+
+    def test_factory_status_avatar_and_proximity_contract(self):
+        office=(ROOT/'static/js/office.js').read_text()
+        fleet=(ROOT/'static/js/app.js').read_text()
+        css=(ROOT/'static/css/office.css').read_text()
+        avatars=(ROOT/'static/js/avatars.js').read_text()
+        self.assertIn('MeshRuntime.workLabel',office)
+        self.assertIn('MeshRuntime.workLabel',fleet)
+        self.assertIn('chatterEligible',office)
+        self.assertIn('d<90',office)
+        self.assertNotIn("chatter?.enabled&&id.startsWith('factory-')",office)
+        self.assertIn('.floor-node.working,.floor-node.busy{color:#6fb7ff}',css)
+        self.assertIn('.floor-node.sleeping,.floor-node.offline{color:#8198aa',css)
+        self.assertIn('agent?.native?.runtime_id',avatars)
+        self.assertIn('moxy.png?v=2',avatars)

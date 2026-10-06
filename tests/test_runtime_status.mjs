@@ -32,3 +32,7 @@ test('unified office keeps saved IDs but removes native aliases and uses native 
  const snapshot={agents:[{id:'orchestrator',runtime_id:'codex',isDirector:true},{id:'runtime-main',runtime_id:'main'}],factoryAgents:[{id:'codex',runtime_id:'codex'},{id:'rend',runtime_id:'main'}],interactions:[{from:'factory-codex',to:'factory-rend'}]};
  const result=api.unifiedOffice(snapshot,fleet,'rend');assert.equal(result.agents.length,2);assert.equal(result.factoryAgents.length,0);assert.equal(result.agents[0].mesh_agent_id,'rend--codex');assert.equal(result.agents[0].native.state,'working');assert.equal(result.interactions[0].from,'orchestrator');assert.equal(result.interactions[0].to,'runtime-main');
 });
+test('current work label ignores connection boilerplate and exposes real task ids',()=>{
+ assert.equal(api.workLabel({state:'unknown',transport:'connected',task:'Local host connected',phase:'Authenticated local host'}),'No active task reported');
+ assert.equal(api.workLabel({state:'working',transport:'connected',task_id:'PT-2026-101'}),'PT-2026-101');
+});
