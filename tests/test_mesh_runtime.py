@@ -67,6 +67,11 @@ class RuntimeTests(unittest.TestCase):
         self.rows['codex']={'mode':'paused','until':None}
         self.assertTrue(self.runtime.chat_sleeping('host--codex'))
 
+    def test_chat_response_timeout_is_explicitly_bounded(self):
+        for value in (29, 7201, 300.0, None):
+            with self.assertRaisesRegex(ValueError, 'invalid_response_timeout'):
+                self.runtime.chat('host', 'hello', response_timeout=value)
+
     def test_unavailable_controls_preserve_configured_model_and_unknown_state(self):
         self.rows.clear()
         status=self.runtime.status('host')

@@ -115,7 +115,10 @@ def dispatch_native_mission(home, role, task_id, gateway, provider, mesh):
         'Mission: ' + task['title'] + '\n\n' + (task.get('description') or task['title'])
     )
     try:
-        job = mesh.chat(binding, prompt, owner_text=task.get('description') or task['title'])
+        # Tool-using missions routinely exceed the five-minute interactive chat
+        # budget. Keep ordinary conversation bounded while allowing an
+        # owner-started mission up to the same two-hour monitor window.
+        job = mesh.chat(binding, prompt, owner_text=task.get('description') or task['title'], response_timeout=7200)
     except Exception:
         engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
             'result': 'The native runtime did not accept the mission. Review host status before retrying.'})
