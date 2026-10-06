@@ -132,6 +132,11 @@ class HandoffTests(unittest.TestCase):
         self.h.dispatch('host','chatter.configure',{'enabled':False})
         self.assertTrue(all(c['state']=='stopped' for c in rows))
 
+    def test_current_codex_and_moxy_roles_are_chatter_participants(self):
+        self.provider.bindings.update({'host--codex':'codex','host--moxy':'moxy'})
+        row=self.h.conversation('host--codex','host--moxy')
+        self.assertEqual((row['a_role'],row['b_role']),('codex','moxy'))
+
     def test_group_three_ordered_turns_and_proposal_notification(self):
         self.provider.bindings['host--codex']='codex'
         self.h.dispatch('host','chatter.configure',{'enabled':True,'experimental_group_chat':True})

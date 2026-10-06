@@ -490,7 +490,7 @@ h1{font-size:clamp(30px,5vw,58px);line-height:1.02;margin:14px 0 12px;letter-spa
 
 .agent-state.error{background:#ff6975;box-shadow:0 0 14px #ff697599}.agent-card[data-agent-card]{cursor:pointer}.agent-card[data-agent-card]:focus-visible{outline:2px solid #7cc8ff}
 
-.agent-state.monitoring{background:#b18bff;box-shadow:0 0 14px #b18bff88}.agent-state.sleeping{background:#e2b45d;box-shadow:none}.agent-status-detail{font-size:12px;color:var(--muted);padding:10px 0;line-height:1.6}
+.agent-state.monitoring{background:#b18bff;box-shadow:0 0 14px #b18bff88}.agent-state.sleeping,.agent-state.offline{background:#7f8a96;box-shadow:none}.agent-status-detail{font-size:12px;color:var(--muted);padding:10px 0;line-height:1.6}
 
 .mesh-update-dialog{max-width:min(560px,90vw);background:#0d1826;color:#e2edf5;border:1px solid #2a3d51;border-radius:12px;padding:24px}.mesh-update-dialog::backdrop{background:#0009}.mesh-update-dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:35vh;overflow:auto}.mesh-update-dialog button{margin:8px 8px 0 0;padding:8px 14px}
 #localUpdateCheck{display:inline-flex!important;white-space:nowrap}
@@ -498,5 +498,6 @@ h1{font-size:clamp(30px,5vw,58px);line-height:1.02;margin:14px 0 12px;letter-spa
 @media(max-width:640px){.topbar{flex-wrap:wrap}.top-actions{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start;margin-left:0}}
 
 .agent-state.warning{background:#eac36c;box-shadow:0 0 12px #eac36c55}
+.agent-state.idle{background:#54efaa;box-shadow:0 0 12px #54efaa66}.agent-card.director{border-color:#25d9f566;box-shadow:inset 3px 0 #25d9f5,var(--shadow)}.agent-card.director .agent-name strong:after{content:" · Director";color:#78e9fa;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.agent-current-work{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
 
 .agent-state.monitoring,.agent-state.success,.agent-state.error,.agent-state.warning{animation:pulse 1.8s ease-in-out infinite}.agent-state.success{background:#7ee2a8;box-shadow:0 0 16px #7ee2a888}@media(prefers-reduced-motion:reduce){.agent-state{animation:none!important}}

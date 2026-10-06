@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 KINDS = {'openclaw', 'hermes', 'claude', 'pycharm'}
+MAX_GATEWAY_ROSTER_BYTES = 16 * 1024 * 1024
 
 
 def runtime_executable(kind, source_home):
@@ -150,7 +151,10 @@ class Registry:
                 'ws://127.0.0.1:' + str(port), '--json'], capture_output=True, text=True,
                 encoding='utf-8', errors='replace', timeout=15, check=False,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-            if response.returncode or len(response.stdout.encode("utf-8")) > 4 * 1024 * 1024: raise ValueError()
+            # OpenClaw includes inline avatar data in agents.list. Keep a strict
+            # response ceiling, but leave enough room for the validated 256-agent
+            # roster; only id, name and workspace are retained below.
+            if response.returncode or len(response.stdout.encode("utf-8")) > MAX_GATEWAY_ROSTER_BYTES: raise ValueError()
             payload = json.loads(response.stdout)
             agents = payload.get('agents')
             if not isinstance(agents, list) or len(agents) > 256: raise ValueError()

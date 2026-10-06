@@ -5,6 +5,8 @@ import json
 import re
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 from control_center.file_lock import lock, unlock
 
@@ -82,6 +84,68 @@ def namespace(role, agent_id=None):
     return role if not agent_id else role + "--" + hashlib.sha256(agent_id.encode()).hexdigest()[:16]
 
 
+def native_binding(provider, gateway, runtime_id):
+    """Resolve an office runtime only inside its enrolled gateway namespace."""
+    if provider.bindings.get(gateway) == runtime_id:
+        return gateway
+    prefix = gateway + '--'
+    return next((agent for agent, runtime in provider.bindings.items()
+                 if agent.startswith(prefix) and runtime == runtime_id), None)
+
+
+def dispatch_native_mission(home, role, task_id, gateway, provider, mesh):
+    """Run a Factory mission through its real bound OpenClaw role.
+
+    CrewAI remains available when explicitly configured, but the connected
+    native roster must not leave the Start mission control inert.
+    """
+    office_role = namespace(role, gateway)
+    mission = engine(home, office_role, 'begin', {'id': task_id})['result']
+    task = mission['task']
+    target = next((row for row in mission['agents'] if row['id'] == task['assignee']), None)
+    binding = native_binding(provider, gateway, target.get('runtime_id') if target else None)
+    if not binding:
+        engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
+            'result': 'The assigned office role has no connected native runtime binding.'})
+        raise ValueError('office_runtime_binding_required')
+    prompt = (
+        'Owner-authorized Mesh Factory mission. Use your current role, tools, '
+        'approval gates, and repository/task ledgers. Coordinate or delegate when '
+        'that is your role; do not claim completion without evidence.\n\n'
+        'Mission: ' + task['title'] + '\n\n' + (task.get('description') or task['title'])
+    )
+    try:
+        job = mesh.chat(binding, prompt, owner_text=task.get('description') or task['title'])
+    except Exception:
+        engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
+            'result': 'The native runtime did not accept the mission. Review host status before retrying.'})
+        raise
+
+    def monitor():
+        deadline = time.monotonic() + 7200
+        try:
+            while time.monotonic() < deadline:
+                result = mesh.get(binding, job['job_id'])
+                if result.get('done'):
+                    error = result.get('error')
+                    reply = result.get('result', {}).get('reply', '')
+                    engine(home, office_role, 'finish', {'id': task_id, 'ok': not error,
+                        'result': (error or reply or 'Mission completed without a text result.')[:6000]})
+                    return
+                time.sleep(2)
+            engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
+                'result': 'Mission completion was not confirmed within two hours.'})
+        except Exception:
+            try:
+                engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
+                    'result': 'Mission status became unavailable; inspect the native runtime before retrying.'})
+            except Exception:
+                pass
+
+    threading.Thread(target=monitor, daemon=True, name='mesh-office-mission').start()
+    return {'job_id': job['job_id'], 'state': 'queued', 'provider': 'openclaw'}
+
+
 def dispatch_office(home, role, args, agent_id=None):
     validate_office(args)
     if args['operation'] == 'workday.control':
@@ -127,6 +191,13 @@ def dispatch_office(home, role, args, agent_id=None):
         if row['sleeping']:row['state']='sleeping'
     from control_center.office_relations import interactions
     result['snapshot']['interactions']=interactions(result['snapshot'],home)
+    from control_center.mesh_runtime import sync_gateway_status_file
+    sync_gateway_status_file(home)
+    try:
+        gateway_status=json.loads((Path(home)/'.progretech-mesh/gateway-status.json').read_text())
+        result['snapshot']['gatewayStatus']=gateway_status
+    except (OSError,ValueError):
+        result['snapshot']['gatewayStatus']={'state':'unavailable','note':'Gateway status snapshot not yet available.'}
     from control_center.factory_jobs import _config
     settings = _config(home).get('crewai', {})
     result['snapshot']['runtimeReady'] = bool(settings.get('enabled') and role in settings.get('roles', []) and Path(settings.get('python', '')).is_file())

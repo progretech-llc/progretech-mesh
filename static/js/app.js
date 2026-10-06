@@ -1001,7 +1001,7 @@
   function renderFleet() {
     renderAgentStatus();
     agentGrid.innerHTML = fleet.filter(a=>!a.identity_alias && !a.office_archived).map((agent) => `
-      <article tabindex="0" data-agent-card="${escapeHtml(agent.id)}" class="agent-card ${selectedAgentId === agent.id ? "active" : ""}">
+      <article tabindex="0" data-agent-card="${escapeHtml(agent.id)}" class="agent-card ${agent.is_orchestrator?'director':''} ${selectedAgentId === agent.id ? "active" : ""}">
         <div class="agent-top">
           <div class="agent-id">
             ${MeshAvatar.source(agent) ? `<img class="avatar" src="${MeshAvatar.source(agent)}" alt="" style="object-fit:cover">` : `<div class="avatar ${["rend","lyra","mak"].includes(agent.id) ? agent.id : "rend"}"></div>`}
@@ -1018,7 +1018,7 @@
         <div class="task">
           <label>${agent.transport === "connected" ? "Live activity" : "Status"}</label>
           <strong>${escapeHtml(MeshRuntime.indicator(agent).label)}</strong>
-          <span>${escapeHtml(agent.phase)}${agent.mesh_runtime ? ` · ${MeshAvailability.label(agent.mesh_runtime)}` : ""}</span>
+          <span class="agent-current-work">${escapeHtml(MeshRuntime.workLabel(agent))}${agent.mesh_runtime ? ` · ${MeshAvailability.label(agent.mesh_runtime)}` : ""}</span>
         </div>
 
         <div class="progress"><i style="width:${Number(agent.progress || 0)}%"></i></div>

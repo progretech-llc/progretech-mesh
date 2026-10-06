@@ -15,6 +15,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import { forwardFactoryControl } from "./factory-control.js";
 import { resolveMeshTarget, meshConversationBody } from "./routing.js";
 import { runGatewayConversation } from "./gateway-client.js";
+import { buildQuickPresenceReply } from "./quick-reply.js";
 
 const PLUGIN_ID = "progretech-mesh";
 const ROUTE = "/plugins/progretech-mesh/message";
@@ -63,6 +64,30 @@ const directPeers = new Map();
 const MAX_DIRECT_MESSAGE_BYTES = 256 * 1024;
 let localSignalServer = null;
 const localSignalQueues = new Map();
+const activeAgentRuns = new Map();
+
+function activeRunCount(agentId, excludingRunId) {
+  const runs = activeAgentRuns.get(String(agentId || ""));
+  if (!runs) return 0;
+  let count = 0;
+  for (const runId of runs) if (!excludingRunId || runId !== excludingRunId) count += 1;
+  return count;
+}
+
+function trackAgentRun(agentId, runId, active) {
+  const key = String(agentId || "");
+  const id = String(runId || "");
+  if (!key || !id) return;
+  const runs = activeAgentRuns.get(key) || new Set();
+  if (active) {
+    runs.add(id);
+    activeAgentRuns.set(key, runs);
+    return;
+  }
+  runs.delete(id);
+  if (runs.size) activeAgentRuns.set(key, runs);
+  else activeAgentRuns.delete(key);
+}
 
 
 function privateIpv4Addresses() {
@@ -1386,6 +1411,23 @@ async function redeemOwnershipClaim(api, claimCode) {
 }
 
 function registerObservationHooks(api) {
+  api.on("before_agent_reply", (event, ctx) => {
+    const reply = buildQuickPresenceReply(event?.cleanedBody, {
+      agentId: ctx?.agentId,
+      activeRuns: activeRunCount(ctx?.agentId, ctx?.runId),
+    });
+    if (!reply) return;
+    appendEvent({
+      event_type: "presence",
+      channel: sessionLooksMesh(ctx) ? "mesh" : channelFromContext(ctx, "system"),
+      state: "idle",
+      direction: "output",
+      summary: "Fast presence reply",
+      payload: { session_key: ctx?.sessionKey, run_id: ctx?.runId, agent_id: ctx?.agentId },
+    });
+    return { handled: true, reply: { text: reply }, reason: "progretech_presence_fast_path" };
+  }, { eligibleTriggers: ["user"] });
+
   api.on("message_received", (event, ctx) => {
     const ownershipClaim = extractOwnershipClaim(event?.content || event?.text || "");
     if (ownershipClaim) {
@@ -1435,6 +1477,7 @@ function registerObservationHooks(api) {
   });
 
   api.on("model_call_started", (event, ctx) => {
+    trackAgentRun(ctx?.agentId, ctx?.runId, true);
     appendEvent({
       event_type: "model",
       channel: sessionLooksMesh(ctx) ? "mesh" : channelFromContext(ctx, "system"),
@@ -1483,6 +1526,7 @@ function registerObservationHooks(api) {
   });
 
   api.on("agent_end", (event, ctx) => {
+    trackAgentRun(ctx?.agentId, ctx?.runId, false);
     try { recordAgentResult(STATE_DIR,event,ctx); } catch {}
     appendEvent({
       event_type: "agent",

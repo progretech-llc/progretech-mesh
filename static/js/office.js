@@ -2,10 +2,28 @@
   const $ = id => document.getElementById(id);
   const escape = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let snapshot = null, selected = null, positions = {}, manualPositions = {}, zoom = 1, pending = false, online = false, hostEpoch = 0;
-  let basePositions={}, selectedLink=null, fleet=[], runtimeState=null, powerBusy=false, mailboxEpoch=0, artifacts=[], chatter=null, handoffs=[];
+  let basePositions={}, selectedLink=null, fleet=[], runtimeState=null, powerBusy=false, mailboxEpoch=0, artifacts=[], chatter=null, handoffs=[], lastProximityCheck=0;
   const conversations=new Map();
   const host = () => $('officeHost').value;
   const say = text => { $('officeStatus').textContent = text; };
+  const legend=document.querySelector('.floor-legend');
+  if(legend)legend.innerHTML='<span class="cyan">Director ring</span><span class="blue">Working</span><span class="green">Idle</span><span class="gray">Sleeping / offline</span><span class="pink">Needs you</span><span class="red">Error</span><span>··· chatter</span><span>— agents working together</span>';
+  const activeChatterStates=new Set(['queued','approaching','first','second','third','reply_wait']);
+  const pairCooldown=new Map();
+  function officeRow(id) {
+    const office=snapshot?.agents.find(a=>a.id===id);
+    return office?.native || snapshot?.factoryAgents?.find(a=>'factory-'+a.id===id) || null;
+  }
+  function runtimeRole(id) { return officeRow(id)?.runtime_id || officeRow(id)?.id || null; }
+  function fleetBinding(id) {
+    const role=runtimeRole(id);
+    return fleet.find(a=>(a.control_center_gateway===host() || a.id===host()) && a.runtime_id===role)?.id || null;
+  }
+  function chatterEligible(id) {
+    const row=officeRow(id);if(!row)return false;
+    const state=MeshRuntime.indicator(row).state;
+    return state==='idle' && row.sleeping!==true && !(chatter?.conversations||[]).some(c=>activeChatterStates.has(c.state)&&[c.a_role,c.b_role,c.c_role].includes(runtimeRole(id)));
+  }
   async function api(operation, args = {}) {
     if (!host()) throw Error('Connect a personally hosted agent to open an office.');
     const response = await fetch(`/api/agents/${encodeURIComponent(host())}/office`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({operation,args})});
@@ -44,7 +62,8 @@
       const indicator=a.native?MeshRuntime.indicator(a.native):a.factoryObserved?MeshRuntime.indicator(a):null;
       const state = indicator?indicator.state:blocked?'blocked':a.state;
       const p = positions[a.id];
-      return `<button class="floor-node ${a.isDirector?'director':''} ${state==='active'?'working':escape(state)} ${a.id===selected?'selected':''}" data-agent="${escape(a.id)}" ${a.factoryObserved?'data-factory-role="'+escape(a.id.slice(8))+'"':''} style="left:${p.x}px;top:${p.y}px" title="${escape(indicator?.detail||a.role)}" aria-label="${escape(a.name)}, ${escape(a.role)}, ${escape(indicator?.detail||state)}"><span class="node-orb">${MeshAvatar.source(a)?`<img src="${MeshAvatar.source(a)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:a.isDirector?'◈':escape(a.name.slice(0,2).toUpperCase())}</span><span class="node-state" aria-hidden="true"></span><span class="node-name">${escape(a.name)} · ${escape(indicator?.label||state)}</span><span class="node-role">${escape(a.role)}</span></button>`;
+      const work=indicator?.state==='busy'?MeshRuntime.workLabel(a.native||a):a.role;
+      return `<button class="floor-node ${a.isDirector?'director':''} ${state==='active'?'working':escape(state)} ${a.id===selected?'selected':''}" data-agent="${escape(a.id)}" ${a.factoryObserved?'data-factory-role="'+escape(a.id.slice(8))+'"':''} style="left:${p.x}px;top:${p.y}px" title="${escape(indicator?.detail||a.role)}" aria-label="${escape(a.name)}, ${escape(a.role)}, ${escape(indicator?.detail||state)}"><span class="node-orb">${MeshAvatar.source(a)?`<img src="${MeshAvatar.source(a)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:a.isDirector?'◈':escape(a.name.slice(0,2).toUpperCase())}</span><span class="node-state" aria-hidden="true"></span><span class="node-name">${escape(a.name)} · ${escape(indicator?.label||state)}</span><span class="node-role">${escape(work)}</span></button>`;
     }).join('');
     // Preserve live nodes, focus, pointer capture and CSS animation timelines.
     // Polling updates metadata, rather than resetting the animated coordinates.
@@ -66,17 +85,18 @@
         const scale=Math.min($('officeFloor').clientWidth/1000,$('officeFloor').clientHeight/700)*zoom;
         node.setPointerCapture(e.pointerId);
         node.onpointermove = move => {if(Math.hypot(move.clientX-start.x,move.clientY-start.y)<4)return;node.dataset.dragged='true';manualPositions[id]=positions[id]={x:Math.max(80,Math.min(920,original.x+(move.clientX-start.x)/scale)),y:Math.max(90,Math.min(600,original.y+(move.clientY-start.y)/scale))};node.style.left=positions[id].x+'px';node.style.top=positions[id].y+'px';renderLinks();};
-        node.onpointerup=()=>{node.onpointermove=null;if(node.dataset.dragged!=='true')return;try{manualPositions[id]={...positions[id]};sessionStorage.setItem('mesh-office-layout:'+host(),JSON.stringify(manualPositions));}catch{};if(chatter?.enabled&&id.startsWith('factory-')){const near=Object.keys(positions).filter(other=>other!==id&&other.startsWith('factory-')).map(other=>({id:other,d:Math.hypot(positions[other].x-positions[id].x,positions[other].y-positions[id].y)})).sort((a,b)=>a.d-b.d)[0];if(near&&near.d<70)requestPair(id,near.id);}};
+        node.onpointerup=()=>{node.onpointermove=null;if(node.dataset.dragged!=='true')return;try{manualPositions[id]={...positions[id]};sessionStorage.setItem('mesh-office-layout:'+host(),JSON.stringify(manualPositions));}catch{};if(chatter?.enabled&&chatterEligible(id)){const near=Object.keys(positions).filter(other=>other!==id&&chatterEligible(other)).map(other=>({id:other,d:Math.hypot(positions[other].x-positions[id].x,positions[other].y-positions[id].y)})).sort((a,b)=>a.d-b.d)[0];if(near&&near.d<90)requestPair(id,near.id);}};
       };
     });
     renderLinks(); fit();if(chatter)renderShared();
   }
   async function requestPair(a,b){
     const epoch=hostEpoch;
-    const binding=id=>fleet.find(x=>x.control_center_gateway===host()&&x.runtime_id===({rend:'main',mak:'coder',lyra:'researcher'}[id.slice(8)]||id.slice(8)))?.id;
-    const first=binding(a),second=binding(b);
+    if(!chatterEligible(a)||!chatterEligible(b)){say('Working or sleeping agents stay on their current work; chatter will wait for two idle agents.');return;}
+    const key=[a,b].sort().join('|'),now=Date.now();if(now-(pairCooldown.get(key)||0)<60000)return;pairCooldown.set(key,now);
+    const first=fleetBinding(a),second=fleetBinding(b);
     if(!first||!second){say('This pair needs signed agent bindings.');return;}
-    try{await MeshRuntime.request(host(),'chatter.pair',{a:first,b:second,topic:''});if(epoch!==hostEpoch)return;manualPositions[a]=positions[a]={x:Math.max(80,Math.min(920,positions[b].x+(positions[b].x>800?-110:110))),y:positions[b].y};try{sessionStorage.setItem('mesh-office-layout:'+host(),JSON.stringify(manualPositions));}catch{}say('Conversation requested; waiting for idle agents and capacity.');await loadShared();await refresh();}catch(e){if(epoch===hostEpoch)say(e.message);}
+    try{await MeshRuntime.request(host(),'chatter.pair',{a:first,b:second,topic:''});if(epoch!==hostEpoch)return;manualPositions[a]=positions[a]={x:Math.max(80,Math.min(920,positions[b].x+(positions[b].x>800?-110:110))),y:positions[b].y};try{sessionStorage.setItem('mesh-office-layout:'+host(),JSON.stringify(manualPositions));}catch{}say('Conversation requested; the configured timer and concurrency limit remain authoritative.');await loadShared();await refresh();}catch(e){pairCooldown.delete(key);if(epoch===hostEpoch)say(e.message);}
   }
   function geometry(link,t=0) {
     const a=positions[link.from],b=positions[link.to];if(!a||!b)return '';
@@ -114,6 +134,16 @@
       });
       const links=snapshot.interactions||[];
       $('floorLinks').querySelectorAll('[data-interaction]').forEach(path=>{const l=links.find(l=>l.id===path.dataset.interaction);if(l)path.setAttribute('d',geometry(l,time/900));});
+      if(chatter?.enabled && time-lastProximityCheck>5000){
+        lastProximityCheck=time;
+        const ids=Object.keys(positions).filter(chatterEligible);
+        let nearest=null;
+        for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
+          const d=Math.hypot(positions[ids[i]].x-positions[ids[j]].x,positions[ids[i]].y-positions[ids[j]].y);
+          if(d<90 && (!nearest || d<nearest.d))nearest={a:ids[i],b:ids[j],d};
+        }
+        if(nearest)requestPair(nearest.a,nearest.b);
+      }
     }
     animation=requestAnimationFrame(float);
   }
@@ -146,6 +176,7 @@
     }
     $('archiveWorker').disabled=!a || a.isDirector || !officeAgent || !online;
     $('officeActivity').innerHTML=(snapshot?.events || []).filter(e=>!selected||e.agentId===selected||e.from===selected||e.to===selected).slice(-10).reverse().map(e=>`<li>${escape(e.kind)}${e.summary?'<br>'+escape(e.summary):''}${e.taskId?'<br>'+escape(e.taskId):''}</li>`).join('') || (live ? `<li>${escape(live.state)}${live.task_id?'<br>'+escape(live.task_id):''}${live.last_result?.severity==='error'?'<br>Recorded failure: '+escape(live.last_result.code):''}</li>` : '<li>No recent activity.</li>');
+    if(live)$('officeActivity').insertAdjacentHTML('afterbegin',`<li><strong>Current work</strong><br>${escape(MeshRuntime.workLabel(live))}</li>`);
     if(live)$('officeActivity').insertAdjacentHTML('afterbegin',`<li>${escape(MeshRuntime.indicator(live).detail)}</li>`);
     if(live && !powerBusy) {if(runtimeState)runtimeState.sleeping=live.sleeping;const asleep=live.sleeping;$('factoryPower').textContent=asleep?'Wake up':'Sleep';$('factoryPower').disabled=asleep===null || !online;$('factoryPowerStatus').textContent=asleep===null?'Availability unknown':asleep?'Asleep in Mesh and Factory':'Awake in Mesh and Factory';}
   }
@@ -169,8 +200,12 @@
     $('officeAgentCount').textContent=snapshot.agents.length+(snapshot.factoryAgents?.length||0);
     $('officeTaskCount').textContent=snapshot.tasks.filter(t=>t.status!=='done').length;
     $('officeMessageCount').textContent=snapshot.messages.length;
-    $('officeRuntimeNotice').textContent=document.body.dataset.offline?snapshot.runtimeReady?'Your local GGUF model runs through the bundled inference engine. Linked workers can delegate to your imported agents. Pausing stops work at the next agent step.':'Choose a GGUF model in Mission Control to execute missions. You can hire workers and organize missions now.':snapshot.runtimeReady?'CrewAI is configured on this host. Missions use its model and approved workspace. Pausing stops work at the next agent step.':'CrewAI execution needs setup on this host. Office coordination is available; see docs/FACTORY_OFFICE.md.';
+    $('officeRuntimeNotice').textContent=document.body.dataset.offline?snapshot.runtimeReady?'Your local GGUF model runs through the bundled inference engine. Linked workers can delegate to your imported agents. Pausing stops work at the next agent step.':'Choose a GGUF model in Mission Control to execute missions. You can hire workers and organize missions now.':snapshot.nativeRuntimeReady?'Missions run through the assigned connected OpenClaw role. Pausing stops work at the next agent step.':snapshot.runtimeReady?'CrewAI is configured on this host. Missions use its model and approved workspace. Pausing stops work at the next agent step.':'Connect the assigned native role or configure CrewAI before starting a mission.';
     if(document.activeElement!==$('maxIterations'))$('maxIterations').value=snapshot.maxIterations;
+    const current=$('handoffSource').value;
+    const sources=[...snapshot.agents.map(a=>a.native).filter(Boolean),...(snapshot.factoryAgents||[])].filter((a,i,all)=>a.id&&all.findIndex(row=>row.id===a.id)===i);
+    $('handoffSource').innerHTML='<option value="">Send now</option>'+sources.map(a=>`<option value="${escape(a.id)}">${escape(a.name||a.id)}</option>`).join('');
+    if(sources.some(a=>a.id===current))$('handoffSource').value=current;
     renderFloor();renderBoard();renderInspector();
   }
   function selectedRuntime() {

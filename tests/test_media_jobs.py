@@ -57,7 +57,7 @@ class MediaTests(unittest.TestCase):
         self.mesh.api=api;self.mesh.prepare=lambda *a,**kw:None
         result=review(self.mesh,'host--codex','Review this icon','b'*32,[artifact])
         self.assertEqual(result['review']['source_sha256'],hashlib.sha256(Path(artifact).read_bytes()).hexdigest())
-        self.assertTrue((self.home/'pt-context/deliverables/mesh-odexi'/('review-'+'b'*32+'.json')).is_file())
+        self.assertTrue((self.home/'pt-context/deliverables/mesh-codex'/('review-'+'b'*32+'.json')).is_file())
         self.assertTrue(calls[0]['messages'][1]['images']);self.assertFalse(calls[0]['think']);self.assertEqual(calls[0]['options']['num_ctx'],8192)
         self.assertIn('no alpha channel',result['reply'])
         old=self.mesh.api

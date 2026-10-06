@@ -81,24 +81,33 @@
     const labels={native_agent_failed:'The last native agent turn failed. This occurred outside this Mesh conversation; detailed provider diagnostics are unavailable here.',native_turn_complete:'The last native agent turn completed.',reply_received:'The last Mesh reply was received.'};
     const last=result.code ? `${labels[result.code] || errors[result.code] || result.code}${result.at ? ' Recorded '+new Date(result.at*1000).toLocaleString()+'.' : ''}` : '';
     // Current observed activity takes precedence over the last completed turn.
-    if(agent.transport && agent.transport!=='connected')return {state:'idle',label:'Offline',detail:'Gray: the gateway is offline.'};
-    if(runtime.sleeping)return {state:'sleeping',label:'Asleep',detail:'Amber: this agent is asleep in Mesh and Factory.'+(last?' Previous result: '+last:'')};
+    if(agent.transport && agent.transport!=='connected')return {state:'offline',label:'Offline',detail:'Gray: the gateway is offline.'};
+    if(runtime.sleeping)return {state:'sleeping',label:'Sleeping',detail:'Gray: this agent is asleep and can be woken by ping or the Wake up control.'+(last?' Previous result: '+last:'')};
     if(['active','working','processing'].includes(agent.state))return {state:'busy',label:'Working',detail:'Blue: the host reports active work.'+(last?' Previous result: '+last:'')};
     const health=runtime.health;
-    const healthAge=health?Date.now()/1000-health.checked_at:Infinity;
     const current=health?' Current check: gateway '+(health.gateway_reachable?'reachable':'unavailable')+', model provider '+(health.model_provider_reachable===true?'reachable':health.model_provider_reachable===false?'unavailable':'not verified')+(health.configured_model_installed===false?', configured model missing':'')+'.':'';
-    const fresh=health?.state==='reachable' && health.checked_at>=Number(result.at||0) && healthAge>=-5 && healthAge<45;
-    if(result.severity==='error' && result.code==='mesh_provider_unavailable' && fresh)return {state:'warning',label:'Previous request failed',detail:'Amber: '+last+' Current gateway and model provider are reachable; the configured model is installed. The failed request was not retried.'};
-    if(result.severity==='error')return {state:'error',label:'Last action failed',detail:'Red: '+(last || 'The last Mesh request failed; see its error in this conversation.')+current};
-    if(agent.transport && agent.transport!=='connected')return {state:'idle',label:'Offline',detail:'Gray: the gateway is offline.'+(last?' Previous result: '+last:'')};
-    if((monitoring || agent.gateway_agent) && agent.transport==='connected')return {state:'monitoring',label:'Gateway connected',detail:'Purple: the host gateway is connected.'+(last?' Last result: '+last:'')};
+    const resultAt=Number(result.at || 0);
+    const healthyAfterError=result.severity==='error' && resultAt>0 && Number(health?.checked_at || 0)>=resultAt && health?.gateway_reachable===true && health?.model_provider_reachable!==false && health?.configured_model_installed!==false;
+    const recentError=result.severity==='error' && (!resultAt || Date.now()/1000-resultAt<300);
+    if(result.severity==='error' && !healthyAfterError && recentError)return {state:'error',label:'Last action failed',detail:'Red: '+(last || 'The last Mesh request failed; see its error in this conversation.')+current};
+    const previousFailure=result.severity==='error' ? ' Previous failure: '+(last || 'A prior Mesh request failed.')+current : '';
+    if(agent.transport && agent.transport!=='connected')return {state:'offline',label:'Offline',detail:'Gray: the gateway is offline.'+(last?' Previous result: '+last:'')};
+    if((monitoring || agent.gateway_agent) && agent.transport==='connected')return {state:'idle',label:'Idle',detail:'Green: the gateway is connected and no active work is currently observed.'+(previousFailure || (last?' Last result: '+last:''))};
     if(agent.last_event){
-      const direction=terminalDirection(agent.last_event),state={SYS:'monitoring',IN:'success',OUT:'busy',ERR:'error',FILE:'warning'}[direction.label];
+      const direction=terminalDirection(agent.last_event),state={SYS:'idle',IN:'idle',OUT:'busy',ERR:'error',FILE:'idle'}[direction.label];
       return {state,label:direction.label+' activity',detail:'Latest stream event: '+direction.label+'. The light matches the terminal.'};
     }
-    if(agent.state==='unknown' && !result.code)return {state:'idle',label:'Activity unknown',detail:'Gray: no current activity observation is available.'};
-    if(result.severity==='success')return {state:'success',label:'Last action completed',detail:'Green: '+(last || 'The last reply completed.')};
-    return {state:'idle',label:'Idle',detail:'Gray: no current work or recorded result is reported.'};
+    if(agent.state==='unknown' && !result.code && agent.transport!=='connected')return {state:'offline',label:'Activity unknown',detail:'Gray: no current gateway observation is available.'};
+    if(agent.state==='unknown' && (!result.code || previousFailure))return {state:'idle',label:'Idle',detail:'Green: the agent is connected and no active work is currently observed.'+previousFailure};
+    if(result.severity==='success')return {state:'idle',label:'Idle',detail:'Green: '+(last || 'The last reply completed; no current work is reported.')};
+    return {state:'idle',label:'Idle',detail:'Green: the agent is connected and no current work is reported.'+previousFailure};
+  }
+  function workLabel(agent) {
+    const runtime=agent.mesh_runtime || agent;
+    const candidates=[runtime.current_task,runtime.task_title,runtime.task_id,agent.current_task,agent.task_title,agent.task_id,agent.task,agent.phase];
+    const generic=new Set(['local host connected','authenticated local host','connected','idle','unknown','—','-']);
+    const value=candidates.find(item=>item && !generic.has(String(item).trim().toLowerCase()));
+    return value ? String(value) : (indicator(agent).state==='busy' ? 'Active work · details not reported by gateway' : 'No active task reported');
   }
   function memoryLabel(memory={}) {
     if(memory.latest_status==='activity_write_unavailable')return 'MemPalace: last activity write failed'+(memory.at?' · '+new Date(memory.at).toLocaleString():'')+'.';
@@ -109,5 +118,5 @@
     const result=await run(agent,'runtime.recover',{},progress);
     return (result.steps || []).map(s=>s.name+' · '+s.state+': '+s.detail).join('\n')+'\n'+result.note;
   }
-  window.MeshRuntime={history,request,run,errors,indicator,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice};
+  window.MeshRuntime={history,request,run,errors,indicator,workLabel,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice};
 })();

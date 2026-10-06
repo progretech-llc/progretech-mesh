@@ -12,7 +12,45 @@ from urllib.request import Request, urlopen
 
 _CONTROL_CACHE = {}
 _CONTROL_LOCK = threading.Lock()
-ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','progre':'progre','imagen':'imagen','codex':'codex'}
+ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','progre':'progre','imagen':'imagen','codex':'codex','moxy':'moxy'}
+SIGNAL_TTL_SECONDS = 900
+
+
+def gateway_activity_idle(data):
+    """Read both current and legacy OpenClaw activity counters strictly."""
+    work = data.get('shutdownBudget', {}).get('activeWork')
+    if not isinstance(work, dict) or not work or any(type(v) is not int or v < 0 for v in work.values()):
+        raise ValueError('runtime_activity_unavailable')
+    tasks = data.get('tasks')
+    if tasks is None:
+        active_tasks = 0  # OpenClaw 2026.9.8 removed the redundant tasks block.
+    elif isinstance(tasks, dict) and type(tasks.get('active')) is int and tasks['active'] >= 0:
+        active_tasks = tasks['active']
+    else:
+        raise ValueError('runtime_activity_unavailable')
+    return not sum(work.values()) and active_tasks == 0
+
+
+def sync_gateway_status_file(home):
+    """Persist a bounded, credential-free OpenClaw status snapshot for Mesh."""
+    try:
+        result=subprocess.run(['openclaw','gateway','call','status','--json'],capture_output=True,text=True,timeout=12)
+        if result.returncode:raise ValueError('gateway_status_unavailable')
+        raw=json.loads(result.stdout)
+        snapshot={'observed_at':time.time(),'runtimeVersion':raw.get('runtimeVersion'),
+            'tasks':raw.get('tasks',{}),'taskAudit':raw.get('taskAudit',{}),
+            'heartbeat':raw.get('heartbeat',{}),'sessions':raw.get('sessions',{}),
+            'degradedSecretOwners':raw.get('degradedSecretOwners',[]),
+            'degradedPlugins':raw.get('degradedPlugins',[])}
+        path=Path(home)/'.progretech-mesh/gateway-status.json';path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+        temporary=path.with_name(path.name+'.'+secrets.token_hex(8)+'.tmp')
+        import os
+        fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'w') as stream:json.dump(snapshot,stream);stream.flush();os.fsync(stream.fileno())
+        temporary.replace(path)
+        return snapshot
+    except (OSError,ValueError,subprocess.SubprocessError,json.JSONDecodeError):
+        return None
 
 
 def role_controls(home, refresh=False):
@@ -51,7 +89,11 @@ def read_signals(home):
     try:data=json.loads((Path(home)/'.progretech-mesh/agent-signals.json').read_text())
     except (OSError,ValueError):data={}
     for role in ROLE_NAMES:
-        try:data[role]=json.loads((Path(home)/'.progretech-mesh/agent-signals'/f'{role}.json').read_text())
+        try:
+            row=json.loads((Path(home)/'.progretech-mesh/agent-signals'/f'{role}.json').read_text())
+            if isinstance(row,dict) and isinstance(row.get('at'),(int,float)) and time.time()-row['at']>SIGNAL_TTL_SECONDS and row.get('severity')=='error':
+                row={'severity':'unknown','code':'stale_signal','at':row['at'],'stale':True,'previous_severity':'error','previous_code':row.get('code')}
+            data[role]=row
         except (OSError,ValueError):pass
     return data
 
@@ -63,6 +105,30 @@ class MeshRuntime:
         self.health_cache = {}
         self.lock = threading.RLock()
         self.inference = threading.Lock()
+        self.gateway_status_checked = 0.0
+
+    def sync_gateway_status(self):
+        """Persist a bounded, credential-free OpenClaw status snapshot for Mesh."""
+        now=time.time()
+        if now-self.gateway_status_checked<10:return
+        self.gateway_status_checked=now
+        try:
+            result=subprocess.run(['openclaw','gateway','call','status','--json'],capture_output=True,text=True,timeout=12)
+            if result.returncode:raise ValueError('gateway_status_unavailable')
+            raw=json.loads(result.stdout)
+            snapshot={'observed_at':now,'runtimeVersion':raw.get('runtimeVersion'),
+                'tasks':raw.get('tasks',{}),'taskAudit':raw.get('taskAudit',{}),
+                'heartbeat':raw.get('heartbeat',{}),'sessions':raw.get('sessions',{}),
+                'degradedSecretOwners':raw.get('degradedSecretOwners',[]),
+                'degradedPlugins':raw.get('degradedPlugins',[])}
+            path=self.home/'.progretech-mesh/gateway-status.json';path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+            temporary=path.with_name(path.name+'.'+secrets.token_hex(8)+'.tmp')
+            import os
+            fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(fd,'w') as stream:json.dump(snapshot,stream);stream.flush();os.fsync(stream.fileno())
+            temporary.replace(path)
+        except (OSError,ValueError,subprocess.SubprocessError,json.JSONDecodeError):
+            return
 
     def settings(self, agent):
         from control_center.management import preferences
@@ -197,12 +263,7 @@ class MeshRuntime:
         result = subprocess.run(['openclaw','gateway','call','status','--json'], capture_output=True, text=True, timeout=10)
         if result.returncode: raise ValueError('runtime_activity_unavailable')
         data = json.loads(result.stdout)
-        work = data.get('shutdownBudget',{}).get('activeWork')
-        if not isinstance(work,dict) or not isinstance(data.get('tasks',{}).get('active'),int):
-            raise ValueError('runtime_activity_unavailable')
-        if any(type(v) is not int or v < 0 for v in work.values()):
-            raise ValueError('runtime_activity_unavailable')
-        return not sum(work.values()) and data['tasks']['active'] == 0
+        return gateway_activity_idle(data)
 
     def mark(self, ident, phase, detail):
         with self.lock:
@@ -340,8 +401,7 @@ class MeshRuntime:
                 cfg,role,_=self.config(agent)
                 result=subprocess.run(['openclaw','gateway','call','status','--json'],capture_output=True,text=True,timeout=15)
                 if result.returncode:raise ValueError('gateway_unavailable')
-                data=json.loads(result.stdout);counts=data.get('shutdownBudget',{}).get('activeWork',{})
-                busy=not counts or any(type(v) is not int or v!=0 for v in counts.values()) or data.get('tasks',{}).get('active',1)!=0
+                data=json.loads(result.stdout);busy=not gateway_activity_idle(data)
                 add('gateway','passed','Gateway is reachable; active work will be preserved')
             except (OSError,ValueError,subprocess.SubprocessError):
                 return {'outcome':'needs_attention','steps':steps+[{'name':'gateway','state':'needs_attention','detail':'Gateway check failed. Inspect the local OpenClaw service; no restart was attempted.'}],'note':'Recovery needs host attention. No task was replayed.'}

@@ -87,8 +87,18 @@ def install(host, home=None):
             gateway = agent if agent in trusted_gateways and not any(agent.startswith(k+'--') for k in trusted_gateways) else agent.rsplit('--',1)[0]
             host_runtime = provider.bindings.get(gateway, runtime_id)
             roster(gateway)
-            from control_center.office import dispatch_office
-            return dispatch_office(home, host_runtime, args, gateway)
+            from control_center.office import dispatch_office, dispatch_native_mission, native_binding
+            if args['operation'] == 'run':
+                return dispatch_native_mission(home, host_runtime, args['args']['id'], gateway, provider, mesh)
+            result = dispatch_office(home, host_runtime, args, gateway)
+            snapshot = result.get('snapshot')
+            if snapshot:
+                director = next((row for row in snapshot.get('agents', []) if row.get('isDirector')), None)
+                native_ready = bool(director and native_binding(provider, gateway, director.get('runtime_id')))
+                snapshot['nativeRuntimeReady'] = native_ready
+                snapshot['runtimeReady'] = bool(snapshot.get('runtimeReady') or native_ready)
+                snapshot['runtimeMode'] = 'openclaw' if native_ready else ('crewai' if snapshot.get('runtimeReady') else 'unavailable')
+            return result
         if action.startswith('factory.'):
 
             from control_center.factory_jobs import dispatch_factory
