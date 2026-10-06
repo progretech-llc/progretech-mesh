@@ -21,6 +21,11 @@
   }
   function chatterEligible(id) {
     const row=officeRow(id);if(!row)return false;
+    const binding=fleetBinding(id);
+    // The parent gateway/director is not a chatter participant, and legacy
+    // office nodes without an exact signed runtime binding must not reach the
+    // stricter host-side pair validator.
+    if(!binding || !binding.startsWith(host()+'--'))return false;
     const state=MeshRuntime.indicator(row).state;
     return state==='idle' && row.sleeping!==true && !(chatter?.conversations||[]).some(c=>activeChatterStates.has(c.state)&&[c.a_role,c.b_role,c.c_role].includes(runtimeRole(id)));
   }
@@ -95,7 +100,7 @@
     if(!chatterEligible(a)||!chatterEligible(b)){say('Working or sleeping agents stay on their current work; chatter will wait for two idle agents.');return;}
     const key=[a,b].sort().join('|'),now=Date.now();if(now-(pairCooldown.get(key)||0)<60000)return;pairCooldown.set(key,now);
     const first=fleetBinding(a),second=fleetBinding(b);
-    if(!first||!second){say('This pair needs signed agent bindings.');return;}
+    if(!first||!second||first===second||!first.startsWith(host()+'--')||!second.startsWith(host()+'--')){say('Choose two different signed team agents for chatter.');return;}
     try{await MeshRuntime.request(host(),'chatter.pair',{a:first,b:second,topic:''});if(epoch!==hostEpoch)return;manualPositions[a]=positions[a]={x:Math.max(80,Math.min(920,positions[b].x+(positions[b].x>800?-110:110))),y:positions[b].y};try{sessionStorage.setItem('mesh-office-layout:'+host(),JSON.stringify(manualPositions));}catch{}say('Conversation requested; the configured timer and concurrency limit remain authoritative.');await loadShared();await refresh();}catch(e){pairCooldown.delete(key);if(epoch===hostEpoch)say(e.message);}
   }
   function geometry(link,t=0) {
