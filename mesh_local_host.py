@@ -70,8 +70,17 @@ class LocalHost:
 
     def send(self, agent_id, message=None):
         if message is None: raise RuntimeError("local_control_only")
-        if agent_id!='rend' or message.get('type')!='control_center_request':
+        if agent_id!='rend' or message.get('type') not in {'control_center_request','factory_control_request'}:
             return False,'local_control_only'
+        if message['type']=='factory_control_request':
+            from mesh_factory_control import factory_relay
+            payload=message.get('payload',{})
+            try:
+                data=self.call('/api/factory/control',{'action':payload.get('action'),'args':payload.get('args',{})})
+            except Exception:
+                data={'ok':False,'error':'local_host_action_failed'}
+            factory_relay.resolve('rend',{'type':'factory_control_response','request_id':message['request_id'],'payload':data})
+            return True,None
         from mesh_control_center import control_relay
         payload=message.get('payload',{})
         target=payload.get('agent_id')

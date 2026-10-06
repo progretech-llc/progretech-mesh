@@ -1470,7 +1470,7 @@ def create_app() -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
         ENVIRONMENT=environment,
-        MESH_VERSION=os.environ.get("MESH_VERSION", "1.8.10-v1-rc2-terminal-file-exchange"),
+        MESH_VERSION=os.environ.get("MESH_VERSION", "1.18.3-e2e-stability"),
         BUILD_ID=os.environ.get("BUILD_ID", BUILD_ID),
         DEV_AUTH_ENABLED=os.environ.get("DEV_AUTH_ENABLED", dev_auth_default) == "1",
         DEV_SEED_AGENTS=os.environ.get("DEV_SEED_AGENTS", dev_seed_default) == "1",
