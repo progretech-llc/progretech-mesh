@@ -295,7 +295,7 @@ class MeshRuntime:
             if len(self.jobs)>=128: raise ValueError('mesh_jobs_full')
             ident=secrets.token_hex(16)
             self.jobs[ident]={'job_id':ident,'agent_id':agent,'kind':kind,'done':False,'phase':'queued',
-                'detail':'Request accepted by your host','created_at':now,'updated_at':now,'milestones':[], 'specklet':track,'background':bool(background)}
+                'detail':'Request accepted by your host','created_at':now,'updated_at':now,'milestones':[], 'specklet':track,'background':bool(background),'background_id':background if isinstance(background,str) else None}
             if capability:self.jobs[ident]['capability']=capability
         def run():
             try:
@@ -313,6 +313,7 @@ class MeshRuntime:
                     result=worker(ident)
                 finally:
                     if kind=='chat':self.inference.release()
+                if self.jobs[ident].get('cancelled'):raise ValueError('mesh_chatter_cancelled')
                 self.mark(ident,'complete','Reply ready' if kind=='chat' else 'Recovery checks complete' if kind=='recovery' else 'Agent availability updated')
                 if kind=='chat':
                     try:self.signal(agent,'success','reply_received')
@@ -322,12 +323,32 @@ class MeshRuntime:
                 # Do not return credential-bearing transport diagnostics.
                 error=str(exc) if isinstance(exc,ValueError) and str(exc).startswith(('mesh_','local_','runtime_','model_')) else provider_error(exc) if isinstance(exc,(HTTPError,URLError,TimeoutError)) else 'mesh_runtime_request_failed'
                 self.mark(ident,'failed',error)
-                if kind=='chat' and error!='mesh_chatter_deferred':
+                if kind=='chat' and error not in {'mesh_chatter_deferred','mesh_chatter_cancelled'}:
                     try:self.signal(agent,'error',error)
                     except OSError:pass
                 with self.lock:self.jobs[ident].update(done=True,error=error)
         threading.Thread(target=run,daemon=True,name='mesh-'+kind).start()
         return self.get(agent,ident)
+
+    def cancel_background(self, conversation):
+        """Cancel only chatter for this conversation, preserving owner/native work."""
+        with self.lock:
+            jobs=[j for j in self.jobs.values() if not j['done'] and j.get('background_id')==conversation]
+            for job in jobs:job['cancelled']=True
+        def abort(job):
+            role=self.provider.bindings.get(job['agent_id'])
+            if not role:return
+            session='agent:'+role+':mesh-chatter:'+conversation
+            for _ in range(5):
+                try:
+                    result=subprocess.run(['openclaw','gateway','call','chat.abort','--params',json.dumps({'sessionKey':session}),'--json'],capture_output=True,text=True,timeout=10)
+                    receipt=json.loads(result.stdout) if result.returncode==0 else {}
+                    if receipt.get('aborted'):return
+                except (OSError,ValueError,subprocess.SubprocessError):pass
+                with self.lock:
+                    if job['done']:return
+                time.sleep(1)
+        for job in jobs:threading.Thread(target=abort,args=(job,),daemon=True,name='mesh-chatter-cancel').start()
 
     def prepare(self, agent, ident, model=None):
         model=model or self.model(agent)
@@ -481,6 +502,9 @@ class MeshRuntime:
                 from control_center.media_jobs import review
                 return review(self,agent,text,ident,image_paths)
             elif chosen.startswith('ollama/'):self.prepare(agent,ident)
+            if background:
+                if self.jobs[ident].get('cancelled'):raise ValueError('mesh_chatter_cancelled')
+                if admission:admission(ident)  # Recheck tab consent after a slow preload.
             port=cfg['gateway'].get('port',18789)
             if type(port) is not int or not 1<=port<=65535:raise ValueError('runtime_port_invalid')
             headers={'Content-Type':'application/json','Authorization':'Bearer '+cfg['gateway']['auth']['token'],
@@ -527,7 +551,7 @@ class MeshRuntime:
             from control_center.artifacts import catalog, public
             result['attachments']=[public(row) for row in catalog(self.home) if row['path'] in result.get('reply','') and row['downloadable']]
             return result
-        return self.start(agent,'chat',synchronized_worker,background=bool(background),queue_timeout=1200 if media else 600,capability='image_generation' if media else None,track=not background)
+        return self.start(agent,'chat',synchronized_worker,background=background,queue_timeout=1200 if media else 600,capability='image_generation' if media else None,track=not background)
 
     def snapshot(self, agent, kind):
         state=self.status(agent)

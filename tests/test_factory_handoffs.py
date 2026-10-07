@@ -16,6 +16,7 @@ class FakeMesh:
     def chat(self,a,text,**kwargs):
         j={'job_id':str(len(self.calls)),'done':False,'agent_id':a};self.calls.append((a,text));self.jobs[(a,j['job_id'])]=j;return j
     def get(self,a,i):return self.jobs[(a,i)]
+    def cancel_background(self,conversation):pass
 
 class HandoffTests(unittest.TestCase):
     def setUp(self):
@@ -44,7 +45,7 @@ class HandoffTests(unittest.TestCase):
         h=Handoffs(self.provider,self.home,self.mesh);self.assertEqual(h.data['rules'][0]['state'],'unconfirmed');h.notify=lambda _:True;h.tick();self.assertEqual(len(self.mesh.calls),1)
     def test_chatter_opt_in_idle_pair_and_two_actual_replies(self):
         self.h.chatter_tick();self.assertFalse(self.mesh.calls)
-        self.h.dispatch('host','chatter.configure',{'enabled':True});self.mesh.native_idle=False;self.h.chatter_tick();self.assertFalse(self.mesh.calls)
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32});self.mesh.native_idle=False;self.h.chatter_tick();self.assertFalse(self.mesh.calls)
         self.mesh.native_idle=True
         with patch('control_center.office.engine',return_value={'snapshot':{'paused':False}}):self.h.chatter_tick()
         chat=self.h.data['chatter']['conversations'][0];self.assertEqual(chat['state'],'approaching');self.assertFalse(self.mesh.calls);chat['approach_until']=0;self.h.chatter_tick();self.assertEqual(len(self.mesh.calls),1)
@@ -54,19 +55,19 @@ class HandoffTests(unittest.TestCase):
         self.h.chatter_tick();self.assertEqual(chat['state'],'complete');self.assertEqual(len(chat['messages']),2)
         self.h.chatter_tick();self.assertEqual(len(self.mesh.calls),2)
     def test_disabling_chatter_stops_before_second_turn(self):
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         with patch('control_center.office.engine',return_value={'snapshot':{'paused':False}}):self.h.chatter_tick()
         chat=self.h.data['chatter']['conversations'][0];chat['approach_until']=0;self.h.chatter_tick();self.h.dispatch('host','chatter.configure',{'enabled':False});self.mesh.jobs[(chat['a'],'0')].update(done=True,result={'reply':'Suggestion'})
         self.h.chatter_tick();self.assertEqual(chat['state'],'stopped');self.assertEqual(len(self.mesh.calls),1)
     def test_transient_preload_failure_preserves_replies_and_retries_turn(self):
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         self.h.chatter_tick();chat=self.h.data['chatter']['conversations'][0];chat['approach_until']=0;self.h.chatter_tick()
         self.mesh.jobs[(chat['a'],'0')].update(done=True,result={'reply':'First reply'})
         self.h.chatter_tick();self.mesh.jobs[(chat['b'],'1')].update(done=True,error='model_preload_not_confirmed')
         self.h.chatter_tick();self.assertEqual(chat['state'],'reply_wait');self.assertEqual(len(chat['messages']),1);self.assertIn('deferred',chat['note'])
         chat['approach_until']=0;self.h.chatter_tick();self.assertEqual(len(self.mesh.calls),3);self.assertEqual(chat['state'],'second')
     def test_serial_conversations_repeat_inside_and_after_windows(self):
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         self.h.chatter_tick();c=self.h.data['chatter']['conversations'][0];c['approach_until']=0
         self.h.chatter_tick();self.h.chatter_tick();self.assertEqual(len(self.mesh.calls),1)
         self.mesh.jobs[(c['a'],'0')].update(done=True,result={'reply':'First'})
@@ -78,7 +79,7 @@ class HandoffTests(unittest.TestCase):
     def test_configurable_session_duration_persists_repeats_and_requires_enabled(self):
         self.assertEqual(self.h.data['chatter']['session_minutes'],15)
         with patch('control_center.handoffs.time.time',return_value=100):
-            self.h.dispatch('host','chatter.configure',{'enabled':True,'session_minutes':7})
+            self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'session_minutes':7})
         ch=self.h.data['chatter'];self.assertEqual(ch['window_ends'],520)
         self.mesh.native_idle=False
         with patch('control_center.handoffs.time.time',return_value=521):self.h.chatter_tick()
@@ -87,13 +88,13 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(restored.data['chatter']['session_minutes'],7)
         self.h.dispatch('host','chatter.configure',{'enabled':False})
         for value in [0,121,True,1.5,'7']:
-            with self.assertRaises(ValueError):self.h.dispatch('host','chatter.configure',{'enabled':True,'session_minutes':value})
+            with self.assertRaises(ValueError):self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'session_minutes':value})
         with self.assertRaises(ValueError):self.h.dispatch('host','chatter.configure',{'enabled':False,'session_minutes':20})
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         self.assertEqual(ch['session_minutes'],7)
 
     def test_pair_topic_and_resource_wait_preserve_request(self):
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         c=self.h.dispatch('host','chatter.pair',{'a':'host--imagen','b':'host--researcher','topic':''})
         self.h.dispatch('host','chatter.topic',{'id':c['id'],'topic':'Icon accessibility'})
         self.h.chatter_tick();c=self.h.data['chatter']['conversations'][0];c['approach_until']=0
@@ -102,7 +103,7 @@ class HandoffTests(unittest.TestCase):
         self.h.chatter_tick();self.assertIn('Icon accessibility',self.mesh.calls[0][1])
         with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.pair',{'a':'other--imagen','b':'host--researcher','topic':''})
     def test_owner_requests_preempt_chatter(self):
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         self.mesh.jobs['owner']={'agent_id':'host','done':False}
         self.h.chatter_tick();self.assertFalse(self.h.data['chatter']['conversations']);self.assertIn('priority',self.h.data['chatter']['admission'])
 
@@ -120,17 +121,17 @@ class HandoffTests(unittest.TestCase):
         self.assertFalse(self.h.data['chatter']['experimental_group_chat'])
         for value in [0,5,True,'2',1.5]:
             with self.assertRaisesRegex(ValueError,'invalid_chatter_concurrency'):
-                self.h.dispatch('host','chatter.configure',{'enabled':True,'max_conversations':value})
+                self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'max_conversations':value})
         with self.assertRaisesRegex(ValueError,'invalid_group_chat'):
-            self.h.dispatch('host','chatter.configure',{'enabled':True,'experimental_group_chat':1})
-        self.h.dispatch('host','chatter.configure',{'enabled':True,'max_conversations':3,'experimental_group_chat':True})
+            self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'experimental_group_chat':1})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'max_conversations':3,'experimental_group_chat':True})
         restored=Handoffs(self.provider,self.home,self.mesh)
         self.assertEqual(restored.data['chatter']['max_conversations'],3)
         self.assertTrue(restored.data['chatter']['experimental_group_chat'])
 
     def test_concurrent_pairs_never_share_participants(self):
         self.provider.bindings.update({'host--codex':'codex','host--progre':'progre','host--coder':'coder'})
-        self.h.dispatch('host','chatter.configure',{'enabled':True,'max_conversations':3})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'max_conversations':3})
         self.h.chatter_tick()
         rows=self.h.data['chatter']['conversations']
         self.assertEqual(len(rows),2)
@@ -145,13 +146,13 @@ class HandoffTests(unittest.TestCase):
         row=self.h.conversation('host--codex','host--moxy')
         self.assertEqual((row['a_role'],row['b_role']),('codex','moxy'))
         self.mesh.sleeping=lambda _: (_ for _ in ()).throw(ValueError('runtime_controls_unavailable'))
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         self.h.chatter_tick()
         self.assertTrue(self.h.data['chatter']['conversations'])
 
     def test_group_three_ordered_turns_and_proposal_notification(self):
         self.provider.bindings['host--codex']='codex'
-        self.h.dispatch('host','chatter.configure',{'enabled':True,'experimental_group_chat':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'experimental_group_chat':True})
         self.h.chatter_tick();row=self.h.data['chatter']['conversations'][0]
         row['approach_until']=0
         people=self.h.participants(row);self.assertEqual(len(people),3)
@@ -171,9 +172,9 @@ class HandoffTests(unittest.TestCase):
     def test_group_queue_requires_opt_in_distinct_bound_participants(self):
         self.provider.bindings['host--codex']='codex'
         args={'a':'host--imagen','b':'host--researcher','c':'host--codex','topic':'PWA preview proposal'}
-        self.h.dispatch('host','chatter.configure',{'enabled':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
         with self.assertRaisesRegex(ValueError,'group_chat_disabled'):self.h.dispatch('host','chatter.group',args)
-        self.h.dispatch('host','chatter.configure',{'enabled':True,'experimental_group_chat':True})
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32,'experimental_group_chat':True})
         row=self.h.dispatch('host','chatter.group',args)
         self.assertEqual(row['state'],'queued');self.assertEqual(row['c'],args['c'])
         self.assertEqual(self.h.dispatch('host','chatter.group',args)['id'],row['id'])

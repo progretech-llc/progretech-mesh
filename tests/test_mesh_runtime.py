@@ -90,6 +90,35 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(job['error'],'mesh_chatter_deferred')
         self.assertEqual(self.runtime.status('host')['last_result']['severity'],'success')
 
+    def test_chatter_consent_is_rechecked_after_model_preload(self):
+        cfg=json.loads((self.home/'.openclaw/openclaw.json').read_text())
+        cfg['agents']['entries']['main']['model']='ollama/local'
+        (self.home/'.openclaw/openclaw.json').write_text(json.dumps(cfg))
+        consent=[True]
+        self.runtime.prepare=lambda *args:consent.__setitem__(0,False)
+        self.runtime.open=lambda *a,**k:self.fail('Expired chatter must not send a model request')
+        def guard(ident):
+            if not consent[0]:raise ValueError('mesh_chatter_deferred')
+        job=self.done('host',self.runtime.chat('host','Discussion',admission=guard,background='a'*32))
+        self.assertEqual(job['error'],'mesh_chatter_deferred')
+
+    def test_background_cancellation_targets_only_its_chatter_session(self):
+        hold=threading.Event();self.addCleanup(hold.set)
+        def worker(ident):hold.wait(2);return {'reply':'Late reply'}
+        chatter=self.runtime.start('host','chat',worker,background='a'*32)
+        owner=self.runtime.start('host--coder','recovery',worker)
+        aborted=threading.Event();calls=[]
+        def call(command,**kwargs):
+            calls.append(command);aborted.set();return SimpleNamespace(returncode=0,stdout='{"aborted":true}')
+        with patch('control_center.mesh_runtime.subprocess.run',side_effect=call):
+            self.runtime.cancel_background('a'*32)
+            self.assertTrue(aborted.wait(1))
+        self.assertEqual(json.loads(calls[0][5]),{'sessionKey':'agent:main:mesh-chatter:'+'a'*32})
+        self.assertFalse(self.runtime.jobs[owner['job_id']].get('cancelled',False))
+        hold.set()
+        self.assertEqual(self.done('host',chatter)['error'],'mesh_chatter_cancelled')
+        self.assertNotIn('error',self.done('host--coder',owner))
+
     def test_progress_is_agent_scoped_and_busy_aliases_rejected(self):
         hold=threading.Event();self.addCleanup(hold.set)
         def worker(j):self.runtime.mark(j,'processing','Waiting for reply text');hold.wait(2);return {'reply':'private fixture'}
