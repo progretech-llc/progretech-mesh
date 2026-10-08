@@ -83,6 +83,9 @@
     // Current observed activity takes precedence over the last completed turn.
     if(agent.transport && agent.transport!=='connected')return {state:'offline',label:'Offline',detail:'Gray: the gateway is offline.'};
     if(runtime.sleeping)return {state:'sleeping',label:'Sleeping',detail:'Gray: this agent is asleep and can be woken by ping or the Wake up control.'+(last?' Previous result: '+last:'')};
+    const observedAt=agent.activity?.observed_at || agent.last_heartbeat;
+    const age=observedAt ? (Date.now()-Date.parse(observedAt))/1000 : null;
+    if(['active','working','processing'].includes(agent.state) && age!==null && (!Number.isFinite(age) || age<0 || age>180))return {state:'unknown',label:'Activity unknown',detail:'The activity report expired. Connectivity does not confirm active work.'};
     if(['active','working','processing'].includes(agent.state))return {state:'busy',label:'Working',detail:'Blue: the host reports active work.'+(last?' Previous result: '+last:'')};
     const health=runtime.health;
     const current=health?' Current check: gateway '+(health.gateway_reachable?'reachable':'unavailable')+', model provider '+(health.model_provider_reachable===true?'reachable':health.model_provider_reachable===false?'unavailable':'not verified')+(health.configured_model_installed===false?', configured model missing':'')+'.':'';

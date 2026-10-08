@@ -1,4 +1,4 @@
-const CACHE_NAME = "progretech-mesh-shell-v16-native-missions";
+const CACHE_NAME = "progretech-mesh-shell-v17-tab-chatter";
 // Retain the prior cache marker for release-contract and rollback checks.
 const LEGACY_CACHE_NAME = "progretech-mesh-shell-v13-all-avatars";
 const SHELL_ASSETS = [
@@ -6,7 +6,7 @@ const SHELL_ASSETS = [
   "/how-it-works",
   "/static/css/app.css",
   "/static/js/app.js",
-  "/static/js/avatars.js?v=seven-roles-moxy",
+  "/static/js/avatars.js?v=moxy-teal-20261007",
   "/static/js/agent-management.js",
   "/static/js/onboarding.js",
   "/static/css/onboarding.css",

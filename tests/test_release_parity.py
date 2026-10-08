@@ -51,4 +51,4 @@ class ReleaseParityTests(unittest.TestCase):
         self.assertIn('.floor-link.instruction{stroke:#62d6ed;stroke-dasharray:none}',css)
         self.assertIn('.floor-link.conversation{stroke:#b38cf3;stroke-dasharray:3 6}',css)
         self.assertIn('agent?.native?.runtime_id',avatars)
-        self.assertIn('moxy.png?v=2',avatars)
+        self.assertIn('moxy.png?v=teal-20261007',avatars)

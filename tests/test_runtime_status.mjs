@@ -48,3 +48,9 @@ test('a recovered or historical failure does not pin an idle agent red',()=>{
  assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout',at:now-30},health:{checked_at:now,gateway_reachable:true,model_provider_reachable:true,configured_model_installed:true}}).state,'idle');
  assert.equal(api.indicator({state:'idle',transport:'connected',last_result:{severity:'error',code:'mesh_reply_timeout',at:now-30},health:{checked_at:now-60,gateway_reachable:true,model_provider_reachable:true}}).state,'error');
 });
+test('stale work reports expire even while transport remains connected',()=>{
+ const agent={state:'working',transport:'connected',activity:{observed_at:new Date(Date.now()-181000).toISOString()}};
+ assert.equal(api.indicator(agent).state,'unknown');
+ agent.activity.observed_at=new Date().toISOString();
+ assert.equal(api.indicator(agent).state,'busy');
+});
