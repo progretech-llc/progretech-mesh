@@ -821,6 +821,8 @@ def public_agent(record: dict[str, Any]) -> dict[str, Any]:
         for key, value in record.items()
         if key not in {"codeseal_key", "owner_id"}
     }
+    from mesh_presence import observed_state
+    public['state'] = observed_state(record)
     public["gateway_agent"] = not record.get("control_center_gateway")
     public["control_center_available"] = bool(record.get("owner_id")) and record.get("trust_state") == "verified"
     if record.get("control_center_gateway"):
@@ -829,7 +831,7 @@ def public_agent(record: dict[str, Any]) -> dict[str, Any]:
         if record.get("gateway_enrollment"):
             linked = linked and any(item['id'] == record['id'] for item in host.get('identified_agents', []))
             public["task"] = "Gateway live" if linked else "Gateway offline"
-            activity = {"working": "Working", "idle": "Idle", "paused": "Paused", "blocked": "Needs attention"}.get(record.get("state"), "Activity unknown")
+            activity = {"working": "Working", "idle": "Idle", "paused": "Paused", "blocked": "Needs attention"}.get(public.get("state"), "Activity unknown")
             public["phase"] = f"Connected through {host.get('name') or record['control_center_gateway']} · {activity}" if linked else "Waiting for the host gateway to reconnect"
         public["transport"] = "connected" if linked else "not-connected"
         public["control_center_available"] = public["control_center_available"] and host.get("trust_state") == "verified"

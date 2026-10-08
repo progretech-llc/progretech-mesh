@@ -62,6 +62,7 @@ class LocalHost:
                     'office_archived':r.get('office_archived') is True, 'office_agent_id':r.get('office_agent_id'), 'is_orchestrator':r.get('is_orchestrator') is True, 'office_worker':r.get('office_worker') is True, 'runtime_id':r.get('runtime_id'),
                     'owner_id':'local-edwin','trust_state':'verified','trust_valid':True,
                     'trust_reason':'authenticated-local-host-binding','local_host_binding':True,
+                    'activity':r.get('activity',{}),
                     'state':'paused' if runtime.get('sleeping') is True else state,'transport':'connected',
                     'task':'Local host connected','phase':'Authenticated local host',
                     'runtime':'OpenClaw','model':runtime.get('model','Unknown'),'mesh_runtime':runtime,
