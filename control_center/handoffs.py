@@ -3,6 +3,7 @@ import copy
 import json
 import secrets
 import random
+import re
 import subprocess
 import threading
 import time
@@ -13,7 +14,10 @@ from control_center.artifacts import catalog, public, write, ROLES
 def validate(action,args):
     fields={'handoff.create':{'source','text'},'handoff.list':set(),'handoff.control':{'id','state'},'chatter.configure':{'enabled'},'chatter.history':set(),'chatter.pair':{'a','b','topic'},'chatter.group':{'a','b','c','topic'},'chatter.topic':{'id','topic'}}[action]
     if action=='chatter.configure':
-        if not isinstance(args,dict) or not {'enabled'} <= set(args) <= {'enabled','session_minutes','max_conversations','experimental_group_chat'} or type(args['enabled']) is not bool:raise ValueError('invalid_chatter_settings')
+        if not isinstance(args,dict) or not {'enabled'} <= set(args) <= {'enabled','session_minutes','max_conversations','experimental_group_chat','tab_id','renew_only'} or type(args['enabled']) is not bool:raise ValueError('invalid_chatter_settings')
+        if args['enabled'] and (not isinstance(args.get('tab_id'),str) or not re.fullmatch(r'[a-f0-9]{32}',args['tab_id'])):raise ValueError('chatter_tab_required')
+        if 'tab_id' in args and (not isinstance(args['tab_id'],str) or not re.fullmatch(r'[a-f0-9]{32}',args['tab_id'])):raise ValueError('invalid_chatter_tab')
+        if 'renew_only' in args and (type(args['renew_only']) is not bool or not args['enabled'] or set(args)!={'enabled','tab_id','renew_only'}):raise ValueError('invalid_chatter_renewal')
         if 'session_minutes' in args and (not args['enabled'] or type(args['session_minutes']) is not int or not 1 <= args['session_minutes'] <= 120):raise ValueError('invalid_chatter_duration')
         if 'max_conversations' in args and (type(args['max_conversations']) is not int or not 1 <= args['max_conversations'] <= 4):raise ValueError('invalid_chatter_concurrency')
         if 'experimental_group_chat' in args and type(args['experimental_group_chat']) is not bool:raise ValueError('invalid_group_chat')
@@ -30,14 +34,14 @@ class Handoffs:
         self.path=self.home/'.progretech-mesh/artifact-handoffs.json'
         self.lock=threading.RLock()
         self.started=False
+        self.chatter_session=None  # Tab consent is ephemeral and never restored from disk.
         try:self.data=json.loads(self.path.read_text())
         except (OSError,ValueError):self.data={'rules':[],'seen':[],'notifications':[]}
         self.data.setdefault('chatter',{'enabled':False,'next_at':0,'conversations':[]})
         self.data['chatter'].setdefault('session_minutes',15)
         self.data['chatter'].setdefault('max_conversations',1)
         self.data['chatter'].setdefault('experimental_group_chat',False)
-        if self.data['chatter']['enabled'] and not self.data['chatter'].get('window_started'):
-            self.data['chatter']['next_at']=0  # Migrate the legacy one-pair cooldown.
+        self.data['chatter'].update(enabled=False,tab_id=None,lease_expires=0)
         for chat in self.data['chatter']['conversations']:
             if chat['state'] in {'approaching','dispatching','first','second','third','reply_wait'}:chat.update(state='unconfirmed',note='Host restarted; conversation was not replayed.')
         for row in self.data['rules']:
@@ -48,16 +52,24 @@ class Handoffs:
     def dispatch(self,agent,action,args):
         validate(action,args)
         with self.lock:
+            self.expire_chatter()
+            if action=='chatter.configure' and args.get('renew_only'):
+                if not self.chatter_session or self.chatter_session['agent']!=agent or self.chatter_session['tab_id']!=args['tab_id']:raise ValueError('chatter_tab_expired')
+                self.renew_chatter(agent,args['tab_id']);self.save();return copy.deepcopy(self.data['chatter'])
             if action=='chatter.configure':
-                chatter=self.data['chatter'];chatter['enabled']=args['enabled']
+                chatter=self.data['chatter']
+                if not args['enabled'] and args.get('tab_id') and (not self.chatter_session or self.chatter_session['agent']!=agent or self.chatter_session['tab_id']!=args['tab_id']):return copy.deepcopy(chatter)
+                chatter['enabled']=args['enabled']
                 for key in ('max_conversations','experimental_group_chat'):
                     if key in args:chatter[key]=args[key]
                 if args['enabled']:
+                    if self.chatter_session and (self.chatter_session['agent']!=agent or self.chatter_session['tab_id']!=args['tab_id']):self.stop_chatter('Chatter moved to another tab.')
+                    chatter['enabled']=True
+                    self.renew_chatter(agent,args['tab_id'])
                     chatter['session_minutes']=args.get('session_minutes',chatter['session_minutes'])
                     now=time.time();chatter.update(window_started=now,window_ends=now+chatter['session_minutes']*60,next_at=0)
                 else:
-                    for row in chatter['conversations']:
-                        if row['state'] in {'queued','approaching','reply_wait'}:row.update(state='stopped',note='Chatter disabled before the next turn.')
+                    self.stop_chatter('Chatter disabled by the user.')
                 self.save();return copy.deepcopy(chatter)
             if action in {'chatter.pair','chatter.group'}:
                 chatter=self.data['chatter']
@@ -95,6 +107,26 @@ class Handoffs:
             if not row or row['target']!=agent:raise ValueError('handoff_not_found')
             if row['state'] not in {'waiting','paused'}:raise ValueError('handoff_already_started')
             row.update(state=args['state']);self.save();return copy.deepcopy(row)
+    def renew_chatter(self,agent,tab_id):
+        self.chatter_session={'agent':agent,'tab_id':tab_id,'expires':time.monotonic()+30}
+        self.data['chatter'].update(tab_id=tab_id,lease_expires=time.time()+30)
+
+    def stop_chatter(self,note):
+        self.chatter_session=None
+        self.data['chatter'].update(enabled=False,tab_id=None,lease_expires=0)
+        for row in self.data['chatter']['conversations']:
+            if row['state'] in {'queued','approaching','dispatching','first','second','third','reply_wait'}:
+                if row.get('job_id'):
+                    self.mesh.cancel_background(row['id'])
+                    note_for_row=note+' Cancellation requested for the active turn; completed actions cannot be undone.'
+                else:note_for_row=note
+                row.update(state='stopped',note=note_for_row)
+
+    def expire_chatter(self):
+        if self.data['chatter']['enabled'] and (not self.chatter_session or time.monotonic()>=self.chatter_session['expires']):
+            self.stop_chatter('Enabling tab disconnected; enable chatter again to start.')
+            self.save()
+
     def notify(self,text):
         # The shared office belongs to the exact enrolled parent gateway binding.
         from control_center.office import engine, namespace
@@ -152,7 +184,9 @@ class Handoffs:
     def admission(self,active,ident=None):
         from control_center.chatter_admission import resources
         from control_center.office import engine,namespace
-        if not self.data['chatter']['enabled']:return False,'Chatter disabled'
+        with self.lock:
+            self.expire_chatter()
+            if not self.data['chatter']['enabled']:return False,'Chatter disabled'
         parents=[a for a,r in self.provider.bindings.items() if r=='main' and '--' not in a]
         if not parents or engine(self.home,namespace('main',parents[0]),'snapshot',{})['snapshot']['paused']:return False,'Office paused'
         if not self.mesh.idle():return False,'Waiting for native work to finish'
@@ -182,6 +216,7 @@ class Handoffs:
 
     def chatter_tick(self):
         with self.lock:
+            self.expire_chatter()
             chatter=self.data['chatter'];now=time.time()
             live_states={'approaching','first','second','third','reply_wait'}
             active=[c for c in chatter['conversations'] if c['state'] in live_states]
@@ -254,6 +289,10 @@ class Handoffs:
             self.started=True
         def run():
             while True:
+                with self.lock:
+                    if not self.data['chatter']['enabled'] and not any(row['state'] in {'waiting','running'} for row in self.data['rules']):
+                        self.started=False
+                        return
                 try:
                     self.mesh.sync_gateway_status()
                     self.tick()
