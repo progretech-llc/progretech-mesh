@@ -11,8 +11,14 @@ from typing import Any
 import mesh_media_router as router
 
 ROOT = Path.home() / ".local" / "share" / "rend" / "media-runtime"
-OUT_ROOT = Path("/mnt/rend-support/runtime-artifacts/PT-2026-049B")
+OUT_ROOT = Path("/mnt/pt-context/job-artifacts/factory-media")
 SCRIPTS = Path(__file__).resolve().parent / "scripts"
+
+def _image_python():
+    device=os.environ.get('FACTORY_IMAGE_DEVICE','cuda')
+    if device not in {'cuda','rocm'}:
+        raise ValueError('Unsupported image backend')
+    return Path.home()/f'.local/share/rend/runtimes/comfyui-{device}/bin/python'
 
 @dataclass(frozen=True)
 class MediaResult:
@@ -61,14 +67,20 @@ def invoke_intent(intent: str, *, prompt: str | None=None, timeout: int=1800) ->
     if not script.is_file():
         raise FileNotFoundError(str(script))
 
+    if subprocess.check_output(['findmnt','-n','-o','TARGET','-T','/mnt/pt-context'],text=True).strip()!='/mnt/pt-context':
+        raise RuntimeError('PT_CONTEXT unavailable; no alternate artifact destination')
+    if not OUT_ROOT.resolve().is_relative_to(Path('/mnt/pt-context/job-artifacts')):
+        raise ValueError('Invalid artifact destination')
     OUT_ROOT.mkdir(parents=True,exist_ok=True)
-    stamp=time.strftime("%Y%m%d-%H%M%S")
+    stamp=str(time.time_ns())
     outdir=OUT_ROOT/f"{route.capability_id}-{stamp}"
     outdir.mkdir(parents=True,exist_ok=True)
 
     cmd=[
-      str(Path.home()/".local/share/rend/runtimes/comfyui-rocm/bin/python")
-      if route.role in {"image_generation","video_generation"}
+      str(_image_python())
+      if route.role == "image_generation"
+      else str(Path.home()/".local/share/rend/runtimes/comfyui-rocm/bin/python")
+      if route.role == "video_generation"
       else str(Path.home()/".local/share/rend/runtimes/ace-step15-rocm/venv/bin/python"),
       str(script),
       "--prompt",p,
@@ -89,7 +101,10 @@ def invoke_intent(intent: str, *, prompt: str | None=None, timeout: int=1800) ->
         except Exception:
             meta={"error":"invalid_result_json"}
 
-    ok=proc.returncode==0 and bool(artifact) and Path(artifact).is_file() and Path(artifact).stat().st_size>0
+    owned=isinstance(artifact,str) and Path(artifact).resolve().is_relative_to(outdir.resolve())
+    ok=proc.returncode==0 and owned and Path(artifact).is_file() and Path(artifact).stat().st_size>0
+    if artifact and not owned:
+        meta['error']='artifact_outside_owned_job'; artifact=None
     return MediaResult(
       ok=ok,
       role=route.role,
