@@ -42,10 +42,12 @@ def generate(mesh,agent,text,ident):
         mesh.mark(ident,'generating','Generating image with the approved local '+route.capability_id+' model')
         result=runtime.invoke_intent('generate image',prompt=text,timeout=1000)
         if not result.ok or result.capability_id!=route.capability_id or not result.artifact:raise ValueError('mesh_image_generation_failed')
-        # Only the established ComfyUI output tree, fixed by the local runtime.
+        # Runtime supplies its own job directory, never a backend-supplied output root.
         source=Path(result.artifact)
-        allowed=mesh.home/'.local/share/rend/runtimes/comfyui-rocm/ComfyUI/output'
-        if not source.resolve().is_relative_to(allowed.resolve()):raise ValueError('mesh_image_artifact_unavailable')
+        owned=result.metadata.get('owned_output_dir')
+        if not isinstance(owned,str):raise ValueError('mesh_image_artifact_unavailable')
+        allowed=Path(owned).resolve()
+        if allowed.parent!=runtime.OUT_ROOT.resolve() or not source.resolve().is_relative_to(allowed):raise ValueError('mesh_image_artifact_unavailable')
         if source.is_symlink() or not source.is_file() or not 0<source.stat().st_size<=MAX_FILE:raise ValueError('mesh_image_artifact_unavailable')
         data=source.read_bytes()
         try:

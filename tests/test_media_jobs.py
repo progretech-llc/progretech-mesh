@@ -7,19 +7,43 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from PIL import Image, ImageDraw
 from control_center.media_jobs import generate, image_request, review_input, review
+from mesh_media_runtime import invoke_intent as real_invoke
+import json
 
 class MediaTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.home=Path(self.tmp.name)
-        self.source=self.home/'.local/share/rend/runtimes/comfyui-rocm/ComfyUI/output/icon.png';self.source.parent.mkdir(parents=True)
+        self.source=self.home/'job-artifacts/factory-media/job/icon.png';self.source.parent.mkdir(parents=True)
         picture=Image.new('RGB',(1024,1024),'blue');ImageDraw.Draw(picture).rectangle((200,200,800,800),fill='red');picture.save(self.source)
         self.mesh=SimpleNamespace(home=self.home,provider=SimpleNamespace(bindings={'host--imagen':'imagen'}),idle=lambda:True,mark=lambda *a:None)
         self.addCleanup(patch.stopall)
         patch('control_center.media_jobs.record_activity',return_value={'status':'saved-and-recalled','memory_id':'fixture'}).start()
+        patch('mesh_media_runtime.OUT_ROOT',self.source.parent.parent).start()
         self.route=SimpleNamespace(capability_id='animagine-xl-3.1')
         patch('mesh_media_router.resolve_active_role',return_value=self.route).start()
-        self.invoke=patch('mesh_media_runtime.invoke_intent',return_value=SimpleNamespace(ok=True,capability_id='animagine-xl-3.1',artifact=str(self.source))).start()
+        self.invoke=patch('mesh_media_runtime.invoke_intent',return_value=SimpleNamespace(ok=True,capability_id='animagine-xl-3.1',artifact=str(self.source),metadata={'owned_output_dir':str(self.source.parent)})).start()
         patch('control_center.media_jobs.psutil.virtual_memory',return_value=SimpleNamespace(available=50*1024**3,total=120*1024**3)).start()
+    def test_real_runtime_handoff_uses_admission_and_owned_job(self):
+        route=SimpleNamespace(role='image_generation',capability_id='animagine-xl-3.1')
+        commands=[]
+        def backend(command,timeout):
+            commands.append(command)
+            self.assertEqual(Path(command[0]).name,'factory-heavy-command')
+            self.assertIn('--owned-backend',command)
+            job=Path(command[command.index('--output-dir')+1])
+            artifact=job/'render.png';artifact.write_bytes(self.source.read_bytes())
+            (job/'result.json').write_text(json.dumps({'artifact':str(artifact),'owned_output_dir':'/untrusted'}))
+            return SimpleNamespace(returncode=0,stdout='',stderr='')
+        with patch('mesh_media_runtime.invoke_intent',side_effect=real_invoke), patch('mesh_media_runtime.router.resolve_media_intent',return_value=route), patch('mesh_media_runtime._require_output_root'), patch('mesh_media_runtime.subprocess.check_output',return_value='{"ok":true,"busy":false,"lease":{}}'), patch('mesh_media_runtime._run_backend',side_effect=backend):
+            result=generate(self.mesh,'host--imagen','Generate an icon','d'*32)
+        self.assertEqual(len(commands),1)
+        self.assertTrue(Path(result['artifacts'][0]['path']).is_file())
+
+    def test_foreign_job_root_cannot_publish(self):
+        self.invoke.return_value.metadata={'owned_output_dir':str(self.home)}
+        with self.assertRaisesRegex(ValueError,'artifact_unavailable'):
+            generate(self.mesh,'host--imagen','Generate an icon','e'*32)
+
     def test_explicit_generation_and_review_are_separate(self):
         for text in ['Generate a small robot icon','Please create a friendly robot image','Draw an icon']:self.assertTrue(image_request(text),text)
         for text in ['Review the generated icon','When imagen is done, review the generated image',"Don't generate an icon",'Generate a status summary']:self.assertFalse(image_request(text),text)
