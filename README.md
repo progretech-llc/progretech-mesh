@@ -1,8 +1,15 @@
 # ProgreTech Mesh
-<img width="1761" height="900" alt="firefox_ybIdXT0Xw0" src="https://github.com/user-attachments/assets/de674b43-4bbb-487e-85bb-ea7617f955c1" />
+
+Manage and orchestrate agents from your OpenClaw gateway. Monitor each agent, create scoped API relay setups, and coordinate tasks through the Factory Scrum board while execution and data remain on the enrolled host.
+
+A project of **[ProgreTech LLC](https://progretech.com)**, owned and maintained by **Ed Rodriguez**. Third-party components and contributions retain their respective ownership and notices.
+
+[Project website](https://mesh.progretech.com) · [Report an issue](https://github.com/progretech-llc/progretech-mesh/issues) · [Contribute](CONTRIBUTING.md)
+
+<img width="1761" height="900" alt="ProgreTech Mesh agent monitoring dashboard" src="https://github.com/user-attachments/assets/de674b43-4bbb-487e-85bb-ea7617f955c1" />
 
 
-> A direct-first, local-owned monitoring and interaction console for independently running AI agents.
+> Connect an available OpenClaw gateway, import its agents, and manage their work from Mesh. See [Factory workflow](docs/FACTORY_OFFICE.md) for the current workflow.
 
 **ProgreTech Mesh** is an open project exploring how humans can monitor, communicate with, and safely coordinate autonomous AI agents **without taking ownership of the agent runtime away from the user's machine**.
 
@@ -184,40 +191,29 @@ Roles sharing one workstation keep separate profiles through their verified host
 Setup includes Minimum Requirements and Rend’s dated stack reference.
 See [the integration guide](docs/PER_AGENT_CONTROL_CENTER.md) for setup and runtime limits.
 
-## Agent onboarding and Factory office
+## Connect your gateway and use the Factory
 
-The fleet’s **Agent onboarding** plus tile connects a personally hosted agent with
-an encrypted invitation, a live pulse, an identification question and owner
-confirmation. The agent keeps its private PEM; Mesh binds verified public identity
-and CodeSeal evidence to the logged-in owner. See [onboarding](docs/AGENT_ONBOARDING.md).
+An available **OpenClaw gateway is required** to import and run agents in this release. Mesh manages the agents and their work; the gateway host supplies their runtime, tools, files and memory.
 
-**Mission Control** at `/mission-control` provides the existing workstation controls.
-**Factory** at `/factory` is a Mesh-owned office with pulsing agent circles, message
-paths, hiring, mailboxes, reviewed memory, dependencies and owner approvals. CrewAI
-executes hierarchical missions on the selected host; Munder Difflin HiveManager owns
-coordination. See [Factory setup and validation](docs/FACTORY_OFFICE.md).
+1. Sign in to Mesh and enroll your OpenClaw host using **Add signed agent** and the generated setup instructions. Complete the host connection and identity verification.
+2. Import the gateway's configured agents into your fleet. Each imported agent has its own monitor, conversation and scoped API relay setup for compatible external tools.
+3. Choose a **Scrum Master** from an agent card, or double-click an agent on the Factory canvas. Its yellow pulse identifies the coordinating role.
+4. Create an **Intake** task with a clear brief. The Scrum Master assigns or performs the work on the host, records progress, asks for clarification when needed, and reviews completion evidence.
+5. Use the separate chatter terminal to enable conversations among available idle agents. Chatter is distinct from task execution and remains subject to host resource availability.
 
-## Agent enrollment and management
+The persistent Factory board supports editing, assignment, comments, dependencies, deletion and card movement. Tasks with active or uncertain execution are protected from destructive changes. See [Factory workflow and limits](docs/FACTORY_OFFICE.md), [agent management](docs/AGENT_MANAGEMENT.md) and [trusted enrollment](docs/TRUSTED_ENROLLMENT_BOOTSTRAP.md).
 
-**Add signed agent** explains identity keys, imports signed evidence, and can generate a new Ed25519 identity plus a registry-issued CodeSeal key. **Manage** saves host-local communication models, removes enrollments, and launches configured CrewAI/OpenHands factory jobs. Lyra and Mak can be messaged through their verified host in separate Mesh sessions. See [setup and local/offline instructions](docs/AGENT_MANAGEMENT.md).
+**Mission Control** at `/mission-control` retains workstation controls. `/factory` uses the pinned Munder Difflin host ledger and OpenClaw native execution; optional CrewAI integration is separate from this default workflow.
 
-## Current Reference Agent: Rend
+## Reference host: Rend
 
-Mesh is currently being developed and acceptance-tested against **Rend**, an independently running OpenClaw-based autonomous agent.
-
-Rend is intentionally treated as an external agent from Mesh's perspective.
-
-This helps enforce an important architectural requirement:
-
-> Mesh should integrate with an agent through a defined adapter and protocol rather than through assumptions about the machine running it.
-
-The OpenClaw integration therefore acts as the first reference adapter—not as a requirement that future agents use OpenClaw.
+Rend is a reference OpenClaw host used for integration qualification. Mesh connects through its defined adapter and authenticated protocol; it does not take ownership of the underlying agent runtime. Additional runtimes remain future adapter work, not an alternative supported onboarding path in this release.
 
 ---
 
 ## Adapter Architecture
 
-Mesh is intended to support multiple agent runtimes through bounded adapters.
+OpenClaw is the supported gateway today. The following diagram describes potential future adapters, not currently available runtime imports.
 
 ```text
                          Mesh Protocol
@@ -269,7 +265,7 @@ OWNER DEVICE / PWA
                                          AGENT RUNTIME
 ```
 
-Mesh currently uses a Flask/PWA architecture with an OpenClaw reference adapter while the direct data-plane architecture continues through release acceptance.
+Mesh currently uses a Flask/PWA architecture with the OpenClaw gateway adapter. The direct data-plane diagram above describes the longer-term architecture, not a claim that every transport is released.
 
 ---
 
@@ -468,7 +464,7 @@ Mesh is currently an RC/development project.
 A typical development environment uses Python 3.12+.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/progretech-llc/progretech-mesh.git
 cd progretech-mesh
 
 python -m venv .venv
@@ -576,3 +572,19 @@ The project is under active development.
 ---
 
 *Built around a simple idea: the agent can remain autonomous without becoming invisible.*
+
+## Collaboration
+
+Adapter documentation, accessibility, connection diagnostics, and reproducible enrollment failures are useful ways to help. Read [CONTRIBUTING.md](CONTRIBUTING.md) for issue reports, proposed changes, and attribution requirements.
+
+## License and reuse
+
+This repository uses custom ProgreTech source-available terms; see [LICENSE.md](LICENSE.md). Read the permitted uses, attribution, and contribution terms before reusing or submitting code. Public visibility is not an OSI-approved open-source license.
+
+Preserve [third-party notices](packaging/THIRD_PARTY_NOTICES.md), including the separate licenses for bundled runtimes, libraries, model weights, and Munder Difflin. The project license does not replace upstream terms.
+
+## More from ProgreTech
+
+[Open Mesh](https://mesh.progretech.com) (sign-in required). Explore [CodeSeal](https://codeseal.progretech.com) for signed software provenance and [Atlas](https://atlas.progretech.com) for opportunity and evidence research.
+
+Discover the wider portfolio at [progretech.com](https://progretech.com). These links identify related products; they do not imply a bundled integration or shared license.
