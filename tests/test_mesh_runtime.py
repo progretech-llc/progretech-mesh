@@ -211,6 +211,7 @@ class RuntimeTests(unittest.TestCase):
         with patch('control_center.mesh_runtime.subprocess.run',side_effect=response) as run:
             result=self.done('host--coder',self.runtime.chat('host--coder','Bounded fixture',mission=True))
         self.assertEqual(result['result']['reply'],'actual native reply')
+        self.assertIs(result['native_dispatch_started'],True)
         command=run.call_args.args[0];params=json.loads(command[command.index('--params')+1])
         self.assertEqual(command[:4],['openclaw','gateway','call','agent']);self.assertIn('--expect-final',command)
         self.assertEqual(command[command.index('--expect-url')+1],'ws://127.0.0.1:18789')
@@ -257,6 +258,17 @@ class RuntimeTests(unittest.TestCase):
         self.runtime.open=lambda *a,**k:(_ for _ in ()).throw(TimeoutError('private diagnostic'))
         result=self.done('host',self.runtime.chat('host','fixture'))
         self.assertEqual(result['error'],'mesh_runtime_completion_unconfirmed')
+        self.assertIs(result['native_dispatch_started'],True)
+
+    def test_headroom_refusal_is_marked_before_any_native_transport(self):
+        cfg=json.loads((self.home/'.openclaw/openclaw.json').read_text())
+        cfg['agents']['entries']['coder']['model']='ollama/large-fixture'
+        (self.home/'.openclaw/openclaw.json').write_text(json.dumps(cfg))
+        self.runtime.open=lambda *a,**k:self.fail('No native transport before preload admission')
+        with patch.object(self.runtime,'prepare',side_effect=ValueError('model_memory_headroom_required')):
+            result=self.done('host--coder',self.runtime.chat('host--coder','bounded fixture',mission=True))
+        self.assertEqual(result['error'],'model_memory_headroom_required')
+        self.assertIs(result['native_dispatch_started'],False)
 
     def test_native_failure_diagnostic_is_bound_and_excludes_native_text(self):
         cfg=json.loads((self.home/'.openclaw/openclaw.json').read_text())
