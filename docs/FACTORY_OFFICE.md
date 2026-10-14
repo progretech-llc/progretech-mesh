@@ -73,6 +73,17 @@ Five recorded agent errors in the recent upstream breaker window pause the offic
 
 ## Bounded task tool for native agents
 
+Gateway credentials may be literal tokens or OpenClaw SecretRefs. For SecretRefs,
+Mesh uses the official authenticated gateway CLI against the configured loopback
+URL, retaining the exact role, session, explicit model override and idempotency
+key. The CLI uses the scoped Mesh session and no outbound delivery; it omits the
+HTTP-only `mesh` channel label, which is not a registered gateway delivery
+channel. The gateway agent RPC also has no per-turn `max_tokens` field, so the
+HTTP path’s 384-token chatter cap is unavailable on this transport; the existing
+role/model configuration and bounded request timeout apply. Mesh does not extract secret values, fall back to embedded execution or
+replay a failed request. A missing terminal transport receipt preserves the
+mission lease for runtime reconciliation.
+
 Task comments and matching events carry a host-owned origin. `native-tool` means
 the bounded CLI accepted an update against the current task, actor and run
 capability; `native-reply` means the host parsed the model’s final response.

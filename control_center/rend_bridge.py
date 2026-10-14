@@ -7,6 +7,7 @@ import json
 import hashlib
 import re
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 
 from control_center.provider import AgentControlProvider, register_provider_routes
@@ -120,31 +121,31 @@ def install(host, home=None):
             port = gateway.get('port', 18789)
             if type(port) is not int or not 1 <= port <= 65535:
                 raise ValueError('gateway_port_invalid')
-            request_body = {'model': 'openclaw/' + role, 'stream': False,
-                            'messages': [{'role': 'user', 'content': args['text']}],
-                            'user': 'mesh-conversation-' + profile['agent_id']}
-            # Runtime model overrides are sent only via the configured gateway;
-            # they do not rewrite the agent's global primary/fallback settings.
-            headers = {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + gateway['auth']['token'],
-                       'x-openclaw-agent-id': role, 'x-openclaw-message-channel': 'mesh',
-                       'x-openclaw-session-key': 'agent:' + role + ':mesh-chat:' + profile['agent_id']}
-            if model != 'default':
-                headers['x-openclaw-model'] = model
-            req = Request(f'http://127.0.0.1:{port}/v1/chat/completions', data=json.dumps(request_body).encode(), headers=headers)
+            session='agent:'+role+':mesh-chat:'+profile['agent_id']
             nonce=preferences(provider,profile['agent_id']).get('conversation_nonce')
-            if nonce:req.add_header('x-openclaw-session-key',headers['x-openclaw-session-key']+':'+nonce)
+            if nonce:session+=':'+nonce
             from control_center.conversation_sync import publish
+            from control_center.mesh_runtime import gateway_agent_reply, provider_error
             sync_id=__import__('uuid').uuid4().hex
-            sync_fields={'agent':role,'origin':'mesh','session':req.get_header('X-openclaw-session-key')}
+            sync_fields={'agent':role,'origin':'mesh','session':session}
             publish(home,**sync_fields,event_key=sync_id+':user',speaker='user',text=args['text'])
             try:
-                with urlopen(req, timeout=300) as response:
-                    completion = json.loads(response.read(1048576))
+                token=gateway['auth']['token']
+                if isinstance(token,dict):
+                    reply=gateway_agent_reply(cfg,role,session,args['text'],300,sync_id,model if model!='default' else None)
+                else:
+                    if not isinstance(token,str) or not token:raise ValueError('runtime_auth_unavailable')
+                    request_body={'model':'openclaw/'+role,'stream':False,'messages':[{'role':'user','content':args['text']}],'user':'mesh-conversation-'+profile['agent_id']}
+                    headers={'Content-Type':'application/json','Authorization':'Bearer '+token,
+                        'x-openclaw-agent-id':role,'x-openclaw-message-channel':'mesh','x-openclaw-session-key':session}
+                    if model!='default':headers['x-openclaw-model']=model
+                    req=Request(f'http://127.0.0.1:{port}/v1/chat/completions',data=json.dumps(request_body).encode(),headers=headers)
+                    with urlopen(req,timeout=300) as response:completion=json.loads(response.read(1048576))
+                    reply=completion['choices'][0]['message']['content']
             except Exception as exc:
-                from control_center.mesh_runtime import provider_error
-                code=provider_error(exc);mesh.signal(agent,'error',code)
-                raise ValueError(code) from exc
-            reply=completion['choices'][0]['message']['content']
+                code=('mesh_runtime_completion_unconfirmed' if isinstance(exc,(TimeoutError,URLError)) and not isinstance(exc,HTTPError) else
+                      str(exc) if isinstance(exc,ValueError) and str(exc).startswith(('mesh_','runtime_')) else provider_error(exc))
+                mesh.signal(agent,'error',code);raise ValueError(code) from None
             if reply.lstrip().startswith(('⚠️ LLM request failed','LLM request failed:')):
                 mesh.signal(agent,'error','mesh_provider_rejected');raise ValueError('mesh_provider_rejected')
             publish(home,**sync_fields,event_key=sync_id+':assistant',speaker='assistant',text=reply)

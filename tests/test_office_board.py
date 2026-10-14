@@ -143,6 +143,17 @@ class NativeWorkflowTests(BoardTests):
         row=self.task(a);self.assertTrue(row['running']);self.assertEqual(row['stage'],'blocked')
         with self.assertRaisesRegex(ValueError,'task_running'):self.call('task.delete',{'id':a})
 
+    def test_native_transport_uncertainty_preserves_run_lease(self):
+        self.role=namespace('main','host')
+        self.call('runtime.sync',{'agents':[{'runtime_id':'main','name':'Rend','role':'SRE'}],'host_runtime':'main'})
+        a=self.create();provider=SimpleNamespace(bindings={'host':'main'})
+        mesh=SimpleNamespace(chat=lambda *a,**k:{'job_id':'accepted-job'},get=lambda *a:{'done':True,'error':'mesh_runtime_completion_unconfirmed'})
+        with patch('control_center.office_native.threading.Thread') as thread:
+            dispatch_native_mission(self.home,'main',a,'host',provider,mesh)
+            thread.call_args.kwargs['target']()
+        row=self.task(a);self.assertEqual(row['stage'],'blocked');self.assertTrue(row['running'])
+        with self.assertRaisesRegex(ValueError,'task_running'):self.call('task.delete',{'id':a})
+
     def test_completion_schema_requires_evidence(self):
         self.assertIsNone(decision('{"action":"complete","text":"done"}'))
         self.assertIsNone(decision('{"action":"complete","text":"done","evidence":""}'))

@@ -162,6 +162,9 @@ def dispatch(home, role, task_id, gateway, provider, mesh, _queued=False):
                 else:
                     op('mission.uncertain', text='Runtime completion is unconfirmed after two hours. Inspect the native job before recovery; execution remains protected.')
                     return
+                if receipt.get('error')=='mesh_runtime_completion_unconfirmed':
+                    op('mission.uncertain',text='Native transport ended without a verified terminal receipt. Inspect runtime execution before recovery; execution remains protected.')
+                    return
                 op('mission.release', error=bool(receipt.get('error')))
                 if receipt.get('error'):
                     resolve('blocked', 'Runtime stopped: ' + str(receipt['error'])[:300])

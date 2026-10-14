@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from urllib.error import HTTPError
 from unittest.mock import patch
 from control_center.provider import AgentControlProvider
-from control_center.mesh_runtime import MeshRuntime, gateway_activity_idle, provider_error
+from control_center.mesh_runtime import MeshRuntime, gateway_activity_idle, provider_error, gateway_agent_reply
 from control_center.management import validate_management
 from control_center.office import engine, validate_office
 from control_center.office_relations import interactions
@@ -199,6 +199,54 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(value['result']['reply'],'actual answer')
         self.assertIn('writing',[m['phase'] for m in value['milestones']])
         self.assertNotIn('hidden fixture',str(value));self.assertEqual(requests[0].get_header('X-openclaw-agent-id'),'coder');self.assertFalse(json.loads(requests[0].data)['stream'])
+    def test_secretref_uses_official_gateway_with_exact_actor_session_and_model(self):
+        cfg=json.loads((self.home/'.openclaw/openclaw.json').read_text())
+        cfg['gateway']['auth']['token']={'source':'store','provider':'default','id':'fixture-reference'}
+        (self.home/'.openclaw/openclaw.json').write_text(json.dumps(cfg))
+        self.runtime.open=lambda *a,**k:self.fail('SecretRef must not be concatenated or sent over HTTP')
+        self.runtime.settings=lambda agent:{'enabled':True,'model':'remote/override','conversation_nonce':'owned-session'}
+        def response(command,**kwargs):
+            params=json.loads(command[command.index('--params')+1])
+            return SimpleNamespace(returncode=0,stdout=json.dumps({'runId':params['idempotencyKey'],'status':'ok','result':{'payloads':[{'text':'actual native reply'}]}}))
+        with patch('control_center.mesh_runtime.subprocess.run',side_effect=response) as run:
+            result=self.done('host--coder',self.runtime.chat('host--coder','Bounded fixture',mission=True))
+        self.assertEqual(result['result']['reply'],'actual native reply')
+        command=run.call_args.args[0];params=json.loads(command[command.index('--params')+1])
+        self.assertEqual(command[:4],['openclaw','gateway','call','agent']);self.assertIn('--expect-final',command)
+        self.assertEqual(command[command.index('--expect-url')+1],'ws://127.0.0.1:18789')
+        self.assertEqual(params['agentId'],'coder');self.assertEqual(params['sessionKey'],'agent:coder:mesh-chat:host--coder:owned-session')
+        self.assertEqual(params['model'],'remote/override');self.assertFalse(params['deliver'])
+        self.assertEqual(params['idempotencyKey'],'mesh-'+result['job_id']);self.assertEqual(run.call_count,1)
+        self.assertNotIn('fixture-reference',str(command));self.assertNotIn('--token',command)
+        self.assertEqual(json.loads((self.home/'.openclaw/openclaw.json').read_text()),cfg)
+
+    def test_unconfirmed_gateway_cli_never_replays_or_exposes_diagnostics(self):
+        cfg={'gateway':{'port':18789}}
+        for response in [SimpleNamespace(returncode=1,stdout='sensitive diagnostic'),SimpleNamespace(returncode=0,stdout='{"status":"accepted"}'),SimpleNamespace(returncode=0,stdout='invalid secret diagnostic'),SimpleNamespace(returncode=0,stdout='{"runId":"different","status":"ok","result":{"payloads":[{"text":"wrong run"}]}}')]:
+            with patch('control_center.mesh_runtime.subprocess.run',return_value=response) as run:
+                with self.assertRaisesRegex(ValueError,'^mesh_runtime_completion_unconfirmed$'):
+                    gateway_agent_reply(cfg,'coder','agent:coder:mesh-chat:host--coder','bounded',30,'id')
+                self.assertEqual(run.call_count,1)
+
+    def test_gateway_success_envelope_does_not_override_native_failure_or_pending(self):
+        cfg={'gateway':{'port':18789}}
+        for meta,code in [({'error':{'kind':'incomplete_turn'}},'mesh_provider_rejected'),({'aborted':True},'mesh_provider_rejected'),({'replayInvalid':True},'mesh_provider_rejected'),({'continuationPending':True},'mesh_runtime_completion_unconfirmed')]:
+            payload={'runId':'mesh-id','status':'ok','result':{'meta':meta,'payloads':[{'text':'Claimed done'}]}}
+            with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))):
+                with self.assertRaisesRegex(ValueError,'^'+code+'$'):gateway_agent_reply(cfg,'coder','agent:coder:mesh-chat:x','bounded',30,'id')
+        payload={'runId':'mesh-id','status':'ok','result':{'meta':{},'payloads':[{'text':'private reasoning','isReasoning':True},{'text':'pre-tool commentary','isCommentary':True},{'text':'compaction notice','isCompactionNotice':True},{'text':'fallback notice','isFallbackNotice':True},{'text':'status notice','isStatusNotice':True},{'text':'visible final'}]}}
+        with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))):
+            self.assertEqual(gateway_agent_reply(cfg,'coder','agent:coder:mesh-chat:x','bounded',30,'id'),'visible final')
+        payload['result']['payloads']=[{'text':'notice only','isStatusNotice':True}]
+        with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))):
+            with self.assertRaisesRegex(ValueError,'^mesh_reply_incomplete$'):
+                gateway_agent_reply(cfg,'coder','agent:coder:mesh-chat:x','bounded',30,'id')
+
+    def test_http_timeout_is_unconfirmed_not_cancellation(self):
+        self.runtime.open=lambda *a,**k:(_ for _ in ()).throw(TimeoutError('private diagnostic'))
+        result=self.done('host',self.runtime.chat('host','fixture'))
+        self.assertEqual(result['error'],'mesh_runtime_completion_unconfirmed')
+
     def test_failed_job_finishes_even_if_signal_write_fails(self):
         self.runtime.signal=lambda *a:(_ for _ in ()).throw(OSError('fixture'))
         value=self.done('host',self.runtime.start('host','chat',lambda j:(_ for _ in ()).throw(ValueError('mesh_context_limit'))))
