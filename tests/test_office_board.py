@@ -87,7 +87,16 @@ class BoardTests(unittest.TestCase):
 
 
 class NativeWorkflowTests(BoardTests):
-    def run_workflow(self,replies):
+    def test_transition_clears_prior_scrum_tool_decision(self):
+        self.call('runtime.sync',{'agents':[{'runtime_id':'main','name':'Rend','role':'SRE'},{'runtime_id':'coder','name':'Mak','role':'Engineer'}],'host_runtime':'main'})
+        a=self.create();t=self.call('begin',{'id':a,'native':True})['result']['task'];lease=t['runId'];coordinator=t['coordinator']
+        self.call('mission.update',{'id':a,'runId':lease,'actor':coordinator,'action':'delegate','to':'runtime-coder','text':'Bounded assignment'})
+        self.assertEqual(self.call('mission.inspect',{'id':a,'runId':lease})['result']['task']['pendingDecision']['action'],'delegate')
+        self.call('mission.transition',{'id':a,'runId':lease,'from':coordinator,'to':'runtime-coder','text':'Bounded assignment'})
+        self.assertIsNone(self.call('mission.inspect',{'id':a,'runId':lease})['result']['task']['pendingDecision'])
+        self.call('mission.update',{'id':a,'runId':lease,'actor':'runtime-coder','action':'question','text':'Current executor clarification'})
+        self.assertEqual(self.call('mission.inspect',{'id':a,'runId':lease})['result']['task']['pendingDecision']['actor'],'runtime-coder')
+    def run_workflow(self,replies,receipt_overrides=None):
         self.role=namespace('main','host')
         self.call('runtime.sync',{'agents':[{'runtime_id':'main','name':'Rend','role':'SRE'},{'runtime_id':'coder','name':'Mak','role':'Engineer'}],'host_runtime':'main'})
         a=self.create();calls=[];receipts={}
@@ -95,6 +104,7 @@ class NativeWorkflowTests(BoardTests):
             index=len(calls);calls.append((agent,prompt));job='job-'+str(index)
             reply=replies[index] if index<len(replies) else {'action':'review','text':'Stop'}
             receipts[job]={'done':True,'result':{'reply':json.dumps(reply) if isinstance(reply,dict) else reply}}
+            receipts[job].update((receipt_overrides or {}).get(index,{}))
             return {'job_id':job}
         mesh=SimpleNamespace(chat=chat,get=lambda agent,job:receipts[job])
         provider=SimpleNamespace(bindings={'host':'main','host--coder':'coder'})
@@ -109,6 +119,50 @@ class NativeWorkflowTests(BoardTests):
         self.assertEqual(result['task_id'],a)
     def test_plain_reply_never_becomes_false_completion(self):
         a,_,_=self.run_workflow(['I completed it.']);self.assertEqual(self.task(a)['stage'],'review');self.assertNotEqual(self.task(a)['status'],'done')
+    def test_plain_executor_reply_returns_to_scrum_for_independent_review(self):
+        a,calls,_=self.run_workflow([{'action':'delegate','to':'runtime-coder','text':'Inspect acceptance'}, 'Finished the prior task.', {'action':'complete','text':'Independently reviewed the evidence','evidence':'actual reviewer checks'}])
+        self.assertEqual([actor for actor,_ in calls],['host','host--coder','host'])
+        review_prompt=calls[-1][1]
+        self.assertIn('unstructured reply; this does not establish completion',review_prompt)
+        self.assertIn('independently verify evidence',review_prompt)
+        self.assertIn('No completion evidence supplied.',review_prompt)
+        self.assertEqual(self.task(a)['stage'],'done')
+    def test_plain_executor_and_plain_scrum_reply_remain_in_review(self):
+        a,calls,_=self.run_workflow([{'action':'delegate','to':'runtime-coder','text':'Inspect acceptance'}, 'Done.', 'Looks good.'])
+        self.assertEqual(len(calls),3);self.assertEqual(self.task(a)['stage'],'review');self.assertFalse(self.task(a)['running'])
+    def test_plain_self_executor_returns_to_scrum_review_without_closing(self):
+        a,calls,_=self.run_workflow([{'action':'execute','text':'Inspect within my authority'},'Unstructured self-execution result.',{'action':'question','text':'Evidence needs owner clarification'}])
+        self.assertEqual([actor for actor,_ in calls],['host','host','host'])
+        self.assertIn('independently verify evidence',calls[-1][1])
+        self.assertEqual(self.task(a)['stage'],'blocked');self.assertFalse(self.task(a)['running'])
+    def test_plain_executor_repair_loop_remains_bounded(self):
+        replies=[{'action':'delegate','to':'runtime-coder','text':'Inspect acceptance'},'Unstructured result.']*8
+        a,calls,_=self.run_workflow(replies)
+        self.assertEqual(len(calls),8);self.assertEqual(self.task(a)['stage'],'review');self.assertFalse(self.task(a)['running'])
+    def test_pre_dispatch_headroom_refusal_returns_to_scrum_for_alternative(self):
+        replies=[{'action':'delegate','to':'runtime-coder','text':'Inspect'},'',{'action':'execute','text':'Use my available runtime'}, {'action':'complete','text':'Checked','evidence':'executor checks'}, {'action':'complete','text':'Reviewed','evidence':'independent checks'}]
+        a,calls,_=self.run_workflow(replies,{1:{'error':'model_memory_headroom_required','native_dispatch_started':False}})
+        self.assertEqual([actor for actor,_ in calls],['host','host--coder','host','host','host'])
+        self.assertIn('refused before native dispatch',calls[2][1]);self.assertIn('Do not automatically retry',calls[2][1])
+        self.assertEqual(self.task(a)['stage'],'done')
+        self.assertFalse(any(c.get('author')=='runtime-coder' and c.get('source')=='native-reply' for c in self.task(a)['comments']))
+    def test_headroom_failure_without_proven_pre_dispatch_boundary_stays_blocked(self):
+        for marker in ({},{'native_dispatch_started':True}):
+            with self.subTest(marker=marker):
+                a,calls,_=self.run_workflow([{'action':'delegate','to':'runtime-coder','text':'Inspect'},''],{1:{'error':'model_memory_headroom_required',**marker}})
+                self.assertEqual(len(calls),2);self.assertEqual(self.task(a)['stage'],'blocked')
+    def test_pre_dispatch_self_executor_refusal_returns_to_review(self):
+        a,calls,_=self.run_workflow([{'action':'execute','text':'Inspect'},'',{'action':'question','text':'Need available resources'}],{1:{'error':'model_memory_headroom_required','native_dispatch_started':False}})
+        self.assertEqual(len(calls),3);self.assertEqual(self.task(a)['stage'],'blocked')
+        self.assertIn('No native executor work',calls[-1][1])
+    def test_initial_scrum_resource_refusal_stays_blocked(self):
+        a,calls,_=self.run_workflow([''],{0:{'error':'model_memory_headroom_required','native_dispatch_started':False}})
+        self.assertEqual(len(calls),1);self.assertEqual(self.task(a)['stage'],'blocked')
+    def test_resource_refusal_coordination_remains_bounded(self):
+        replies=[{'action':'delegate','to':'runtime-coder','text':'Inspect'},'']*8
+        overrides={i:{'error':'model_memory_headroom_required','native_dispatch_started':False} for i in range(1,16,2)}
+        a,calls,_=self.run_workflow(replies,overrides)
+        self.assertEqual(len(calls),8);self.assertEqual(self.task(a)['stage'],'review');self.assertFalse(self.task(a)['running'])
     def test_question_is_persistent_and_can_be_answered(self):
         a,_,_=self.run_workflow([{'action':'question','text':'Which deployment environment?'}]);self.assertEqual(self.task(a)['stage'],'blocked')
         self.call('task.approve',{'id':a,'answer':'Staging'});self.assertEqual(self.task(a)['stage'],'ready')

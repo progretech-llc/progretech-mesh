@@ -166,16 +166,32 @@ def dispatch(home, role, task_id, gateway, provider, mesh, _queued=False):
                     op('mission.uncertain',text='Native transport ended without a verified terminal receipt. Inspect runtime execution before recovery; execution remains protected.')
                     return
                 op('mission.release', error=bool(receipt.get('error')))
-                if receipt.get('error'):
+                resource_refusal=((actor != coordinator or mode=='execute') and receipt.get('error')=='model_memory_headroom_required'
+                                  and receipt.get('native_dispatch_started') is False)
+                if receipt.get('error') and not resource_refusal:
                     resolve('blocked', 'Runtime stopped: ' + str(receipt['error'])[:300])
                     return
                 current = op('mission.inspect')['result']['task']
-                proposed = current.get('pendingDecision') or decision(receipt.get('result', {}).get('reply', ''))
+                proposed = current.get('pendingDecision') or ({'action':'review','text':
+                    'The assigned executor '+actor+' was refused before native dispatch: model_memory_headroom_required. '
+                    'No native executor work or completion evidence exists for this attempt. '
+                    'Choose another available assignee, execute within your own authority, or ask the owner for clarification. '
+                    'Do not automatically retry this refused assignee, change model settings, or evict other models.'}
+                    if resource_refusal else decision(receipt.get('result', {}).get('reply', '')))
                 if not proposed:
-                    resolve('review', 'The runtime returned an unstructured result; completion is not confirmed. ' + receipt.get('result', {}).get('reply', '')[:5000])
-                    return
+                    unstructured=receipt.get('result', {}).get('reply', '')[:5000]
+                    if actor != coordinator or mode == 'execute':
+                        # A terminal executor turn still belongs to Scrum review.
+                        # Carry the unsupported reply as context, never evidence.
+                        proposed={'action':'review','text':
+                            'The executor returned an unstructured reply; this does not establish completion. '
+                            'Inspect accepted task comments and independently verify evidence. Request clarification '
+                            'or bounded repair if evidence is insufficient. Executor reply: '+unstructured}
+                    else:
+                        resolve('review', 'The runtime returned an unstructured result; completion is not confirmed. ' + unstructured)
+                        return
                 action = proposed['action']; text = proposed['text']
-                if not current.get('pendingDecision'):
+                if not current.get('pendingDecision') and not resource_refusal:
                     op('mission.update', actor=actor, action='comment', text=(text + ('\nEvidence: ' + proposed['evidence'] if proposed.get('evidence') else ''))[:6000])
                 if action == 'question':
                     resolve('blocked', text); return

@@ -89,6 +89,18 @@ matching terminal reply once while retaining its no-replay policy. Native errors
 error payloads, aborts, timeouts and pending continuations still prevent completion.
 Failed host jobs retain only bounded transport-owned diagnostic categories and
 flags, never native prompts, reply text or tool output.
+When a successful executor turn returns plain text, Mesh sends it to the Scrum
+Master as unverified review context alongside the persisted task comments. Scrum
+must independently check evidence, request a bounded repair, or ask clarification.
+A plain-text Scrum decision still remains in Review; only a structured,
+evidence-bearing Scrum completion can close the card. This review uses the same
+coordination turn limit and does not replay the executor request.
+An executor rejected specifically for model memory headroom can also return to
+Scrum when the host job proves native dispatch never started. Scrum can select
+another available role, self-execute or ask clarification; the host does not
+automatically retry the refused role, evict models or change configuration.
+Missing or positive dispatch markers and other failures retain the existing
+Blocked/uncertain behavior. An initial Scrum admission refusal stays Blocked.
 
 Task comments and matching events carry a host-owned origin. `native-tool` means
 the bounded CLI accepted an update against the current task, actor and run

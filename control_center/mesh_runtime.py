@@ -666,6 +666,7 @@ class MeshRuntime:
             output.mkdir(parents=True,exist_ok=True,mode=0o700)
             text+='\nIf generating a deliverable for the owner, publish a non-secret copy under '+str(output)+'. Report the actual path; a reply alone is not a published file. Keep private memory and credentials out of shared artifacts.'
         def worker(ident):
+            with self.lock:self.jobs[ident]['native_dispatch_started']=False
             if admission:admission(ident)
             cfg,role,chosen=self.config(agent)
             if not self.settings(agent).get('enabled',True):raise ValueError('mesh_enrollment_removed')
@@ -690,6 +691,7 @@ class MeshRuntime:
             token=cfg['gateway']['auth']['token']
             self.mark(ident,'processing','Processing your request; waiting for reply text')
             if isinstance(token,dict):
+                with self.lock:self.jobs[ident]['native_dispatch_started']=True
                 answer=gateway_agent_reply(cfg,role,session,text,response_timeout,ident,override)
             else:
                 if not isinstance(token,str) or not token:raise ValueError('runtime_auth_unavailable')
@@ -701,6 +703,7 @@ class MeshRuntime:
                 # Retrieve the final response; never infer native cancellation from
                 # a timed-out/disconnected HTTP client.
                 try:
+                    with self.lock:self.jobs[ident]['native_dispatch_started']=True
                     with self.open(req,timeout=response_timeout) as response:
                         raw=response.read(4194305)
                 except HTTPError:raise
