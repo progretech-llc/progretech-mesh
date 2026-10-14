@@ -32,7 +32,7 @@ class HandoffTests(unittest.TestCase):
     def create(self):return self.h.dispatch('host--researcher','handoff.create',{'source':'imagen','text':'Review the generated icon.'})
     def test_dependency_waits_for_new_artifact_then_runs_once_and_notifies_director(self):
         self.publish();self.h.tick();r=self.create();self.h.tick();self.assertEqual(self.mesh.calls,[])
-        time.sleep(.01);p=self.publish();self.h.tick();self.assertEqual(len(self.mesh.calls),1);self.assertEqual(self.mesh.calls[0][0],'host--researcher');self.assertIn(str(p),self.mesh.calls[0][1])
+        time.sleep(.01);p=self.publish();self.h.tick();self.assertEqual(len(self.mesh.calls),1);self.assertEqual(self.mesh.calls[0][0],'host--researcher');self.assertIn(str(p),self.mesh.calls[0][1]);self.assertIn(str(self.home/'pt-context/deliverables/mesh-lyra'),self.mesh.calls[0][1])
         self.h.tick();self.assertEqual(len(self.mesh.calls),1)
         self.mesh.jobs[('host--researcher','0')].update(done=True,result={'reply':'Reviewed icon; contrast needs work.'})
         self.h.tick();row=self.h.data['rules'][0];self.assertEqual(row['state'],'delivered');self.assertTrue(row['director_notified']);self.assertTrue(any('contrast' in t for t in self.notices))
@@ -40,6 +40,15 @@ class HandoffTests(unittest.TestCase):
         r=self.create();self.h.dispatch('host--researcher','handoff.control',{'id':r['id'],'state':'paused'});self.publish();self.h.tick();self.assertEqual(self.mesh.calls,[])
         with self.assertRaises(ValueError):self.h.dispatch('host--imagen','handoff.control',{'id':r['id'],'state':'waiting'})
         self.h.dispatch('host--researcher','handoff.control',{'id':r['id'],'state':'cancelled'});self.h.tick();self.assertEqual(self.mesh.calls,[])
+    def test_unavailable_publication_storage_does_not_admit_or_stick_dispatch(self):
+        row=self.h.dispatch('host--researcher','handoff.create',{'source':'imagen','text':'Inspect next published artifact'})
+        self.publish()
+        with patch('control_center.handoffs.output_directory',side_effect=ValueError('pt_context_unavailable')):
+            self.h.tick()
+        self.assertFalse(self.mesh.calls)
+        self.assertEqual(self.h.data['rules'][0]['state'],'waiting')
+        self.assertIn('storage unavailable',self.h.data['rules'][0]['note'])
+
     def test_sleep_and_restart_do_not_replay_started_work(self):
         self.create();self.publish();self.mesh.asleep=True;self.h.tick();self.assertFalse(self.mesh.calls)
         self.mesh.asleep=False;self.h.tick();self.assertEqual(len(self.mesh.calls),1)
@@ -175,7 +184,7 @@ class HandoffTests(unittest.TestCase):
             self.h.chatter_tick()
         self.assertEqual(row['state'],'complete');self.assertEqual(len(row['messages']),3)
         self.assertTrue(row['director_notified'])
-        proposal=Path(row['proposal_path']);self.assertTrue(proposal.is_file())
+        proposal=Path(row['proposal_path']);self.assertTrue(proposal.is_file());self.assertTrue(proposal.is_relative_to(self.home/'pt-context/deliverables/mesh-rend'))
         self.assertIn('Proposal turn 2',proposal.read_text())
         self.assertIn('have not been executed',proposal.read_text())
         self.assertIn('Proposal turn 0',self.mesh.calls[2][1]);self.assertIn('Proposal turn 1',self.mesh.calls[2][1])

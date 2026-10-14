@@ -133,7 +133,7 @@ def dispatch(home, role, task_id, gateway, provider, mesh, _queued=False):
         try:
             job = mesh.chat(binding, prompt, owner_text=task.get('description') or task['title'], response_timeout=7200, mission=True)
         except ValueError as exc:
-            if str(exc) in {'mesh_agent_busy','mesh_agent_sleeping','mesh_jobs_full','invalid_response_timeout'}:
+            if str(exc) in {'mesh_agent_busy','mesh_agent_sleeping','mesh_jobs_full','invalid_response_timeout','runtime_controls_unavailable'}:
                 op('mission.release', error=True)
             raise
         op('mission.bind', jobId=job['job_id'], agentId=actor)

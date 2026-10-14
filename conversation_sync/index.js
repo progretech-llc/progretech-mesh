@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import {definePluginEntry} from 'openclaw/plugin-sdk/core';
 import {callGatewayFromCli} from 'openclaw/plugin-sdk/gateway-runtime';
 import {spawn} from 'node:child_process';
@@ -5,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {route,textOf,finalText,eventKey,chunks} from './hooks.js';
+import {route,textOf,finalText,eventKey,chunks,telegramBinding,telegramToken} from './hooks.js';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const configPath='/mnt/pt-context/agents/shared/conversation-sync/config.json';
 function config(){try{return JSON.parse(fs.readFileSync(configPath,'utf8'));}catch{return {agents:[]};}}
@@ -19,26 +20,29 @@ function store(data){return new Promise((resolve,reject)=>{
 export default definePluginEntry({id:'progretech-conversation-sync',name:'ProgreTech conversation sync',register(api){
   const runs=new Map(); let timer,busy=false;
   const report=()=>api.logger.warn('Conversation synchronization failed; inspect delivery receipts. No prompt was replayed.');
-  const received=new Set();
   api.on('message_received',async(event,ctx)=>{
     if(ctx.channelId!=='telegram')return;
-    const settings=config(),binding=settings.telegram?.find(b=>b.account===(ctx.accountId||'default') && String(b.owner)===String(event.senderId||event.from));
+    const binding=telegramBinding(event,ctx,config());
     if(!binding)return;
-    const session=event.sessionKey||ctx.sessionKey;if(!session?.startsWith('agent:'+binding.agent+':'))return;
-    const id=event.runId||ctx.runId||('telegram:'+binding.account+':'+event.messageId);
+    const session=event.sessionKey||ctx.sessionKey||('agent:'+binding.agent+':main');if(!session.startsWith('agent:'+binding.agent+':'))return;
+    const id='telegram:'+binding.account+':'+(event.messageId||ctx.messageId||event.runId||ctx.runId||crypto.randomUUID());
     const paths=(event.media||[]).map(m=>m.path).filter(p=>typeof p==='string' && path.isAbsolute(p));
     const text=[event.content,...paths.map(p=>'Attached file: '+p)].filter(Boolean).join('\n');
-    try{await store({op:'append',event_key:id+':user',agent:binding.agent,origin:'telegram',session,speaker:'user',text});received.add(id);if(received.size>2000)received.delete(received.values().next().value);}catch{report();}
+    try{await store({op:'append',event_key:id+':user',agent:binding.agent,origin:'telegram',session,speaker:'user',text});}catch{report();}
   });
   api.on('message_sent',async(event,ctx)=>{
     if(ctx.channelId!=='telegram' || !event.success)return;
-    const binding=config().telegram?.find(b=>b.account===(ctx.accountId||'default') && String(b.owner)===String(event.to));
-    const session=event.sessionKey||ctx.sessionKey;if(!binding || !session?.startsWith('agent:'+binding.agent+':'))return;
-    try{await store({op:'append',event_key:'telegram:'+binding.account+':sent:'+event.messageId,agent:binding.agent,origin:'telegram',session,speaker:'assistant',text:event.content});}catch{report();}
+    const binding=telegramBinding(event,ctx,config(),true);if(!binding)return;
+    const recent=await store({op:'history',agent:binding.agent,limit:20});
+    const session=event.sessionKey||ctx.sessionKey||recent.filter(r=>r.origin==='telegram' && r.speaker==='user').at(-1)?.session||('agent:'+binding.agent+':main');
+    if(!session.startsWith('agent:'+binding.agent+':'))return;
+    try{await store({op:'append',event_key:'telegram:'+binding.account+':sent:'+(event.messageId||ctx.messageId||crypto.randomUUID()),agent:binding.agent,origin:'telegram',session,speaker:'assistant',text:event.content});}catch{report();}
   });
   api.on('reply_payload_sending',(event,ctx)=>{
     const session=event.sessionKey||ctx.sessionKey;
-    if(!session || !config().agents?.includes(session.split(':')[1]))return;
+    const settings=config();
+    const agent=session?.split(':')[1] || telegramBinding({to:ctx.conversationId},ctx,settings,true)?.agent;
+    if(!agent || !settings.agents?.includes(agent))return;
     const payload=event.payload||{},paths=[payload.mediaUrl,...(payload.mediaUrls||[])].filter(p=>typeof p==='string' && path.isAbsolute(p));
     const missing=paths.filter(p=>!(payload.text||'').includes(p));
     if(missing.length)return {payload:{...payload,text:[payload.text,...missing.map(p=>'File: '+p)].filter(Boolean).join('\n')}};
@@ -69,7 +73,7 @@ export default definePluginEntry({id:'progretech-conversation-sync',name:'Progre
   async function deliver(row,target,send){
     if(!await store({op:'claim',seq:row.seq,target,part:-1}))return;
     try {
-      const label=row.speaker==='user'?'You':row.speaker==='status'?'Task status':row.agent;
+      const label=row.speaker==='user'?'You':row.speaker==='status'?'Task status':(api.runtime.config.current().agents?.entries?.[row.agent]?.name||row.agent);
       const text=`[${row.origin} · ${label} · #${row.seq}]\n${row.text}`;
       for(const [part,chunk] of chunks(text).entries()){
         if(!await store({op:'claim',seq:row.seq,target,part}))throw Error('unconfirmed prior delivery');
@@ -111,9 +115,8 @@ export default definePluginEntry({id:'progretech-conversation-sync',name:'Progre
       }
       for(const binding of settings.telegram||[]){
         const account=runtime.channels?.telegram?.accounts?.[binding.account];
-        let token=account?.botToken;
-        if(!token && typeof account?.tokenFile==='string'){const filename=account.tokenFile.replace(/^~(?=\/)/,os.homedir());const stat=fs.lstatSync(filename);if(stat.isFile() && !stat.isSymbolicLink())token=fs.readFileSync(filename,'utf8').trim();}
-        if(typeof token!=='string' || !token || account?.enabled===false)continue;
+        const token=telegramToken(account,tokenFile=>{const filename=tokenFile.replace(/^~(?=\/)/,os.homedir());const stat=fs.lstatSync(filename);return stat.isFile() && !stat.isSymbolicLink()?fs.readFileSync(filename,'utf8'):null;});
+        if(!token)continue;
         const target='telegram:'+binding.account+':'+binding.owner;
         for(const row of await store({op:'pending',agent:binding.agent,target,exclude_origin:'telegram'})){
           await deliver(row,target,async text=>{

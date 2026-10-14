@@ -224,3 +224,9 @@ Models may return unsupported output; that remains in Review. Unknown native
 execution requires runtime reconciliation. Shared inference capacity can delay
 idle participants. Neither a successful deployment nor a passing transport check
 establishes sustained whole-fleet acceptance.
+
+Installed factory helper commands resolve from `~/ptinternal/bin` first, with
+`~/Rend/bin` retained only when the canonical helper is absent on older hosts.
+This applies to actual role controls and host image activity receipts. New
+handoff proposals use the established PT_CONTEXT deliverable directories;
+legacy artifact locations remain readable without receiving new publications.
