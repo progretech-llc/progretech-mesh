@@ -4,6 +4,7 @@ import mimetypes
 import os
 import re
 import stat
+from itertools import islice
 from urllib.parse import quote
 import asyncio
 import json
@@ -13,6 +14,10 @@ from pathlib import Path
 from store import Store
 
 DELIVERABLE_ROOT=Path('/mnt/pt-context/deliverables')
+MAX_ATTACHMENT_FILES=4
+MAX_ATTACHMENT_CANDIDATES=32
+MAX_ATTACHMENT_BYTES=10*1024*1024
+MAX_TOTAL_ATTACHMENT_BYTES=10*1024*1024
 BRIDGE=str(Path.home()/'software-factory-setup/openhands-20260928/integration/factory_acp.py')
 
 
@@ -31,19 +36,26 @@ def origin_files(text):
     """Only actual published files can become origin-only attachment cards."""
     from openhands.sdk.llm import TextContent, ImageContent
     prefix=re.escape(str(DELIVERABLE_ROOT))
-    candidates=re.findall(prefix+r'/[^\s`<>"\)]+',text)
-    content=[]
-    for value in dict.fromkeys(candidates):
+    candidates=re.finditer(prefix+r'/[^\s`<>"\)]+',text)
+    content=[];seen=set();files=0;total_bytes=0
+    for match in islice(candidates,MAX_ATTACHMENT_CANDIDATES):
+        if files>=MAX_ATTACHMENT_FILES or total_bytes>=MAX_TOTAL_ATTACHMENT_BYTES:break
+        value=match.group()
         path=Path(value.rstrip('.,;'))
+        if path in seen:continue
+        seen.add(path)
         if not path.is_relative_to(DELIVERABLE_ROOT) or '..' in path.parts:continue
         if any(p.is_symlink() for p in [path,*path.parents]):continue
         try:
             fd=os.open(path,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0))
             with os.fdopen(fd,'rb') as stream:
                 info=os.fstat(stream.fileno())
-                if not stat.S_ISREG(info.st_mode) or not 0<info.st_size<=10*1024*1024:continue
-                data=stream.read(10*1024*1024+1)
+                remaining=MAX_TOTAL_ATTACHMENT_BYTES-total_bytes
+                if not stat.S_ISREG(info.st_mode) or not 0<info.st_size<=min(MAX_ATTACHMENT_BYTES,remaining):continue
+                data=stream.read(info.st_size+1)
+                if len(data)!=info.st_size:continue
         except OSError:continue
+        files+=1;total_bytes+=len(data)
         label=path.name.replace('[','').replace(']','')
         content.append(TextContent(text=f'Generated file: {path}\n[Download {label}](#progretech-file={quote(str(path),safe="")})'))
         if path.suffix.lower() in {'.png','.jpg','.jpeg','.webp','.gif'}:

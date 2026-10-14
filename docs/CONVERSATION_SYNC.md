@@ -32,7 +32,9 @@ Originating Mesh replies receive download buttons; other Mesh tabs do not receiv
 automatic attachment cards. Native channel attachments retain their original
 channel delivery. OpenHands adds download links and validated image previews only
 to the originating conversation, using its existing authenticated file API.
-Published files up to 10 MB are eligible; other surfaces retain only the paths.
+Each response examines at most 32 candidate paths and includes at most four files,
+10 MiB per file and 10 MiB in total before base64 encoding. Only verified images
+receive previews; other surfaces retain only the paths.
 
 New Mesh generated files go to `/mnt/pt-context/deliverables/mesh-<agent>/`;
 Mesh prompt uploads go to `/mnt/pt-context/job-artifacts/mesh-attachments-<runtime>/`.
@@ -57,9 +59,11 @@ or token files. The binding file is local, mode 0600. Unknown owners and roles a
 not auto-enrolled. Additional tools need an explicit adapter and owner binding;
 sharing a model or a MemPalace identity alone cannot synchronize their UI.
 
-Object-shaped credential references are not resolved by this adapter. Those
-accounts remain unsent until their runtime integration is qualified; do not copy
-tokens into configuration to work around that boundary.
+Telegram credentials come from the official `api.runtime.config.current()` runtime
+snapshot, which can supply resolved credentials for source SecretRefs. References
+that remain unresolved are refused without conversion or fallback file access.
+Synthetic tests cover both cases; no current account delivery is claimed. Never
+copy tokens into source configuration to work around unresolved credentials.
 
 The source adapter is opt-in. The October 14 host inspection found no installed
 conversation-sync extension or enabled plugin entry, and neither pinned OpenHands

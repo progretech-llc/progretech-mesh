@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {route,textOf,finalText,eventKey,chunks,telegramBinding} from './hooks.js';
+import {route,textOf,finalText,eventKey,chunks,telegramBinding,telegramToken} from './hooks.js';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const configPath='/mnt/pt-context/agents/shared/conversation-sync/config.json';
 function config(){try{return JSON.parse(fs.readFileSync(configPath,'utf8'));}catch{return {agents:[]};}}
@@ -115,9 +115,8 @@ export default definePluginEntry({id:'progretech-conversation-sync',name:'Progre
       }
       for(const binding of settings.telegram||[]){
         const account=runtime.channels?.telegram?.accounts?.[binding.account];
-        let token=account?.botToken;
-        if(!token && typeof account?.tokenFile==='string'){const filename=account.tokenFile.replace(/^~(?=\/)/,os.homedir());const stat=fs.lstatSync(filename);if(stat.isFile() && !stat.isSymbolicLink())token=fs.readFileSync(filename,'utf8').trim();}
-        if(typeof token!=='string' || !token || account?.enabled===false)continue;
+        const token=telegramToken(account,tokenFile=>{const filename=tokenFile.replace(/^~(?=\/)/,os.homedir());const stat=fs.lstatSync(filename);return stat.isFile() && !stat.isSymbolicLink()?fs.readFileSync(filename,'utf8'):null;});
+        if(!token)continue;
         const target='telegram:'+binding.account+':'+binding.owner;
         for(const row of await store({op:'pending',agent:binding.agent,target,exclude_origin:'telegram'})){
           await deliver(row,target,async text=>{

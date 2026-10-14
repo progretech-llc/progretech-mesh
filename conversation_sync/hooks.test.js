@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {route,finalText,chunks,eventKey,telegramBinding} from './hooks.js';
+import {route,finalText,chunks,eventKey,telegramBinding,telegramToken} from './hooks.js';
 const cfg={agents:['main','imagen'],telegram:[{agent:'main',account:'default',owner:'123'}]};
 test('unknown roles and internal jobs are excluded',()=>{
  for(const key of ['agent:reviewer:main','agent:main:subagent:xyz','agent:main:mesh-chatter:abc','agent:main:cron:abc'])assert.equal(route({sessionKey:key},cfg),null);
@@ -43,4 +43,14 @@ test('explicit native owner conversations sync; internal provenance does not',()
  const ctx={sessionKey:'agent:main:explicit:conversation',channel:'webchat',inputProvenance:{kind:'external_user'}};
  assert.equal(route(ctx,cfg).origin,'openclaw');
  assert.equal(route({...ctx,inputProvenance:{kind:'internal_system'}},cfg),null);
+});
+
+test('Telegram uses resolved runtime credentials and rejects unresolved references',()=>{
+ const noRead=()=>assert.fail('Unexpected credential file read');
+ const reference={source:'env',provider:'default',id:'SYNTHETIC_TOKEN'};
+ assert.equal(telegramToken({botToken:reference,tokenFile:'/unused'},noRead),null);
+ const api={runtime:{config:{current:()=>({channels:{telegram:{accounts:{owner:{botToken:'synthetic-resolved'}}}}})}}};
+ assert.equal(telegramToken(api.runtime.config.current().channels.telegram.accounts.owner,noRead),'synthetic-resolved');
+ assert.equal(telegramToken({enabled:false,botToken:'synthetic-resolved'},noRead),null);
+ assert.equal(telegramToken({tokenFile:'/fixture'},path=>{assert.equal(path,'/fixture');return ' synthetic-file\n';}),'synthetic-file');
 });

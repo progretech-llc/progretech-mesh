@@ -61,6 +61,28 @@ class DisplayTests(unittest.TestCase):
         with large.open('wb') as stream:stream.truncate(10*1024*1024+1)
         with patch.object(openhands_server,'DELIVERABLE_ROOT',root):
             self.assertEqual(openhands_server.origin_files(str(empty)+' '+str(large)),[])
+    def test_attachment_count_is_bounded(self):
+        root=Path(self.tmp.name)/'deliverables';root.mkdir()
+        files=[root/f'{i}.txt' for i in range(8)]
+        for file in files:file.write_text('fixture')
+        with patch.object(openhands_server,'DELIVERABLE_ROOT',root):
+            content=openhands_server.origin_files(' '.join(map(str,files)))
+        self.assertEqual(len(content),openhands_server.MAX_ATTACHMENT_FILES)
+    def test_aggregate_bytes_are_bounded_and_exact_remainder_is_allowed(self):
+        root=Path(self.tmp.name)/'deliverables';root.mkdir()
+        files=[root/f'{i}.txt' for i in range(3)]
+        for file,size in zip(files,[5,5,3]):file.write_bytes(b'x'*size)
+        with patch.object(openhands_server,'DELIVERABLE_ROOT',root), patch.object(openhands_server,'MAX_TOTAL_ATTACHMENT_BYTES',8):
+            content=openhands_server.origin_files(' '.join(map(str,files)))
+        self.assertEqual(len(content),2)
+        self.assertIn('0.txt',content[0].text)
+        self.assertIn('2.txt',content[1].text)
+    def test_invalid_candidate_scan_is_bounded(self):
+        root=Path(self.tmp.name)/'deliverables';root.mkdir()
+        valid=root/'valid.txt';valid.write_text('fixture')
+        absent=[root/f'absent-{i}' for i in range(openhands_server.MAX_ATTACHMENT_CANDIDATES)]
+        with patch.object(openhands_server,'DELIVERABLE_ROOT',root):
+            self.assertEqual(openhands_server.origin_files(' '.join(map(str,absent+[valid]))),[])
     def test_busy_and_own_messages_are_not_injected(self):
         db=Store(self.path);db.append('own','main','openhands','agent:main:factory-api:ProgreTech:own','user','hello');db.db.close()
         self.assertEqual(openhands_server.project_events(self.conversation)['mirrored'],0)

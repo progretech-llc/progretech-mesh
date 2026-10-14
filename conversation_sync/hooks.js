@@ -42,3 +42,14 @@ export function telegramBinding(event,ctx,config,outbound=false){
   const sender=normalize(event.senderId||event.from);
   return config.telegram?.find(b=>config.agents?.includes(b.agent) && b.account===(ctx.accountId||'default') && String(b.owner)===target && (outbound || String(b.owner)===sender)) || null;
 }
+
+// Accounts come from api.runtime.config.current(), never the raw config file.
+// A reference still present in that snapshot must not become a URL or file read.
+export function telegramToken(account,readTokenFile){
+  if(!account || account.enabled===false)return null;
+  const token=account.botToken;
+  if(token)return typeof token==='string'?token:null;
+  if(typeof account.tokenFile!=='string')return null;
+  const fileToken=readTokenFile(account.tokenFile);
+  return typeof fileToken==='string' && fileToken.trim()?fileToken.trim():null;
+}
