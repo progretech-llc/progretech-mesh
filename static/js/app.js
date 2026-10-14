@@ -1041,7 +1041,7 @@
     document.querySelectorAll("[data-identity]").forEach((b) => b.addEventListener("click", () => showIdentity(b.dataset.identity)));
 
     agentGrid.querySelectorAll('[data-agent-card]').forEach(card => {
-      card.onclick=e=>{if(!e.target.closest('button,a,input,select,textarea'))monitorAgent(card.dataset.agentCard);};
+      card.onclick=e=>{if(!e.target.closest('button,a,input,select,textarea,details'))monitorAgent(card.dataset.agentCard);};
       card.onkeydown=e=>{if(e.target===card && ['Enter',' '].includes(e.key)){e.preventDefault();monitorAgent(card.dataset.agentCard);}};
     });
     agentGrid.querySelectorAll('[data-power]').forEach(b=>b.onclick=async()=>{
