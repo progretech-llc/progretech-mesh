@@ -266,6 +266,22 @@ class MeshRuntime:
         data = json.loads(result.stdout)
         return gateway_activity_idle(data)
 
+    def participant_busy(self, agent, exclude=None):
+        """Role-scoped work observation; unrelated active roles do not block chatter."""
+        runtime=self.provider.bindings.get(agent)
+        with self.lock:
+            if any(key!=exclude and not job['done'] and self.provider.bindings.get(job['agent_id'])==runtime for key,job in self.jobs.items()):
+                return True
+        file=self.home/'.local/state/progretech-workday/activity.json'
+        try:
+            data=json.loads(file.read_text())
+            if time.time()-file.stat().st_mtime<=90:
+                row=data.get('agents',{}).get(ROLE_NAMES.get(runtime,runtime),{})
+                if row.get('state') in {'active','working','running'}:return True
+                if any(t.get('role')==ROLE_NAMES.get(runtime,runtime) and t.get('state') in {'running','uncertain'} for t in data.get('tasks',[])):return True
+        except (OSError,ValueError):pass
+        return False
+
     def mark(self, ident, phase, detail):
         with self.lock:
             job = self.jobs[ident]
@@ -305,7 +321,7 @@ class MeshRuntime:
                     if background:raise ValueError('mesh_chatter_deferred')
                     if time.monotonic()>deadline:raise ValueError('mesh_queue_timeout')
                 try:
-                    while kind == 'chat' and not self.idle():
+                    while kind == 'chat' and not background and not self.idle():
                         if background:raise ValueError('mesh_chatter_deferred')
                         self.mark(ident,'queued','Waiting for other runtime work to finish')
                         if time.monotonic()>deadline:raise ValueError('mesh_queue_timeout')
@@ -478,14 +494,14 @@ class MeshRuntime:
         except (OSError,subprocess.TimeoutExpired,json.JSONDecodeError):raise ValueError('mesh_context_delivery_unconfirmed')
         return {'scope':'agent','accepted':True,'delivery':receipt['status'],'note':'Runtime accepted this instruction for the observed work session. Processing or completion is not yet confirmed.'}
 
-    def chat(self, agent, text, admission=None, background=None, image_paths=None, owner_text=None, response_timeout=300):
+    def chat(self, agent, text, admission=None, background=None, image_paths=None, owner_text=None, response_timeout=300, mission=False):
         if type(response_timeout) is not int or not 30 <= response_timeout <= 7200:
             raise ValueError('invalid_response_timeout')
         original_text=owner_text if owner_text is not None else text
         from control_center.artifacts import ROLES, safe, output_directory
         role=ROLES.get(self.provider.bindings[agent])
         from control_center.media_jobs import image_request
-        media=not background and not image_paths and '\nAttached file ' not in text and '\nPublished artifact ' not in text and image_request(text)
+        media=not mission and not background and not image_paths and '\nAttached file ' not in text and '\nPublished artifact ' not in text and image_request(text)
         if role and not background and not media:
             output=safe(self.home,output_directory(self.home,self.provider.bindings[agent]))
             output.mkdir(parents=True,exist_ok=True,mode=0o700)

@@ -49,6 +49,6 @@ class RoleAPITests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/agents/rend/ide/token').status_code,404)
     def test_owner_mints_token(self):
         with self.client.session_transaction() as session:session['mesh_user']={'id':'owner','display_name':'Owner'}
-        self.assertEqual(self.client.post('/api/agents/rend/ide/token').status_code,201)
+        self.assertEqual(self.client.post('/api/agents/rend/ide/token',headers={'Origin':'http://localhost'}).status_code,201)
 
 if __name__=='__main__':unittest.main()

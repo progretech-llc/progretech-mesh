@@ -31,10 +31,10 @@ class RelationshipLifecycleTests(unittest.TestCase):
 
     def test_conversation_removes_line_at_completion_independent_of_session_duration(self):
         chat = {'id': 'chat', 'a_role': 'architect', 'b_role': 'designer', 'topic': 'Review', 'messages': [], 'created': 0}
-        for state in ['queued', 'approaching', 'first', 'reply_wait', 'second']:
+        for state in ['first', 'reply_wait', 'second']:
             chat['state'] = state
             self.assertEqual(len(self.links(conversations=[chat])), 1)
-        for state in ['complete', 'failed', 'stopped', 'unconfirmed']:
+        for state in ['queued', 'approaching', 'complete', 'failed', 'stopped', 'unconfirmed']:
             with self.subTest(state=state):
                 chat.update(state=state, finished=9999999999)
                 self.assertEqual(self.links(conversations=[chat]), [])

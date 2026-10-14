@@ -34,21 +34,15 @@ class ReleaseParityTests(unittest.TestCase):
         self.assertIn('MeshRuntime.unifiedOffice', (ROOT/'static/js/office.js').read_text())
         self.assertIn('MeshRuntime.terminalDirection', (ROOT/'static/js/app.js').read_text())
 
-    def test_factory_status_avatar_and_proximity_contract(self):
+    def test_factory_uses_recorded_collaboration_and_scrum_role(self):
         office=(ROOT/'static/js/office.js').read_text()
-        fleet=(ROOT/'static/js/app.js').read_text()
         css=(ROOT/'static/css/office.css').read_text()
         avatars=(ROOT/'static/js/avatars.js').read_text()
-        self.assertIn('MeshRuntime.workLabel',office)
-        self.assertIn('MeshRuntime.workLabel',fleet)
-        self.assertIn('chatterEligible',office)
-        self.assertIn("binding.startsWith(host()+'--')",office)
-        self.assertIn('first===second',office)
-        self.assertIn('d<90',office)
-        self.assertNotIn("chatter?.enabled&&id.startsWith('factory-')",office)
-        self.assertIn('.floor-node.working,.floor-node.busy{color:#6fb7ff}',css)
-        self.assertIn('.floor-node.sleeping,.floor-node.offline{color:#8198aa',css)
-        self.assertIn('.floor-link.instruction{stroke:#62d6ed;stroke-dasharray:none}',css)
-        self.assertIn('.floor-link.conversation{stroke:#b38cf3;stroke-dasharray:3 6}',css)
+        self.assertIn('snapshot.interactions',office)
+        self.assertIn("['first','second','third','reply_wait']",office)
+        self.assertIn('a.isScrumMaster || a.isDirector',office)
+        self.assertIn('MeshRuntime.unifiedOffice',office)
+        self.assertNotIn('d<90',office)  # Proximity alone must not invent collaboration.
+        self.assertIn('.scrum-master',css)
         self.assertIn('agent?.native?.runtime_id',avatars)
         self.assertIn('moxy.png?v=teal-20261007',avatars)

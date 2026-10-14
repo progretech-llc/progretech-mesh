@@ -616,7 +616,7 @@ export function isHiveAwareProvider(provider: AgentProvider | undefined): boolea
  *  the god). True when lifecycle status supports guarded idle delivery; false
  *  for hookless custom commands. */
 export function canReceiveInbox(provider: AgentProvider | undefined): boolean {
-  if ((provider as string) === 'mesh') return true; // Mesh drains the inbox before CrewAI execution.
+  if ((provider as string) === 'mesh') return true; // Mesh claims the inbox before native or CrewAI execution.
   return providerPreset(provider ?? 'claude').canReceiveInbox;
 }
 

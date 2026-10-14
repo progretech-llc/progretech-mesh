@@ -53,4 +53,4 @@ class OfficeTests(unittest.TestCase):
         operation = {'operation': 'hire', 'args': {'name': 'Ada', 'role': 'Researcher', 'goal': 'Research'}}
         dispatch_office(self.home.name, self.role, operation, 'owner-a-agent')
         other = dispatch_office(self.home.name, self.role, {'operation': 'snapshot', 'args': {}}, 'owner-b-agent')
-        self.assertEqual([a['name'] for a in other['snapshot']['agents']], ['Director'])
+        self.assertEqual([a['name'] for a in other['snapshot']['agents']], ['Scrum Master'])

@@ -181,8 +181,8 @@ SAFE_FILE_EXTENSIONS = {
 }
 SENSITIVE_FILE_EXTENSIONS = {".exe", ".msi", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".so", ".dylib"}
 
-OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.1-continuity.1"
-OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.1-continuity.1.tgz"
+OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.2-role-relay.1"
+OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.2-role-relay.1.tgz"
 UNIVERSAL_ENROLLMENT_PROTOCOL_FILENAME = "universal-agent-enrollment-v1.json"
 AGENT_ADAPTER_CATALOG_FILENAME = "agent-adapter-catalog-v1.json"
 OPENCLAW_SELF_BOOTSTRAP_PLAN_FILENAME = "openclaw-self-bootstrap-plan-v1.json"
@@ -1055,7 +1055,40 @@ def ide_token_secret() -> bytes:
     return str(value).encode("utf-8")
 
 
+def ide_agent_binding(agent_id: str, owner_id: str | None = None) -> dict[str, str]:
+    """Resolve only a current, owner-bound native role on its enrolled host."""
+    record = DEV_AGENT_REGISTRY.get(agent_id)
+    if not record:
+        raise ValueError("agent_not_found")
+    owner = record.get("owner_id")
+    if not isinstance(owner, str) or not owner or (owner_id is not None and owner != owner_id):
+        raise ValueError("ide_owner_mismatch")
+    if record.get("trust_state") != "verified":
+        raise ValueError("verified_agent_required")
+    gateway_id = record.get("control_center_gateway")
+    if not gateway_id:
+        return {"agent_id": agent_id, "gateway_id": agent_id}
+    if not isinstance(gateway_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", gateway_id):
+        raise ValueError("ide_role_binding_invalid")
+    host = DEV_AGENT_REGISTRY.get(gateway_id, {})
+    runtime_id = record.get("runtime_id")
+    runtime_valid = isinstance(runtime_id, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", runtime_id)
+    suffix = (runtime_id if re.fullmatch(r"[A-Za-z0-9_-]{1,28}", runtime_id) else
+              "role_" + hashlib.sha256(runtime_id.encode()).hexdigest()[:24]) if runtime_valid else ""
+    if (host.get("owner_id") != owner or host.get("trust_state") != "verified"
+            or host.get("control_center_gateway")
+            or not (record.get("gateway_linked") or record.get("gateway_enrollment"))
+            or record.get("office_worker") or record.get("office_archived")
+            or not runtime_valid
+            or agent_id != gateway_id + "--" + suffix
+            or not any(isinstance(item, dict) and item.get("id") == agent_id
+                       for item in host.get("identified_agents", []))):
+        raise ValueError("ide_role_binding_invalid")
+    return {"agent_id": agent_id, "gateway_id": gateway_id, "runtime_id": runtime_id}
+
+
 def issue_ide_token(owner_id: str, agent_id: str) -> dict[str, Any]:
+    binding = ide_agent_binding(agent_id, owner_id)
     issued_at = unix_now()
     expires_at = issued_at + IDE_TOKEN_TTL_SECONDS
     payload = {
@@ -1067,6 +1100,8 @@ def issue_ide_token(owner_id: str, agent_id: str) -> dict[str, Any]:
         "scope": "mesh-ide",
         "jti": secrets.token_urlsafe(16),
     }
+    if binding.get("runtime_id"):
+        payload.update(gateway_id=binding["gateway_id"], runtime_id=binding["runtime_id"])
     encoded = _b64url_encode(
         json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     )
@@ -1084,33 +1119,37 @@ def issue_ide_token(owner_id: str, agent_id: str) -> dict[str, Any]:
 def validate_ide_token(token: str) -> tuple[bool, str, dict[str, Any] | None]:
     value = str(token or "").strip()
     parts = value.split(".")
-    if len(parts) != 3 or parts[0] != "PTMIDE1":
+    if len(value) > 16384 or len(parts) != 3 or parts[0] != "PTMIDE1":
         return False, "ide_token_invalid", None
     encoded, supplied = parts[1], parts[2]
-    expected = hmac.new(
-        ide_token_secret(), encoded.encode("ascii"), hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(expected, supplied):
-        return False, "ide_token_signature_invalid", None
     try:
+        expected = hmac.new(ide_token_secret(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, supplied):
+            return False, "ide_token_signature_invalid", None
         payload = json.loads(_b64url_decode(encoded).decode("utf-8"))
-    except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+    except (ValueError, TypeError, UnicodeError, binascii.Error):
         return False, "ide_token_payload_invalid", None
-    if payload.get("scope") != "mesh-ide":
+    if not isinstance(payload, dict):
+        return False, "ide_token_payload_invalid", None
+    if payload.get("scope") != "mesh-ide" or payload.get("v") != 1:
         return False, "ide_token_scope_invalid", None
-    if int(payload.get("expires_at") or 0) < unix_now():
+    if type(payload.get("expires_at")) is not int:
+        return False, "ide_token_payload_invalid", None
+    if payload["expires_at"] <= unix_now():
         return False, "ide_token_expired", None
-    agent_id = str(payload.get("agent_id") or "").strip()
-    owner_id = str(payload.get("owner_id") or "").strip()
-    if not agent_id or not owner_id:
+    agent_id, owner_id = payload.get("agent_id"), payload.get("owner_id")
+    if (not isinstance(agent_id, str) or not agent_id or not isinstance(owner_id, str) or not owner_id
+            or not isinstance(payload.get("jti"), str) or not payload["jti"]):
         return False, "ide_token_binding_invalid", None
-    record = DEV_AGENT_REGISTRY.get(agent_id)
-    if not record:
-        return False, "agent_not_found", None
-    if str(record.get("owner_id") or "").strip() != owner_id:
-        return False, "ide_owner_mismatch", None
-    if record.get("trust_state") != "verified":
-        return False, "verified_agent_required", None
+    try:
+        binding = ide_agent_binding(agent_id, owner_id)
+    except ValueError as exc:
+        return False, str(exc), None
+    if binding.get("runtime_id"):
+        if any(payload.get(key) != binding[key] for key in ("gateway_id", "runtime_id")):
+            return False, "ide_role_binding_invalid", None
+    elif payload.get("gateway_id") or payload.get("runtime_id"):
+        return False, "ide_role_binding_invalid", None
     return True, "ok", payload
 
 
@@ -1148,11 +1187,19 @@ def resolve_ide_pending(agent_id: str, message: dict[str, Any]) -> bool:
 
 
 def dispatch_ide_chat(agent_id: str, body: dict[str, Any]) -> tuple[bool, str, dict[str, Any] | None]:
+    try:
+        binding = ide_agent_binding(agent_id)
+    except ValueError as exc:
+        return False, str(exc), None
+    gateway_id = binding["gateway_id"]
+    if body.get("model") not in ide_models(agent_id):
+        return False, "model_not_allowed", None
     request_id = secrets.token_urlsafe(18)
     event = threading.Event()
     pending = {
         "request_id": request_id,
-        "agent_id": agent_id,
+        "agent_id": gateway_id,
+        "target_agent_id": agent_id,
         "event": event,
         "response": None,
         "created_at": utcnow(),
@@ -1161,13 +1208,14 @@ def dispatch_ide_chat(agent_id: str, body: dict[str, Any]) -> tuple[bool, str, d
     with LIVE_LOCK:
         IDE_PENDING[request_id] = pending
 
-    ok, error = send_gateway_message(agent_id, {
+    ok, error = send_gateway_message(gateway_id, {
         "type": "ide_chat_request",
         "request_id": request_id,
         "timestamp": utcnow(),
         "payload": {
             "request_id": request_id,
             "openai": body,
+            **({"target": binding} if binding.get("runtime_id") else {}),
         },
     })
     if not ok:
@@ -1180,6 +1228,11 @@ def dispatch_ide_chat(agent_id: str, body: dict[str, Any]) -> tuple[bool, str, d
         final = IDE_PENDING.pop(request_id, None) or pending
     if not completed:
         return False, "ide_request_timeout", None
+    try:
+        if ide_agent_binding(agent_id) != binding:
+            return False, "ide_role_binding_invalid", None
+    except ValueError as exc:
+        return False, str(exc), None
     response = final.get("response")
     if not isinstance(response, dict):
         return False, "ide_response_missing", None
@@ -1472,7 +1525,7 @@ def create_app() -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
         ENVIRONMENT=environment,
-        MESH_VERSION=os.environ.get("MESH_VERSION", "1.18.3-e2e-stability"),
+        MESH_VERSION=os.environ.get("MESH_VERSION", "1.19.0-scrum-factory"),
         BUILD_ID=os.environ.get("BUILD_ID", BUILD_ID),
         DEV_AUTH_ENABLED=os.environ.get("DEV_AUTH_ENABLED", dev_auth_default) == "1",
         DEV_SEED_AGENTS=os.environ.get("DEV_SEED_AGENTS", dev_seed_default) == "1",
@@ -1522,7 +1575,7 @@ def create_app() -> Flask:
                 "Strict-Transport-Security",
                 "max-age=31536000; includeSubDomains",
             )
-        if request.path.startswith("/api/") or request.path.startswith("/ws/"):
+        if request.path.startswith(("/api/", "/ws/", "/v1/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -1576,7 +1629,7 @@ def create_app() -> Flask:
         parts = request.path.split("/")
         if len(parts) >= 4 and parts[1:3] == ["api", "agents"]:
             record = DEV_AGENT_REGISTRY.get(parts[3], {})
-            if record.get("control_center_gateway") and parts[4:] not in (["control-center"], ["management"], ["message"], ["office"]):
+            if record.get("control_center_gateway") and parts[4:] not in (["control-center"], ["management"], ["message"], ["office"], ["ide", "token"]):
                 return jsonify(ok=False, error="linked_role_uses_host_identity"), 409
 
 
@@ -1958,9 +2011,16 @@ def create_app() -> Flask:
         allowed, _reason = ownership_can_access(record, current_mesh_user_id())
         if not allowed or str(record.get("owner_id") or "").strip() != current_mesh_user_id():
             return jsonify(ok=False, error="agent_not_found"), 404
-        if record.get("trust_state") != "verified":
-            return jsonify(ok=False, error="verified_agent_required"), 403
-        issued = issue_ide_token(current_mesh_user_id(), agent_id)
+        from mesh_agent_management import same_origin
+        if not same_origin():
+            return jsonify(ok=False, error="same_origin_required"), 403
+        token_body = request.get_json(silent=True)
+        if token_body not in (None, {}) or (request.get_data(cache=True) and token_body is None):
+            return jsonify(ok=False, error="invalid_request"), 400
+        try:
+            issued = issue_ide_token(current_mesh_user_id(), agent_id)
+        except ValueError as exc:
+            return jsonify(ok=False, error=str(exc)), 403
         return jsonify(
             ok=True,
             agent_id=agent_id,
@@ -1993,22 +2053,45 @@ def create_app() -> Flask:
             return openai_error(reason, 401, "authentication_error")
         agent_id = str((payload or {}).get("agent_id") or "")
         record = DEV_AGENT_REGISTRY.get(agent_id)
-        if not record or record.get("transport") != "connected":
+        gateway_id = (payload or {}).get("gateway_id") or agent_id
+        gateway = DEV_AGENT_REGISTRY.get(gateway_id, {})
+        if (not record or gateway.get("transport") != "connected"
+                or (gateway_id != agent_id and gateway_id not in GATEWAY_SOCKETS)):
             return openai_error("gateway_not_connected", 503, "service_unavailable")
 
+        if request.content_length and request.content_length > 1048576:
+            return openai_error("request_too_large", 413)
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return openai_error("invalid_request", 400)
+        allowed_fields = {"model", "messages", "stream", "temperature", "top_p", "max_tokens",
+                          "max_completion_tokens", "tools", "tool_choice", "parallel_tool_calls",
+                          "response_format", "seed", "user", "stop", "presence_penalty", "frequency_penalty"}
+        if set(body) - allowed_fields:
+            return openai_error("unsupported_parameter", 400)
         model = str(body.get("model") or "").strip()
         if model not in ide_models(agent_id):
             return openai_error("model_not_allowed", 400)
         messages = body.get("messages")
         if not isinstance(messages, list) or not messages:
             return openai_error("messages_required", 400)
+        if any(not isinstance(message, dict) or not isinstance(message.get("role"), str)
+               or message["role"] not in {"system", "developer", "user", "assistant", "tool", "function"}
+               for message in messages):
+            return openai_error("invalid_messages", 400)
 
         requested_stream = bool(body.get("stream"))
         relay_body = dict(body)
         relay_body["stream"] = False
+        if (payload or {}).get("runtime_id"):
+            # Token-scoped IDE history never joins native/private conversations or
+            # another API token's history, even when callers reuse a user hint.
+            user_hint = body.get("user", "")
+            if not isinstance(user_hint, str) or len(user_hint) > 1024:
+                return openai_error("invalid_user", 400)
+            relay_body["user"] = hashlib.sha256(json.dumps([
+                payload["owner_id"], agent_id, payload["jti"], user_hint,
+            ], separators=(",", ":")).encode()).hexdigest()
 
         ok, error, response = dispatch_ide_chat(agent_id, relay_body)
         if not ok:

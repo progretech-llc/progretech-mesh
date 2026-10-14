@@ -1,5 +1,6 @@
 """Per-agent control surface. Operational profiles stay on the agent host."""
 import json
+import hashlib
 import secrets
 import threading
 from urllib.parse import urlsplit
@@ -107,10 +108,16 @@ def register_gateway_agents(gateway_id, payload, registry):
             return False
         if aid in accepted:
             return False
+        runtime = item.get('runtime_id', aid[len(gateway_id)+2:])
+        if not isinstance(runtime, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', runtime):
+            return False
+        suffix = runtime if re.fullmatch(r'[A-Za-z0-9_-]{1,28}', runtime) else 'role_' + hashlib.sha256(runtime.encode()).hexdigest()[:24]
+        if item.get('runtime_id') is not None and aid != gateway_id + '--' + suffix:
+            return False
         existing = registry.get(aid)
         if existing and existing.get('control_center_gateway') != gateway_id:
             return False
-        accepted[aid] = item
+        accepted[aid] = {**item, 'runtime_id': runtime}
     # A roster is discovery, not enrollment or proof of each role's identity.
     # The gateway and its intake runtime are one agent. Keep signed receipts
     # intact, but exclude its former child alias from discovery and display.
@@ -144,7 +151,7 @@ def register_gateway_agents(gateway_id, payload, registry):
                            'sleeping':'paused','blocked':'blocked','unknown':'unknown'}.get(observed,'unknown')
         record['activity'] = {k:activity[k] for k in ('state','observed_at','source','task_id','session') if k in activity and isinstance(activity[k],(str,type(None)))}
         record['transport'] = 'connected'
-        record['runtime_id'] = aid[len(gateway_id)+2:]
+        record['runtime_id'] = item['runtime_id']
         record['office_archived'] = item.get('office_archived') is True
         record['office_agent_id'] = item.get('office_agent_id')
         record['is_orchestrator'] = item.get('is_orchestrator') is True

@@ -903,6 +903,7 @@
   }
 
   async function refreshApprovals() {
+    if (!approvalList) return;
     if (!selectedAgentId) {
       approvalList.innerHTML = '<div class="empty-stream">Select an agent to view approvals.</div>';
       return;
@@ -941,6 +942,7 @@
   }
 
   async function refreshFileOffers() {
+    if (!fileOfferList) return;
     if (!selectedAgentId) {
       fileOfferList.innerHTML = '<div class="empty-stream">Select an agent to view offered files.</div>';
       return;
@@ -998,59 +1000,33 @@
     detail.hidden=!agent;
     if(agent)detail.textContent=MeshRuntime.indicator(agent,{monitoring:!agent.control_center_gateway && agent.transport==='connected'}).detail+' '+MeshRuntime.memoryLabel(agent.mesh_runtime?.memory);
   }
+  document.getElementById('connectGatewayGuide')?.addEventListener('click',()=>window.MeshOnboarding.open());
   function renderFleet() {
     renderAgentStatus();
-    agentGrid.innerHTML = fleet.filter(a=>!a.identity_alias && !a.office_archived).map((agent) => `
-      <article tabindex="0" data-agent-card="${escapeHtml(agent.id)}" class="agent-card ${agent.is_orchestrator?'director':''} ${selectedAgentId === agent.id ? "active" : ""}">
-        <div class="agent-top">
-          <div class="agent-id">
-            ${MeshAvatar.source(agent) ? `<img class="avatar" src="${MeshAvatar.source(agent)}" alt="" style="object-fit:cover">` : `<div class="avatar ${["rend","lyra","mak"].includes(agent.id) ? agent.id : "rend"}"></div>`}
-            <div class="agent-name">
-              <strong>${escapeHtml(agent.name)}</strong>
-              <span>${escapeHtml(agent.role)}${agent.is_orchestrator?" · Orchestrator":""}</span>
-            </div>
-          </div>
-          <span class="agent-state ${MeshRuntime.indicator(agent,{monitoring:!agent.control_center_gateway && agent.transport==='connected'}).state}" title="${escapeHtml(MeshRuntime.indicator(agent,{monitoring:!agent.control_center_gateway && agent.transport==='connected'}).detail)}" aria-label="${escapeHtml(MeshRuntime.indicator(agent,{monitoring:!agent.control_center_gateway && agent.transport==='connected'}).label)}"></span>
-        </div>
-
-        ${agent.office_agent_id?`<div class="agent-actions"><button data-orchestrator="${escapeHtml(agent.id)}" ${agent.is_orchestrator?'disabled':''}>${agent.is_orchestrator?'Orchestrator':'Make Orchestrator'}</button><button data-office-remove="${escapeHtml(agent.id)}" ${agent.is_orchestrator?'disabled':''}>Remove from office</button></div>`:''}
-        <div class="agent-actions"><a class="ghost-btn" target="_blank" rel="noopener" href="/agents/${encodeURIComponent(agent.id)}/terminal">Terminal view</a></div>
-        <div class="task">
-          <label>${agent.transport === "connected" ? "Live activity" : "Status"}</label>
-          <strong>${escapeHtml(MeshRuntime.indicator(agent).label)}</strong>
-          <span class="agent-current-work">${escapeHtml(MeshRuntime.workLabel(agent))}${agent.mesh_runtime ? ` · ${MeshAvailability.label(agent.mesh_runtime)}` : ""}</span>
-        </div>
-
-        <div class="progress"><i style="width:${Number(agent.progress || 0)}%"></i></div>
-
-        <div class="agent-meta">
-          <div class="meta-box"><span>Model</span><strong>${escapeHtml(agent.model || "Unknown")}</strong></div>
-          <div class="meta-box"><span>Runtime</span><strong>${escapeHtml(agent.runtime || "—")}</strong></div>
-        </div>
-
-        <div class="agent-identity-row">
-          <span class="trust-badge ${escapeHtml(agent.trust_state)}">${agent.local_host_binding ? "Authenticated local host" : agent.control_center_gateway && !agent.gateway_enrollment ? "Linked through verified host" : trustLabel(agent.trust_state)}</span>
-          <span class="transport-pill ${escapeHtml(agent.transport)}">${agent.transport === "connected" ? "Gateway live" : "Gateway offline"}</span>
-          <button class="identity-link" data-identity="${agent.id}">Identity</button>
-        </div>
-
-        <div class="agent-actions three">
-          ${agent.owner_bound === false ? `<button data-claim-owner="${agent.id}">Claim ownership</button>` : `<button data-pair="${agent.id}" ${agent.trust_state !== "verified" || agent.control_center_gateway ? "disabled" : ""}>Connect agent</button>`}
-          <button data-monitor="${agent.id}" class="monitor" ${agent.control_center_gateway ? "disabled" : ""}>Monitor live</button>
-          <button data-message="${agent.id}" ${agent.transport !== "connected" ? "disabled" : ""}>Message</button>
-        </div>
-        ${agent.mesh_runtime?.controls_available && typeof agent.mesh_runtime.sleeping === "boolean" ? `<div class="agent-actions"><button data-power="${escapeHtml(agent.id)}" ${agent.transport !== "connected" ? "disabled" : ""}>${agent.mesh_runtime.sleeping ? "Wake up" : "Sleep"}</button><button data-new-conversation="${escapeHtml(agent.id)}">New chat</button></div>` : ""}
-        ${MeshRuntime.indicator(agent,{monitoring:!agent.control_center_gateway && agent.transport==='connected'}).state === "error" ? `<div class="agent-actions"><button data-recover="${escapeHtml(agent.id)}">Try to resolve</button></div>` : ""}
-        ${agent.transport === "connected" ? `<div class="agent-actions"><label><input type="checkbox" data-agent-specklet="${escapeHtml(agent.id)}" ${agent.mesh_runtime?.specklet_enabled?"checked":""}> Use Specklet</label><a href="/agents/${encodeURIComponent(agent.id)}/task-board">Task Board</a><button data-agent-memory="${escapeHtml(agent.id)}" data-memory-name="${escapeHtml(agent.name)}">Memory search</button></div>` : ""}
-        ${agent.control_center_available ? `<div class="agent-actions"><a class="ghost-btn" href="/agents/${encodeURIComponent(agent.id)}/control-center">ProgreTech Control Center</a></div>` : ""}
-        ${agent.owner_bound && !agent.control_center_gateway ? `<div class="agent-actions"><button data-ide-access="${agent.id}">Copy IDE relay setup</button></div>` : ""}
-      </article>
-    `).join("") + '<button type="button" class="agent-card onboarding-tile" data-onboarding><span aria-hidden="true">+</span><strong>Agent onboarding</strong><small>Connect your personally hosted agent</small></button>';
+    agentGrid.innerHTML = fleet.filter(a=>!a.identity_alias && !a.office_archived).map(agent => `
+      <article tabindex="0" data-agent-card="${escapeHtml(agent.id)}" class="agent-card ${agent.is_orchestrator?'scrum-master':''} ${selectedAgentId===agent.id?'active':''}">
+        <div class="agent-top"><div class="agent-id">${MeshAvatar.source(agent)?`<img class="avatar" src="${MeshAvatar.source(agent)}" alt="">`:`<div class="avatar rend"></div>`}<div class="agent-name"><strong>${escapeHtml(agent.name)}</strong><span>${escapeHtml(agent.is_orchestrator?'Scrum Master':agent.role)}</span></div></div><span class="agent-state ${MeshRuntime.indicator(agent).state}" title="${escapeHtml(MeshRuntime.indicator(agent).detail)}" aria-label="${escapeHtml(MeshRuntime.indicator(agent).label)}"></span></div>
+        <div class="task"><label>Live activity</label><strong>${escapeHtml(MeshRuntime.indicator(agent).label)}</strong><span class="agent-current-work">${escapeHtml(MeshRuntime.workLabel(agent))}</span></div>
+        <div class="agent-meta"><div class="meta-box"><span>Model</span><strong>${escapeHtml(agent.model||'Unknown')}</strong></div><div class="meta-box"><span>Runtime</span><strong>${escapeHtml(agent.runtime||'OpenClaw')}</strong></div></div>
+        <div class="agent-identity-row"><span class="trust-badge ${escapeHtml(agent.trust_state)}">${agent.local_host_binding?'Local host verified':agent.control_center_gateway&&!agent.gateway_enrollment?'Verified gateway':trustLabel(agent.trust_state)}</span><span class="transport-pill ${escapeHtml(agent.transport)}">${agent.transport==='connected'?'Gateway live':'Offline'}</span><button class="identity-link" data-identity="${escapeHtml(agent.id)}">Identity</button></div>
+        <div class="agent-card-primary"><button data-monitor="${escapeHtml(agent.id)}" class="monitor" ${agent.transport!=='connected'?'disabled':''}>Monitor live</button><button data-message="${escapeHtml(agent.id)}" ${agent.transport!=='connected'?'disabled':''}>Message</button><a class="ghost-btn" target="_blank" rel="noopener" href="/agents/${encodeURIComponent(agent.id)}/terminal">Terminal ↗</a></div>
+        <div class="agent-card-role">${agent.office_agent_id?`<button data-orchestrator="${escapeHtml(agent.id)}" ${agent.is_orchestrator?'disabled':''}>${agent.is_orchestrator?'● Scrum Master':'Make Scrum Master'}</button>`:'<span>Import into your Factory to assign a role.</span>'}</div>
+        <details class="agent-card-tools"><summary>Agent tools</summary><div class="agent-tool-grid">
+          ${agent.owner_bound===false?`<button data-claim-owner="${escapeHtml(agent.id)}">Claim ownership</button>`:!agent.control_center_gateway?`<button data-pair="${escapeHtml(agent.id)}" ${agent.trust_state!=='verified'?'disabled':''}>Connect gateway</button>`:''}
+          ${agent.mesh_runtime?.controls_available&&typeof agent.mesh_runtime.sleeping==='boolean'?`<button data-power="${escapeHtml(agent.id)}">${agent.mesh_runtime.sleeping?'Wake up':'Sleep'}</button><button data-new-conversation="${escapeHtml(agent.id)}">New chat</button>`:''}
+          <button data-agent-memory="${escapeHtml(agent.id)}" data-memory-name="${escapeHtml(agent.name)}">Memory search</button>
+          ${agent.control_center_available?`<a href="/agents/${encodeURIComponent(agent.id)}/control-center">Control Center</a>`:''}
+          ${agent.owner_bound?`<button data-ide-access="${escapeHtml(agent.id)}">Copy API relay setup</button>`:''}
+          <a href="/agents/${encodeURIComponent(agent.id)}/task-board">Specklet board</a><label><input type="checkbox" data-agent-specklet="${escapeHtml(agent.id)}" ${agent.mesh_runtime?.specklet_enabled?'checked':''}>Use Specklet</label>
+          ${agent.office_agent_id?`<button data-office-remove="${escapeHtml(agent.id)}" ${agent.is_orchestrator?'disabled':''}>Remove from office</button>`:''}
+          ${MeshRuntime.indicator(agent).state==='error'?`<button data-recover="${escapeHtml(agent.id)}">Try to resolve</button>`:''}
+        </div></details>
+      </article>`).join('');
     for(const button of agentGrid.querySelectorAll('[data-orchestrator],[data-office-remove]'))button.onclick=async e=>{
       e.stopPropagation();const id=button.dataset.orchestrator || button.dataset.officeRemove,agent=fleet.find(a=>a.id===id);button.disabled=true;
       try{const r=await fetch('/api/agents/'+encodeURIComponent(id)+'/office',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:button.dataset.orchestrator?'orchestrator.set':'archive',args:{id:agent.office_agent_id}})});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Office action failed');const status=await fetch('/api/status');const data=await status.json();fleet=data.agents||[];renderFleet();}catch(error){button.disabled=false;alert(error.message);}
     };
-    agentGrid.querySelector('[data-onboarding]').addEventListener('click', () => window.MeshOnboarding.open());
+    agentGrid.querySelector('[data-onboarding]')?.addEventListener('click', () => window.MeshOnboarding.open());
 
     document.querySelectorAll("[data-claim-owner]").forEach((b) => b.addEventListener("click", () => claimLegacyAgentOwnership(b.dataset.claimOwner)));
     document.querySelectorAll("[data-ide-access]").forEach((b) => b.addEventListener("click", () => copyIdeRelaySetup(b.dataset.ideAccess)));
@@ -1517,8 +1493,10 @@
       document.getElementById("eventStreamLabel").textContent = `${agent.name} · conversation through verified host`;
       const messages = roleConversations.get(agentId) || [];
       if (messages.length) renderEvents(messages);
-      else eventList.innerHTML = '<div class="empty-stream">Messages go to this role in its own Mesh conversation. Host monitoring stays on the gateway tile.</div>';
+      else eventList.innerHTML = '<div class="empty-stream">Messages go to this role in its own Mesh conversation. Live role history and task snapshots appear here; open Terminal to keep another agent alongside it.</div>';
       renderTelemetry(agent);
+      syncSelectedConversation();
+      refreshRoleMonitor(agentId);
       return;
     }
     const socket = new WebSocket(`${scheme}://${location.host}/ws/client/${encodeURIComponent(agentId)}`);
@@ -1723,6 +1701,13 @@
     eventList.lastElementChild?.scrollIntoView({block:"nearest"});
   }
 
+  let roleMonitorPending=false;
+  async function refreshRoleMonitor(id){
+    const agent=fleet.find(a=>a.id===id);if(!agent?.control_center_gateway||roleMonitorPending)return;
+    roleMonitorPending=true;
+    try{const snapshot=await MeshRuntime.request(id,'runtime.snapshot',{kind:'task'});if(id!==selectedAgentId)return;liveTerminal.textContent=(snapshot.lines||[]).join('\n')||'No active task reported.';renderTelemetry(agent);liveTerminal.textContent=(snapshot.lines||[]).join('\n')||'No active task reported.';document.getElementById('eventStreamLabel').textContent=agent.name+' · live role monitor';}catch(e){if(id===selectedAgentId)document.getElementById('eventStreamLabel').textContent=agent.name+' · '+e.message;}finally{roleMonitorPending=false;}
+  }
+  setInterval(()=>{if(selectedAgentId)refreshRoleMonitor(selectedAgentId);},6000);
   const chatInFlight=new Set(),originAttachments=new Map();
   async function syncSelectedConversation(){
     const id=selectedAgentId;if(!id || chatInFlight.has(id))return;
@@ -2102,12 +2087,12 @@
   const trainingSteps = [
     ["Welcome to ProgreTech Mesh","Mesh is a live front end for your local agents. Their runtime, memory, and active work stay on their own machine.","Cloud retention is off for live operational history.",".hero"],
     ["Your agent fleet","Each card shows identity, connection state, current activity, runtime details, and the controls available for that agent.","A verified identity is separate from whether the local gateway is currently online.","#agentGrid"],
-    ["Connect without workstation access","Choose Connect agent, copy the active enrollment request, and send it through your existing direct chat with the agent. The agent handles the local setup.","You should not need SSH, RDP, a terminal, or filesystem access to the agent computer.","#agentGrid"],
+    ["Connect your OpenClaw gateway","Have an OpenClaw gateway running with your agents. Connect it to Mesh, approve enrollment through your agent, then import its roster.","Mesh manages the team; execution, tools and memory remain on your host.","#agentGrid"],
     ["Plug-and-monitor","Connecting Mesh does not take over a running agent. Existing Telegram work can continue while Mesh observes the same agent independently.","Refreshing or disconnecting Mesh must not stop the agent's current task.","#dashboard"],
     ["Filter activity by channel","The live stream can show all activity or narrow it to Telegram, Mesh, or system/tool activity.","A Mesh conversation remains independent from the Telegram conversation even though both can appear in the monitor.",".observability-toolbar"],
     ["Message and speak","Use the composer for a separate Mesh conversation. Where supported, the microphone can capture speech into the editable message field.","Speech recognition is a browser capability and may depend on the browser vendor.","#messageComposer"],
     ["Notifications","Enable notifications independently for the agents you care about. Choose replies, task completion, approvals, blockers, files, and connection changes.","Notification text stays brief and avoids copying sensitive event contents.","#agentGrid"],
-    ["Safe actions and files","Policy-gated actions require approval. File exchange is bidirectional, bounded, verified, and relayed ephemerally.","Mesh does not expose an arbitrary remote shell.",".ops-grid"],
+    ["Coordinate in the Factory","Add work to Intake. Your Scrum Master assigns, reviews and moves tasks while your OpenClaw agents execute on their host.","Use the Factory for team conversations, task context and artifacts.",".factory-nav"],
     ["You're ready","Monitor agents from desktop, phone, or foldable, install Mesh as a PWA, and restart Guided Training whenever you want a refresher.","Agent activity belongs to the agent; Mesh is the live console around it.",".topbar"]
   ];
 

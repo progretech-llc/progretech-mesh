@@ -66,6 +66,6 @@ class FactoryTests(unittest.TestCase):
         relay=factory.FactoryRelay(capacity=0);self.assertEqual(relay.dispatch('rend','factory.status',{},lambda *_:None)[1],429)
     def test_signed_in_page(self):
         self.login();response=self.client.get('/mission-control');self.assertEqual(response.status_code,200);self.assertIn(b'Mission Control',response.data)
-        response=self.client.get('/factory');self.assertEqual(response.status_code,200);self.assertIn(b'Your agent office',response.data)
+        response=self.client.get('/factory');self.assertEqual(response.status_code,200);self.assertIn(b'The agent factory',response.data)
 
 if __name__=='__main__':unittest.main()

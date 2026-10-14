@@ -18,7 +18,7 @@ if BaseLLM:
             agent = kwargs.get('from_agent')
             role = getattr(agent, 'role', '')
             self._calls.append(role)
-            if role == 'Orchestrator' and not self._delegated:
+            if role == 'Scrum Master' and not self._delegated:
                 self._delegated = True
                 return 'Thought: Delegate the bounded mission.\nAction: Delegate work to coworker\nAction Input: {"task":"Check the acceptance criteria","context":"This is an offline integration test","coworker":"Researcher"}'
             return 'Thought: The evidence is sufficient.\nFinal Answer: The acceptance criteria were checked by the office worker.'

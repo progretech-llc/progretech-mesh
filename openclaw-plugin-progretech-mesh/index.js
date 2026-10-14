@@ -712,7 +712,14 @@ function readIdeGatewayToken() {
   return value;
 }
 
-async function forwardIdeChat(api, body) {
+async function forwardIdeChat(api, body, target) {
+  if (target !== undefined) {
+    const gatewayId = meshIdentity?.agent_id;
+    // Recheck the host-owned provider roster for every imported-role request.
+    // A cloud-supplied native name alone is never enough to select an agent.
+    const agents = await discoverControlAgents(gatewayId, ensureLocalAccessCredential().token);
+    return forwardRoleCompletion(api.runtime.config.current(), body, fetch, {target, gatewayId, agents});
+  }
   return forwardRoleCompletion(api.runtime.config.current(), body);
 }
 
@@ -741,7 +748,7 @@ async function handleGatewayCommand(api, msg) {
   if (msg?.type === "ide_chat_request") {
     const requestId = trimText(msg.request_id || msg?.payload?.request_id || crypto.randomUUID(), 160);
     try {
-      const completion = await forwardIdeChat(api, msg?.payload?.openai || {});
+      const completion = await forwardIdeChat(api, msg?.payload?.openai || {}, msg?.payload?.target);
       sendMeshGatewayMessage({
         type:"ide_chat_response",
         request_id:requestId,

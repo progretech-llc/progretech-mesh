@@ -228,6 +228,11 @@ def install(host, home=None):
         from control_center.office_identity import synchronize, project
         inventory = [{'runtime_id':provider.bindings[a['id']], 'name':a['name'], 'role':a['role']} for a in agents]
         snapshot = synchronize(home, provider.bindings[gateway_id], gateway_id, inventory)
+        # Only explicit persisted run requests resume after a host restart.
+        # Plain Intake cards and protected live/uncertain leases never replay.
+        if any(t.get('queued') and not t.get('running') and t.get('status')=='todo' for t in snapshot.get('tasks',[])):
+            from control_center.office_native import _schedule
+            _schedule(home, provider.bindings[gateway_id], gateway_id, provider, mesh)
         return project(snapshot, agents, gateway_id, provider.bindings[gateway_id])
 
     register_provider_routes(host.app, provider, host.token, roster=roster)

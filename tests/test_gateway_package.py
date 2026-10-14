@@ -24,5 +24,5 @@ class GatewayPackageTests(unittest.TestCase):
   import tarfile
   index=json.loads((ROOT/'distribution/openclaw-plugin-index.json').read_text())
   with tarfile.open(ROOT/'distribution'/index['filename']) as archive:
-   for filename in ['control-center.js','package.json']:
+   for filename in ['control-center.js','ide-client.js','index.js','package.json']:
     self.assertEqual(archive.extractfile('package/'+filename).read(),(ROOT/'openclaw-plugin-progretech-mesh'/filename).read_bytes())
