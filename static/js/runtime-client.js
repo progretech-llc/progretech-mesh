@@ -18,6 +18,7 @@
     mesh_reply_timeout:'The reply timed out. Check agent activity before sending again.',
     model_memory_headroom_required:'Not enough free memory to load this model alongside current models.',
     runtime_controls_unavailable:'Shared agent controls are unavailable on this host.',
+    runtime_context_unavailable:'This host has no active-session steering integration. Send a new chat or use the native agent interface.',
     mesh_queue_timeout:'The shared model slot stayed busy. Check host activity.',
   };
   async function request(agent, action, args={}) {
@@ -121,5 +122,15 @@
     const result=await run(agent,'runtime.recover',{},progress);
     return (result.steps || []).map(s=>s.name+' · '+s.state+': '+s.detail).join('\n')+'\n'+result.note;
   }
-  window.MeshRuntime={history,request,run,errors,indicator,workLabel,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice};
+  function canStartConversation(agent={}) {
+    return agent.mesh_runtime?.chat_available===true;
+  }
+  function officeReadinessNotice(snapshot={}) {
+    if(snapshot.nativeRuntimeReady)return 'The selected OpenClaw agent can accept tasks. Pausing stops coordination at the next agent step.';
+    if(snapshot.nativeRuntimeBound)return snapshot.nativeAdmissionReason==='mesh_agent_sleeping'
+      ? 'The selected agent is paused or sleeping. Resume it through its configured scheduler before starting work.'
+      : 'The selected agent is connected, but host admission is unavailable. Check its runtime and configured scheduler; tasks remain on the board.';
+    return snapshot.runtimeReady?'The host execution provider is ready.':'Connect your OpenClaw agents before starting work. You can organize tasks now.';
+  }
+  window.MeshRuntime={history,request,run,errors,indicator,workLabel,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice,canStartConversation,officeReadinessNotice};
 })();
