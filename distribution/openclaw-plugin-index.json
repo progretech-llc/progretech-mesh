@@ -4,7 +4,7 @@
   "runtime": "openclaw",
   "min_openclaw_version": "2026.9.3",
   "filename": "progretech-mesh-openclaw-0.10.2-role-relay.1.tgz",
-  "sha256": "0466b229c2410b816ade6807dded257907216de2be12ecdd957c0378872ddb5c",
+  "sha256": "9b5cc867145d04e08fee725a459f2a3ad9c910a54308c85eff3b458c31fcf24c",
   "signature": {
     "mode": "unconfigured",
     "codeseal_verified": false,

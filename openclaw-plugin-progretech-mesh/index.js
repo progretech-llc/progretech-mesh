@@ -15,7 +15,6 @@ import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import { forwardFactoryControl } from "./factory-control.js";
 import { resolveMeshTarget, meshConversationBody } from "./routing.js";
 import { runGatewayConversation } from "./gateway-client.js";
-import { buildQuickPresenceReply } from "./quick-reply.js";
 
 const PLUGIN_ID = "progretech-mesh";
 const ROUTE = "/plugins/progretech-mesh/message";
@@ -1418,23 +1417,6 @@ async function redeemOwnershipClaim(api, claimCode) {
 }
 
 function registerObservationHooks(api) {
-  api.on("before_agent_reply", (event, ctx) => {
-    const reply = buildQuickPresenceReply(event?.cleanedBody, {
-      agentId: ctx?.agentId,
-      activeRuns: activeRunCount(ctx?.agentId, ctx?.runId),
-    });
-    if (!reply) return;
-    appendEvent({
-      event_type: "presence",
-      channel: sessionLooksMesh(ctx) ? "mesh" : channelFromContext(ctx, "system"),
-      state: "idle",
-      direction: "output",
-      summary: "Fast presence reply",
-      payload: { session_key: ctx?.sessionKey, run_id: ctx?.runId, agent_id: ctx?.agentId },
-    });
-    return { handled: true, reply: { text: reply }, reason: "progretech_presence_fast_path" };
-  }, { eligibleTriggers: ["user"] });
-
   api.on("message_received", (event, ctx) => {
     const ownershipClaim = extractOwnershipClaim(event?.content || event?.text || "");
     if (ownershipClaim) {

@@ -26,3 +26,24 @@ class GatewayPackageTests(unittest.TestCase):
   with tarfile.open(ROOT/'distribution'/index['filename']) as archive:
    for filename in ['control-center.js','ide-client.js','index.js','package.json']:
     self.assertEqual(archive.extractfile('package/'+filename).read(),(ROOT/'openclaw-plugin-progretech-mesh'/filename).read_bytes())
+
+ def test_runtime_does_not_synthesize_presence_replies(self):
+  source=(ROOT/'openclaw-plugin-progretech-mesh/index.js').read_text()
+  for removed in ['buildQuickPresenceReply', 'quick-reply.js', 'before_agent_reply', 'progretech_presence_fast_path']:
+   self.assertNotIn(removed,source)
+ def test_all_packaged_relative_imports_resolve_and_match_source(self):
+  import posixpath, tarfile
+  index=json.loads((ROOT/'distribution/openclaw-plugin-index.json').read_text())
+  with tarfile.open(ROOT/'distribution'/index['filename']) as archive:
+   names=set(archive.getnames())
+   for member in archive.getmembers():
+    if not member.isfile() or not member.name.endswith('.js'):continue
+    content=archive.extractfile(member).read()
+    self.assertEqual(content,(ROOT/'openclaw-plugin-progretech-mesh'/member.name.removeprefix('package/')).read_bytes())
+    source=content.decode()
+    imports=re.findall(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)[\"'](\.[^\"']+)[\"']",source)
+    for relative in imports:
+     target=posixpath.normpath(posixpath.join(posixpath.dirname(member.name),re.split(r'[?#]',relative)[0]))
+     with self.subTest(module=member.name,imported=relative):
+      self.assertTrue(target.startswith('package/'))
+      self.assertIn(target,names)
