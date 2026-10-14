@@ -11,7 +11,26 @@ const FIELDS = new Set(['model','messages','stream','temperature','top_p','max_t
 
 export async function forwardRoleCompletion(config, body, fetchImpl = fetch, options = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('ide_invalid_request');
-  const agentId = IDE_ROLE_ALIASES[body.model];
+  let agentId = IDE_ROLE_ALIASES[body.model];
+  if (options.target !== undefined) {
+    const target = options.target;
+    const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value);
+    const runtimeValid = typeof target?.runtime_id === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(target.runtime_id);
+    const suffix = runtimeValid ? (/^[A-Za-z0-9_-]{1,28}$/.test(target.runtime_id) ? target.runtime_id : 'role_' + createHash('sha256').update(target.runtime_id).digest('hex').slice(0,24)) : '';
+    if (!target || typeof target !== 'object' || Array.isArray(target)
+        || Object.keys(target).sort().join(',') !== 'agent_id,gateway_id,runtime_id'
+        || !validId(target.agent_id) || !validId(target.gateway_id) || !runtimeValid
+        || target.gateway_id !== options.gatewayId
+        || target.agent_id !== `${target.gateway_id}--${suffix}`
+        || ![target.agent_id, `${target.agent_id}-code`].includes(body.model)) {
+      throw new Error('ide_role_binding_invalid');
+    }
+    const local = Array.isArray(options.agents) && options.agents.find(item =>
+      item?.id === target.agent_id && item?.runtime_id === target.runtime_id
+      && item.office_worker !== true && item.office_archived !== true);
+    if (!local) throw new Error('ide_role_binding_unavailable');
+    agentId = target.runtime_id;
+  }
   if (!agentId || !Object.hasOwn(config?.agents?.entries || {}, agentId)) throw new Error('ide_role_not_available');
   if (Object.keys(body).some(key => !FIELDS.has(key))) throw new Error('ide_unsupported_parameter');
   if (!Array.isArray(body.messages) || !body.messages.length || JSON.stringify(body).length > 1048576) throw new Error('ide_invalid_messages');

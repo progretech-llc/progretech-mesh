@@ -13,3 +13,8 @@ venv
 .DS_Store
 
 .mesh-staging
+
+# Full upstream source remains versioned; runtime imports are in office/engine.mjs.
+vendor/munder-difflin/blog
+vendor/munder-difflin/docs
+vendor/munder-difflin/node_modules

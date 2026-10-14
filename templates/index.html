@@ -65,12 +65,12 @@
             Mesh session active
           </div>
 
-          <h1>Your agents, live and local.</h1>
+          <h1>Your agents. One workspace.</h1>
 
           <p class="hero-sub">
-            Monitor signed ProgreTech agents, request a live heartbeat, and follow
-            active work through an ephemeral connection without moving the agent's
-            memory or runtime into Mesh.
+            Connect your OpenClaw gateway to manage and orchestrate its agents.
+            Monitor work, coordinate tasks in the Factory, and connect your tools
+            through API relays. Execution and memory stay on your host.
           </p>
 
           <div class="hero-actions">
@@ -143,10 +143,11 @@
         </div>
         <div class="section-tools">
           <button class="ghost-btn" id="manageAgentsButton">Manage</button>
-          <button class="ghost-btn" id="addAgentButton">+ Add signed agent</button>
+          <button class="ghost-btn" id="addAgentButton">+ Import agents</button>
         </div>
       </div>
 
+      <section class="gateway-guide" aria-labelledby="gatewayGuideTitle"><div><span class="eyebrow">START WITH YOUR GATEWAY</span><h2 id="gatewayGuideTitle">Bring your OpenClaw agents into Mesh</h2><p>You need a running OpenClaw gateway with the agents you want to use. Mesh connects to that gateway; it does not host your models.</p></div><ol><li><strong>1. Connect</strong><span>Use your agent’s existing chat to approve the Mesh connection.</span></li><li><strong>2. Import</strong><span>Choose the gateway’s agents and make one Scrum Master.</span></li><li><strong>3. Work together</strong><span>Add tasks in the Factory or copy an API relay setup for your IDE.</span></li></ol><button class="primary-btn" id="connectGatewayGuide">Connect OpenClaw gateway</button></section>
       <section class="agent-grid" id="agentGrid" aria-live="polite"></section>
 
       <div class="mobile-monitor-bar" id="mobileMonitorBar">
@@ -220,31 +221,6 @@
         </div>
       </section>
 
-
-      <section class="ops-grid">
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Approvals & safe actions</h3>
-            <span>policy gated</span>
-          </div>
-          <div id="approvalList" class="approval-list">
-            <div class="empty-stream">No pending approvals.</div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h3>File exchange</h3>
-            <span>ephemeral relay</span>
-          </div>
-          <div class="file-actions">
-            <button class="ghost-btn" id="requestDemoFileButton">Ask agent for demo artifact</button>
-          </div>
-          <div id="fileOfferList" class="file-offer-list">
-            <div class="empty-stream">No agent files offered yet.</div>
-          </div>
-        </div>
-      </section>
 
       <footer class="footer">
         <span>ProgreTech Mesh · {{ version }} · ProgreTech Mesh</span>

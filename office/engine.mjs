@@ -1196,9 +1196,9 @@ ELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"
     if (!root) return;
     mkdirSync(join2(root, "agents"), { recursive: true });
     writeFileSync(join2(root, "PROTOCOL.md"), PROTOCOL_MD, "utf8");
-    const registry = join2(root, "registry.json");
-    if (!existsSync(registry)) {
-      this.writeJson(registry, { godId: null, agents: {} });
+    const registry2 = join2(root, "registry.json");
+    if (!existsSync(registry2)) {
+      this.writeJson(registry2, { godId: null, agents: {} });
     }
     const userCodexHome = join2(homedir2(), ".codex");
     for (const [id, agent2] of Object.entries(this.registry().agents)) {
@@ -3706,7 +3706,7 @@ var CircuitBreaker = class {
   /** A tool call ran. A NEW (name+input) key counts as forward progress (resets
    *  the repeat + error counters and stamps the distinct-tool clock the
    *  no-progress arm reads); the SAME key in a row is the loop signal. */
-  recordToolUse(agentId, toolName, toolInput, now = Date.now()) {
+  recordToolUse(agentId, toolName, toolInput, now2 = Date.now()) {
     const s = this.get(agentId);
     const key = this.toolKey(toolName, toolInput);
     if (key === s.repeatKey) {
@@ -3715,7 +3715,7 @@ var CircuitBreaker = class {
       s.repeatKey = key;
       s.repeatCount = 1;
       s.errorCount = 0;
-      s.lastDistinctToolAt = now;
+      s.lastDistinctToolAt = now2;
     }
   }
   /** An api_error / retry occurred (no forward progress). */
@@ -3726,23 +3726,23 @@ var CircuitBreaker = class {
    *  the conversation progress clock the no-progress arm reads (#376). Only
    *  that arm gains a way to see this work — the loop, error-storm, velocity
    *  and cap arms are unchanged. */
-  recordUserPrompt(agentId, now = Date.now()) {
-    this.get(agentId).lastUserPromptAt = now;
+  recordUserPrompt(agentId, now2 = Date.now()) {
+    this.get(agentId).lastUserPromptAt = now2;
   }
   /** Compaction started (PreCompact hook). Exempt the Δoutput-based trips —
    *  compaction burns output tokens while touching no coordination file, which
    *  is exactly the false-positive shape of upstream issue #109 (the harness's
    *  own auto-compact mission tripping its own breaker on idle agents). */
-  recordCompactStart(agentId, now = Date.now()) {
-    this.get(agentId).compactingUntil = now + COMPACT_GRACE_MS;
+  recordCompactStart(agentId, now2 = Date.now()) {
+    this.get(agentId).compactingUntil = now2 + COMPACT_GRACE_MS;
   }
   /** Compaction finished (PostCompact, or any SessionStart). Shortens the
    *  exemption to a trailing grace — the burst still lands in the next beat's
    *  cumulative diff. A no-op when no compaction is in flight, so a plain
    *  session start never grants an exemption. */
-  recordCompactEnd(agentId, now = Date.now()) {
+  recordCompactEnd(agentId, now2 = Date.now()) {
     const s = this.get(agentId);
-    if (s.compactingUntil > now) s.compactingUntil = now + POST_COMPACT_GRACE_MS;
+    if (s.compactingUntil > now2) s.compactingUntil = now2 + POST_COMPACT_GRACE_MS;
   }
   toolKey(toolName, toolInput) {
     let inp = "";
@@ -4013,7 +4013,7 @@ async function hire(name, role, goal, god = false) {
   save();
   return id;
 }
-if (!hive.registry().godId) await hire("Director", "Orchestrator", "Delegate, coordinate dependencies and deliver the owner\u2019s mission.", true);
+if (!hive.registry().godId) await hire("Scrum Master", "Scrum Master", "Delegate, coordinate dependencies and deliver the owner\u2019s mission.", true);
 function completeHandoff() {
   if (!settings.handoff) return;
   const { previous, next } = settings.handoff;
@@ -4036,6 +4036,43 @@ function completeHandoff() {
   save();
 }
 completeHandoff();
+var stages = ["intake", "ready", "working", "blocked", "review", "done"];
+var statusFor = { intake: "todo", ready: "todo", working: "doing", blocked: "blocked", review: "todo", done: "done" };
+var stageOf = (t) => stages.includes(t.stage) ? t.stage : { todo: "ready", doing: "working", blocked: "blocked", done: "done" }[t.status] || "intake";
+var now = () => (/* @__PURE__ */ new Date()).toISOString();
+var getTask = (id) => {
+  const t = hive.tasks().tasks.find((t2) => t2.id === id);
+  if (!t) throw Error("task_not_found");
+  return t;
+};
+var running = (t) => !!t.runId || t.status === "doing";
+var editable = (t) => {
+  if (running(t)) throw Error("task_running");
+};
+function dependencies(id, deps) {
+  const tasks = hive.tasks().tasks;
+  if (new Set(deps).size !== deps.length) throw Error("invalid_dependency");
+  const visit = (key, seen = /* @__PURE__ */ new Set()) => {
+    if (key === id) throw Error("dependency_cycle");
+    if (seen.has(key)) return;
+    seen.add(key);
+    const t = tasks.find((t2) => t2.id === key);
+    if (!t) throw Error("dependency_not_found");
+    for (const d of t.dependsOn || []) visit(d, seen);
+  };
+  for (const dep of deps) visit(dep);
+}
+function comment(t, text, author, kind = "comment", source = "host") {
+  const entry = { id: randomUUID(), author, text: text.slice(0, 6e3), kind, source, createdAt: now() };
+  hive.patchTask(t.id, { comments: [...t.comments || [], entry].slice(-200), updatedAt: now() });
+  log({ kind: "task." + kind, taskId: t.id, agentId: author, source, commentId: entry.id, summary: text.slice(0, 1e3) });
+}
+for (const t of hive.tasks().tasks) if (!t.stage) hive.patchTask(t.id, { stage: stageOf(t), order: t.order ?? 0, comments: t.comments || [] });
+var registry = hive.registry();
+if (registry.agents.orchestrator?.name === "Director" && !settings.runtimeBindings.orchestrator) {
+  registry.agents.orchestrator.name = "Scrum Master";
+  hive.atomicWriteJson(join3(hive.root(), "registry.json"), registry);
+}
 var args = body.args || {};
 var result = {};
 switch (body.operation) {
@@ -4050,7 +4087,7 @@ switch (body.operation) {
       }
     }
     const initial = hive.registry(), candidate = args.agents.find((a) => a.runtime_id === args.host_runtime);
-    if (candidate && !Object.keys(settings.runtimeBindings).length && Object.keys(initial.agents).length === 1 && initial.godId === "orchestrator" && initial.agents.orchestrator.name === "Director" && !hive.tasks().tasks.length && !hive.inboxBacklog("orchestrator")) {
+    if (candidate && !Object.keys(settings.runtimeBindings).length && Object.keys(initial.agents).length === 1 && initial.godId === "orchestrator" && ["Director", "Scrum Master"].includes(initial.agents.orchestrator.name) && !hive.tasks().tasks.length && !hive.inboxBacklog("orchestrator")) {
       settings.runtimeBindings.orchestrator = args.host_runtime;
       initial.agents.orchestrator.name = candidate.name;
       initial.agents.orchestrator.role = candidate.role || candidate.name;
@@ -4084,6 +4121,7 @@ switch (body.operation) {
   }
   case "orchestrator.set": {
     const next = agent(args.id), reg = hive.registry(), previous = reg.godId;
+    if (hive.tasks().tasks.some((t) => running(t) && (t.assignee === previous || t.coordinator === previous))) throw Error("task_running");
     if (previous === next.id) {
       result = { id: next.id, previous };
       break;
@@ -4125,6 +4163,10 @@ switch (body.operation) {
       title: args.title,
       description: args.description,
       assignee: args.assignee || hive.registry().godId,
+      coordinator: hive.registry().godId,
+      stage: args.needsApproval ? "blocked" : "intake",
+      order: tasks.length,
+      comments: [],
       status: args.needsApproval ? "blocked" : "todo",
       dependsOn: args.dependsOn,
       priority: 1,
@@ -4133,6 +4175,52 @@ switch (body.operation) {
     });
     hive.send({ to: args.assignee || "god", act: "request", subject: args.title, body: args.description || args.title }, "owner");
     result = { id };
+    break;
+  }
+  case "task.update": {
+    const t = getTask(args.id);
+    editable(t);
+    agent(args.assignee || hive.registry().godId);
+    dependencies(t.id, args.dependsOn);
+    hive.patchTask(t.id, { title: args.title, description: args.description, assignee: args.assignee || hive.registry().godId, dependsOn: args.dependsOn, priority: args.priority, updatedAt: now() });
+    log({ kind: "task.updated", taskId: t.id });
+    result = { id: t.id };
+    break;
+  }
+  case "task.delete": {
+    const t = getTask(args.id);
+    editable(t);
+    if (hive.tasks().tasks.some((other) => (other.dependsOn || []).includes(t.id))) throw Error("task_has_dependents");
+    hive.deleteTask(t.id);
+    log({ kind: "task.deleted", taskId: t.id });
+    result = { deleted: true };
+    break;
+  }
+  case "task.move": {
+    const t = getTask(args.id);
+    editable(t);
+    if (!stages.includes(args.stage) || args.stage === "working") throw Error("task_run_required");
+    if (args.stage === "done" && (t.dependsOn || []).some((id) => getTask(id).status !== "done")) throw Error("task_not_ready");
+    if ((t.humanQA || []).some((q) => !q.a) && args.stage !== "blocked") throw Error("approval_not_pending");
+    const tasks = hive.tasks().tasks, peers = tasks.filter((x) => x.id !== t.id && stageOf(x) === args.stage).sort((a, b) => (a.order || 0) - (b.order || 0));
+    peers.splice(Math.min(args.index, peers.length), 0, { ...t, stage: args.stage, status: statusFor[args.stage], queued: args.stage === "done" ? false : t.queued, updatedAt: now() });
+    const patches = new Map(peers.map((x, i) => [x.id, { ...x, order: i }]));
+    hive.writeTasks(tasks.map((x) => patches.get(x.id) || x));
+    log({ kind: "task.moved", taskId: t.id, stage: args.stage });
+    result = { id: t.id };
+    break;
+  }
+  case "task.comment": {
+    comment(getTask(args.id), args.text, "owner");
+    result = { saved: true };
+    break;
+  }
+  case "task.question": {
+    const t = getTask(args.id);
+    editable(t);
+    hive.patchTask(t.id, { status: "blocked", stage: "blocked", humanQA: [...t.humanQA || [], { q: args.text, askedAt: now() }], updatedAt: now() });
+    comment(getTask(t.id), args.text, "owner", "question");
+    result = { saved: true };
     break;
   }
   case "task.priority": {
@@ -4146,8 +4234,10 @@ switch (body.operation) {
   case "task.approve": {
     const task = hive.tasks().tasks.find((t) => t.id === args.id);
     if (!task || task.status !== "blocked") throw Error("approval_not_pending");
-    hive.patchTask(args.id, { status: "todo", humanQA: [...(task.humanQA || []).map((qa) => qa.a ? qa : { ...qa, a: args.answer, answeredAt: (/* @__PURE__ */ new Date()).toISOString() })] });
-    log({ kind: "approval", taskId: args.id, decision: "approved" });
+    editable(task);
+    hive.patchTask(args.id, { status: "todo", stage: "ready", updatedAt: now(), humanQA: [...(task.humanQA || []).map((qa) => qa.a ? qa : { ...qa, a: args.answer, answeredAt: (/* @__PURE__ */ new Date()).toISOString() })] });
+    comment(getTask(args.id), args.answer, "owner", "answer");
+    log({ kind: "approval", taskId: args.id, decision: "answered" });
     break;
   }
   case "mailbox.list": {
@@ -4196,24 +4286,35 @@ switch (body.operation) {
     writeFileSync2(join3(hive.root(), "agents", args.id, "memory.md"), args.text, { mode: 384 });
     hive.commit("mesh: reviewed office memory");
     break;
+  case "mission.queue": {
+    if (settings.paused) throw Error("office_paused");
+    const t = getTask(args.id);
+    editable(t);
+    if (t.status !== "todo") throw Error("task_not_ready");
+    hive.patchTask(t.id, { queued: true, updatedAt: now() });
+    log({ kind: "mission.queued", taskId: t.id });
+    break;
+  }
   case "begin": {
     if (settings.paused) throw Error("office_paused");
     const tasks = hive.tasks().tasks;
     const task = tasks.find((t) => t.id === args.id);
-    if (!task || task.status !== "todo" || task.dependsOn.some((id) => !tasks.some((t) => t.id === id && t.status === "done"))) throw Error("task_not_ready");
-    hive.patchTask(args.id, { status: "doing" });
+    if (!task || task.status !== "todo" || (task.dependsOn || task.deps || []).some((id) => !tasks.some((t) => t.id === id && t.status === "done"))) throw Error("task_not_ready");
+    const runId = randomUUID();
+    hive.patchTask(args.id, { status: "doing", stage: "working", queued: false, runId, activeAgent: args.native ? hive.registry().godId : task.assignee, coordinator: hive.registry().godId, updatedAt: now() });
     log({ kind: "mission.start", taskId: args.id });
-    result = { task, agents: roster().map((a) => ({
+    result = { task: getTask(task.id), agents: roster().map((a) => ({
       id: a.id,
       name: a.name,
       role: a.role,
       goal: settings.goals[a.id],
       isDirector: hive.isGod(a.id),
+      isScrumMaster: hive.isGod(a.id),
       runtime_id: settings.runtimeBindings[a.id] || null,
       memory: hive.memory(a.id).slice(-4e3),
       ...inboxContext(a.id)
     })), maxIterations: settings.maxIterations };
-    for (const a of result.agents) {
+    for (const a of args.native ? [] : result.agents) {
       const inbox = join3(hive.agentDir(a.id), "inbox"), done = join3(inbox, ".done");
       mkdirSync2(done, { recursive: true, mode: 448 });
       for (const m of hive.inbox(a.id).filter((m2) => a.mailboxIds.includes(m2.id))) {
@@ -4221,6 +4322,87 @@ switch (body.operation) {
       }
       delete a.mailboxIds;
     }
+    break;
+  }
+  case "mission.context": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId || t.activeAgent !== args.actor) throw Error("mission_lease_invalid");
+    const context = inboxContext(args.actor), inbox = join3(hive.agentDir(args.actor), "inbox"), done = join3(inbox, ".done");
+    mkdirSync2(done, { recursive: true, mode: 448 });
+    for (const id of context.mailboxIds) if (/^[A-Za-z0-9_-]{1,160}$/.test(id)) renameSync2(join3(inbox, id + ".json"), join3(done, id + ".json"));
+    result = { task: t, memory: hive.memory(args.actor).slice(-4e3), messages: context.messages };
+    break;
+  }
+  case "mission.inspect": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId) throw Error("mission_lease_invalid");
+    result = { task: t };
+    break;
+  }
+  case "mission.uncertain": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId) throw Error("mission_lease_invalid");
+    hive.patchTask(t.id, { stage: "blocked", status: "blocked", result: args.text, updatedAt: now() });
+    comment(getTask(t.id), args.text, "system", "runtime");
+    break;
+  }
+  case "mission.admit": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId || t.jobId) throw Error("mission_lease_invalid");
+    hive.patchTask(t.id, { jobId: "admitting", activeAgent: args.agentId, updatedAt: now() });
+    break;
+  }
+  case "mission.bind": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId) throw Error("mission_lease_invalid");
+    hive.patchTask(t.id, { jobId: args.jobId, activeAgent: args.agentId, updatedAt: now() });
+    log({ kind: "agent.start", taskId: t.id, agentId: args.agentId });
+    break;
+  }
+  case "mission.release": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId) throw Error("mission_lease_invalid");
+    log({ kind: args.error ? "agent.error" : "agent.complete", taskId: t.id, agentId: t.activeAgent });
+    hive.patchTask(t.id, { jobId: null, updatedAt: now() });
+    break;
+  }
+  case "mission.update": {
+    const t = getTask(args.id);
+    if (!args.runId || t.runId !== args.runId || t.activeAgent !== args.actor) throw Error("mission_lease_invalid");
+    const source = args.source || "native-reply";
+    if (!["native-tool", "native-reply"].includes(source)) throw Error("invalid_mission_update");
+    if (args.action === "comment") comment(t, args.text, args.actor, "comment", source);
+    else if (args.action === "question") {
+      hive.patchTask(t.id, { pendingDecision: { action: "question", text: args.text, actor: args.actor }, updatedAt: now() });
+      comment(t, args.text, args.actor, "question", source);
+    } else if (args.action === "delegate") {
+      if (args.actor !== t.coordinator) throw Error("scrum_master_required");
+      agent(args.to);
+      hive.patchTask(t.id, { pendingDecision: { action: "delegate", to: args.to, text: args.text }, updatedAt: now() });
+      comment(t, args.text, args.actor, "assignment", source);
+    } else throw Error("invalid_mission_update");
+    result = { saved: true };
+    break;
+  }
+  case "mission.transition": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId || t.jobId) throw Error("mission_lease_invalid");
+    agent(args.to);
+    hive.patchTask(t.id, { activeAgent: args.to, assignee: args.to, pendingDecision: null, updatedAt: now() });
+    if (args.from !== args.to) {
+      hive.send({ to: args.to, subject: t.title, body: args.text, act: "request" }, args.from);
+      log({ kind: "delegation", taskId: t.id, agentId: args.from, to: args.to, summary: args.text.slice(0, 1e3) });
+    }
+    break;
+  }
+  case "mission.resolve": {
+    const t = getTask(args.id);
+    if (t.runId !== args.runId || t.jobId) throw Error("mission_lease_invalid");
+    const stage = args.stage;
+    if (!["review", "blocked", "done", "ready"].includes(stage)) throw Error("invalid_mission_resolution");
+    hive.patchTask(t.id, { stage, status: statusFor[stage], runId: null, activeAgent: null, pendingDecision: null, result: args.text, updatedAt: now(), ...stage === "blocked" ? { humanQA: [...t.humanQA || [], { q: args.text, askedAt: now() }] } : {} });
+    comment(getTask(t.id), args.text, t.coordinator, stage === "done" ? "completion" : stage === "blocked" ? "question" : "review");
+    log({ kind: "mission.finish", taskId: t.id, ok: stage === "done" });
     break;
   }
   case "event": {
@@ -4237,6 +4419,11 @@ switch (body.operation) {
     if (!task || task.status !== "doing") throw Error("task_not_running");
     hive.patchTask(args.id, {
       status: args.ok ? "done" : "blocked",
+      stage: args.ok ? "done" : "blocked",
+      runId: null,
+      activeAgent: null,
+      jobId: null,
+      updatedAt: now(),
       result: args.result?.slice(0, 6e3),
       ...!args.ok ? { humanQA: [{ q: "Mission stopped. Review the failure and approve a retry.", askedAt: (/* @__PURE__ */ new Date()).toISOString() }] } : {}
     });
@@ -4264,6 +4451,7 @@ var snapshot = {
     role: a.role,
     goal: settings.goals[a.id],
     isDirector: hive.isGod(a.id),
+    isScrumMaster: hive.isGod(a.id),
     runtime_id: settings.runtimeBindings[a.id] || null,
     state: settings.paused ? "paused" : events.slice().reverse().find((e) => e.agentId === a.id && ["agent.start", "agent.complete", "agent.error"].includes(e.kind))?.kind === "agent.start" ? "working" : "idle",
     pendingMessages: hive.inboxBacklog(a.id),
@@ -4271,11 +4459,12 @@ var snapshot = {
   })),
   orchestratorId: hive.registry().godId,
   archivedAgents: Object.values(hive.registry().agents).filter((a) => a.archived).map((a) => ({ id: a.id, name: a.name, runtime_id: settings.runtimeBindings[a.id] || null })),
-  tasks: hive.tasks().tasks,
+  stages,
+  tasks: hive.tasks().tasks.map(({ runId, pendingDecision, ...t }) => ({ ...t, running: !!runId || t.status === "doing" })),
   messages: hive.voiceMessages({ limit: 30 }),
   events,
   paused: settings.paused,
   maxIterations: settings.maxIterations,
-  components: { coordination: "Munder Difflin HiveManager", execution: "CrewAI hierarchical crews" }
+  components: { coordination: "Munder Difflin HiveManager, CircuitBreaker, ControlRegistry", execution: "OpenClaw native runtime; optional CrewAI", taskAuthority: "host-local HiveManager ledger" }
 };
 process.stdout.write(JSON.stringify({ ok: true, result, snapshot }) + "\n");

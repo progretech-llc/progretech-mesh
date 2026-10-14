@@ -24,9 +24,9 @@
   },
   "package": {
     "package_id": "progretech-mesh-openclaw",
-    "version": "0.10.1-continuity.1",
-    "filename": "progretech-mesh-openclaw-0.10.1-continuity.1.tgz",
-    "sha256": "48727e8eec082b38f058de9b68f44e6b9cd6de64fd2b3b58bb9ef11fd6421bb3",
+    "version": "0.10.2-role-relay.1",
+    "filename": "progretech-mesh-openclaw-0.10.2-role-relay.1.tgz",
+    "sha256": "9b5cc867145d04e08fee725a459f2a3ad9c910a54308c85eff3b458c31fcf24c",
     "integrity_algorithm": "sha256",
     "codeseal_verified": false
   },

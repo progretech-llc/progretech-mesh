@@ -9,7 +9,7 @@ class TestPT048RemoteSessionStability(unittest.TestCase):
         self.cloudbuild=(ROOT/"cloudbuild.yaml").read_text()
 
     def test_ide_copy_available_when_gateway_offline(self):
-        self.assertIn('<button data-ide-access="${agent.id}">Copy IDE relay setup</button>', self.js)
+        self.assertIn('<button data-ide-access="${escapeHtml(agent.id)}">Copy API relay setup</button>', self.js)
         self.assertNotIn('data-ide-access="${agent.id}" ${agent.transport !== "connected" ? "disabled" : ""}', self.js)
 
     def test_ide_copy_uses_compatible_clipboard_helper(self):

@@ -12,20 +12,24 @@ from control_center.file_lock import lock, unlock
 
 SPECKLET_OBSERVER=None
 
-PUBLIC_OPERATIONS = {'orchestrator.set', 'restore', 'snapshot', 'hire', 'archive', 'task.priority', 'task.create', 'task.approve', 'message', 'pause', 'settings', 'memory', 'memory.save', 'run', 'workday.control', 'mailbox.list', 'mailbox.edit', 'mailbox.remove', 'mailbox.priority'}
+PUBLIC_OPERATIONS = {'orchestrator.set', 'restore', 'snapshot', 'hire', 'archive', 'task.priority', 'task.update', 'task.move', 'task.delete', 'task.comment', 'task.question', 'task.create', 'task.approve', 'message', 'pause', 'settings', 'memory', 'memory.save', 'run', 'workday.control', 'mailbox.list', 'mailbox.edit', 'mailbox.remove', 'mailbox.priority'}
 
 
 def validate_office(args):
-    if not isinstance(args, dict) or set(args) != {'operation', 'args'} or args['operation'] not in PUBLIC_OPERATIONS:
+    if not isinstance(args, dict) or set(args) != {'operation', 'args'} or not isinstance(args['operation'],str) or args['operation'] not in PUBLIC_OPERATIONS:
         raise ValueError('invalid_office_operation')
     op, body = args['operation'], args['args']
-    fields = {'orchestrator.set': {'id'}, 'restore': {'id'}, 'task.priority': {'id','priority'}, 'hire': {'name', 'role', 'goal'}, 'archive': {'id'}, 'task.create': {'title', 'description', 'assignee', 'dependsOn', 'needsApproval'},
+    fields = {'task.update': {'id','title','description','assignee','dependsOn','priority'}, 'task.move': {'id','stage','index'}, 'task.delete': {'id'}, 'task.comment': {'id','text'}, 'task.question': {'id','text'}, 'orchestrator.set': {'id'}, 'restore': {'id'}, 'task.priority': {'id','priority'}, 'hire': {'name', 'role', 'goal'}, 'archive': {'id'}, 'task.create': {'title', 'description', 'assignee', 'dependsOn', 'needsApproval'},
         'task.approve': {'id', 'answer'}, 'message': {'to', 'text'}, 'pause': {'paused'}, 'settings': {'maxIterations'},
         'memory': {'id'}, 'memory.save': {'id', 'text'}, 'run': {'id'}, 'workday.control': {'action','role','duration'}, 'mailbox.list': {'agent'}, 'mailbox.edit': {'agent','id','text'}, 'mailbox.remove': {'agent','id'}, 'mailbox.priority': {'agent','id','priority'}}.get(op, set())
     if not isinstance(body, dict) or set(body) != fields:
         raise ValueError('invalid_office_args')
     for key, value in body.items():
-        if key == 'priority':
+        if key == 'index':
+            if type(value) is not int or not 0 <= value <= 10000: raise ValueError('invalid_task_order')
+        elif key == 'stage':
+            if not isinstance(value,str) or value not in {'intake','ready','working','blocked','review','done'}: raise ValueError('invalid_task_stage')
+        elif key == 'priority':
             if type(value) is not int or not -100 <= value <= 100: raise ValueError('invalid_mailbox_priority')
         elif key in {'paused', 'needsApproval'}:
             if type(value) is not bool: raise ValueError('invalid_office_args')
@@ -67,7 +71,7 @@ def engine(home, role, operation, args=None):
             unlock(guard)
     if result.returncode:
         # Only known machine codes cross the relay; full runtime diagnostics stay local.
-        for code in ('task_not_ready', 'office_paused', 'office_capacity', 'agent_has_open_tasks', 'director_required', 'office_agent_not_found', 'dependency_not_found', 'approval_not_pending', 'office_role_already_exists', 'mailbox_item_not_pending', 'mailbox_busy'):
+        for code in ('task_not_ready', 'office_paused', 'office_capacity', 'agent_has_open_tasks', 'director_required', 'office_agent_not_found', 'dependency_not_found', 'approval_not_pending', 'office_role_already_exists', 'mailbox_item_not_pending', 'mailbox_busy', 'task_not_found', 'task_running', 'task_has_dependents', 'dependency_cycle', 'task_run_required', 'task_capacity', 'mission_lease_invalid', 'scrum_master_required', 'invalid_mission_update', 'invalid_mission_resolution'):
             if code in result.stderr: raise ValueError(code)
         raise ValueError('office_coordination_failed')
     payload=json.loads(result.stdout)
@@ -86,6 +90,7 @@ def namespace(role, agent_id=None):
 
 def native_binding(provider, gateway, runtime_id):
     """Resolve an office runtime only inside its enrolled gateway namespace."""
+    if not runtime_id:return None
     if provider.bindings.get(gateway) == runtime_id:
         return gateway
     prefix = gateway + '--'
@@ -94,59 +99,9 @@ def native_binding(provider, gateway, runtime_id):
 
 
 def dispatch_native_mission(home, role, task_id, gateway, provider, mesh):
-    """Run a Factory mission through its real bound OpenClaw role.
-
-    CrewAI remains available when explicitly configured, but the connected
-    native roster must not leave the Start mission control inert.
-    """
-    office_role = namespace(role, gateway)
-    mission = engine(home, office_role, 'begin', {'id': task_id})['result']
-    task = mission['task']
-    target = next((row for row in mission['agents'] if row['id'] == task['assignee']), None)
-    binding = native_binding(provider, gateway, target.get('runtime_id') if target else None)
-    if not binding:
-        engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
-            'result': 'The assigned office role has no connected native runtime binding.'})
-        raise ValueError('office_runtime_binding_required')
-    prompt = (
-        'Owner-authorized Mesh Factory mission. Use your current role, tools, '
-        'approval gates, and repository/task ledgers. Coordinate or delegate when '
-        'that is your role; do not claim completion without evidence.\n\n'
-        'Mission: ' + task['title'] + '\n\n' + (task.get('description') or task['title'])
-    )
-    try:
-        # Tool-using missions routinely exceed the five-minute interactive chat
-        # budget. Keep ordinary conversation bounded while allowing an
-        # owner-started mission up to the same two-hour monitor window.
-        job = mesh.chat(binding, prompt, owner_text=task.get('description') or task['title'], response_timeout=7200)
-    except Exception:
-        engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
-            'result': 'The native runtime did not accept the mission. Review host status before retrying.'})
-        raise
-
-    def monitor():
-        deadline = time.monotonic() + 7200
-        try:
-            while time.monotonic() < deadline:
-                result = mesh.get(binding, job['job_id'])
-                if result.get('done'):
-                    error = result.get('error')
-                    reply = result.get('result', {}).get('reply', '')
-                    engine(home, office_role, 'finish', {'id': task_id, 'ok': not error,
-                        'result': (error or reply or 'Mission completed without a text result.')[:6000]})
-                    return
-                time.sleep(2)
-            engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
-                'result': 'Mission completion was not confirmed within two hours.'})
-        except Exception:
-            try:
-                engine(home, office_role, 'finish', {'id': task_id, 'ok': False,
-                    'result': 'Mission status became unavailable; inspect the native runtime before retrying.'})
-            except Exception:
-                pass
-
-    threading.Thread(target=monitor, daemon=True, name='mesh-office-mission').start()
-    return {'job_id': job['job_id'], 'state': 'queued', 'provider': 'openclaw'}
+    """Run a persisted Scrum Master workflow through enrolled native roles."""
+    from control_center.office_native import dispatch
+    return dispatch(home, role, task_id, gateway, provider, mesh)
 
 
 def dispatch_office(home, role, args, agent_id=None):

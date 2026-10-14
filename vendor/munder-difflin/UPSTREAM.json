@@ -7,5 +7,11 @@
     "CircuitBreaker",
     "ControlRegistry"
   ],
-  "adaptation": "Mesh provider accepts file inbox; runtime remains CrewAI."
+  "adaptation": "Full pinned upstream source with one documented Mesh inbox-provider extension. Mesh imports HiveManager, CircuitBreaker and ControlRegistry and their transitive modules; Python host orchestration executes enrolled OpenClaw jobs. Upstream Electron runtime is retained as reference source and is not launched.",
+  "source_scope": "Full tracked source tree at pinned commit; upstream .git is excluded.",
+  "source_file_count": 2354,
+  "source_manifest_sha256": "2660d655d37acd2439147bf1f70155ab790d8390423706b40610820927908997",
+  "modified_files": [
+    "src/shared/agentProvider.ts (canReceiveInbox accepts Mesh adapter)"
+  ]
 }

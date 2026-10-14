@@ -13,6 +13,7 @@ class FakeMesh:
     def sleeping(self,a):return self.asleep
     def chat_sleeping(self,a):return self.asleep
     def idle(self):return self.native_idle
+    def participant_busy(self,a,exclude=None):return not self.native_idle or any(k!=exclude and not j["done"] and j.get("agent_id")==a for k,j in self.jobs.items())
     def chat(self,a,text,**kwargs):
         j={'job_id':str(len(self.calls)),'done':False,'agent_id':a};self.calls.append((a,text));self.jobs[(a,j['job_id'])]=j;return j
     def get(self,a,i):return self.jobs[(a,i)]
@@ -104,8 +105,19 @@ class HandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'invalid_chatter_pair'):self.h.dispatch('host','chatter.pair',{'a':'other--imagen','b':'host--researcher','topic':''})
     def test_owner_requests_preempt_chatter(self):
         self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
-        self.mesh.jobs['owner']={'agent_id':'host','done':False}
-        self.h.chatter_tick();self.assertFalse(self.h.data['chatter']['conversations']);self.assertIn('priority',self.h.data['chatter']['admission'])
+        self.mesh.jobs['owner']={'agent_id':'host--researcher','done':False}
+        self.h.chatter_tick();self.assertFalse(self.h.data['chatter']['conversations']);self.assertFalse(self.mesh.calls)
+
+    def test_unrelated_native_work_does_not_block_idle_participants(self):
+        self.h.dispatch('host','chatter.configure',{'enabled':True,'tab_id':'a'*32})
+        self.mesh.native_idle=False
+        self.mesh.participant_busy=lambda agent,exclude=None: agent=='host--imagen'
+        self.mesh.jobs['owner']={'agent_id':'host--imagen','done':False}
+        self.h.chatter_tick()
+        row=self.h.data['chatter']['conversations'][0]
+        self.assertNotIn('host--imagen',self.h.participants(row))
+        row['approach_until']=0;self.h.chatter_tick()
+        self.assertEqual(len(self.mesh.calls),1)
 
     def test_mission_priority_persists_and_rejects_running_mutation(self):
         patch.stopall()
@@ -167,7 +179,7 @@ class HandoffTests(unittest.TestCase):
         self.assertIn('Proposal turn 2',proposal.read_text())
         self.assertIn('have not been executed',proposal.read_text())
         self.assertIn('Proposal turn 0',self.mesh.calls[2][1]);self.assertIn('Proposal turn 1',self.mesh.calls[2][1])
-        self.assertTrue(any('Lyra and Director' in n for n in self.notices))
+        self.assertTrue(any('Lyra and Scrum Master' in n for n in self.notices))
 
     def test_group_queue_requires_opt_in_distinct_bound_participants(self):
         self.provider.bindings['host--codex']='codex'
