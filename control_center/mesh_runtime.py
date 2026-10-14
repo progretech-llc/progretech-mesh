@@ -85,6 +85,49 @@ def provider_error(exc):
     return 'mesh_provider_unavailable'
 
 
+
+def gateway_agent_reply(cfg, role, session, text, timeout, request_id, model=None):
+    """Use OpenClaw's SecretRef-aware gateway client without resolving secrets here.
+
+    One exact scoped request, no embedded fallback or automatic replay. A missing
+    terminal receipt is uncertain even when the client process has exited.
+    """
+    port=cfg.get('gateway',{}).get('port',18789)
+    if type(port) is not int or not 1<=port<=65535:raise ValueError('runtime_port_invalid')
+    params={'agentId':role,'sessionKey':session,'message':text,'deliver':False,
+            'timeout':timeout,'idempotencyKey':'mesh-'+request_id}
+    if model is not None:params['model']=model
+    command=['openclaw','gateway','call','agent','--expect-final','--expect-url',
+             'ws://127.0.0.1:'+str(port),'--timeout',str((timeout+20)*1000),
+             '--params',json.dumps(params),'--json']
+    try:
+        response=subprocess.run(command,capture_output=True,text=True,timeout=timeout+30)
+        if response.returncode or len(response.stdout)>4194304:
+            raise ValueError('mesh_runtime_completion_unconfirmed')
+        payload=json.loads(response.stdout)
+    except (OSError,subprocess.SubprocessError,json.JSONDecodeError):
+        raise ValueError('mesh_runtime_completion_unconfirmed') from None
+    if not isinstance(payload,dict) or payload.get('runId')!='mesh-'+request_id or payload.get('status') not in {'ok','error','timeout','aborted'}:
+        raise ValueError('mesh_runtime_completion_unconfirmed')
+    if payload['status']!='ok':raise ValueError('mesh_provider_rejected')
+    result=payload.get('result')
+    if not isinstance(result,dict) or not isinstance(result.get('payloads'),list):
+        raise ValueError('mesh_runtime_completion_unconfirmed')
+    meta=result.get('meta') or {}
+    if not isinstance(meta,dict) or meta.get('yielded') or meta.get('continuationPending'):
+        raise ValueError('mesh_runtime_completion_unconfirmed')
+    if any(meta.get(key) for key in ('error','aborted','replayInvalid','timedOut','timeoutPhase','terminalToolFailure')) or meta.get('modelFallbackStopReason') in {'agent_run_terminal_timeout','idle_timeout_circuit_breaker'}:
+        raise ValueError('mesh_provider_rejected')
+    if any(isinstance(row,dict) and row.get('isError') for row in result['payloads']):
+        raise ValueError('mesh_provider_rejected')
+    answer='\n'.join(row['text'] for row in result['payloads'] if isinstance(row,dict) and isinstance(row.get('text'),str) and not row.get('isReasoning') and not row.get('isCommentary') and not row.get('isCompactionNotice') and not row.get('isFallbackNotice') and not row.get('isStatusNotice') and row.get('visible') is not False)
+    if isinstance(meta.get('finalAssistantVisibleText'),str) and meta['finalAssistantVisibleText'].strip():
+        answer=meta['finalAssistantVisibleText']
+    if not answer.strip():raise ValueError('mesh_reply_incomplete')
+    if len(answer)>1048576:raise ValueError('mesh_reply_too_large')
+    return answer
+
+
 def read_signals(home):
     try:data=json.loads((Path(home)/'.progretech-mesh/agent-signals.json').read_text())
     except (OSError,ValueError):data={}
@@ -523,27 +566,36 @@ class MeshRuntime:
                 if admission:admission(ident)  # Recheck tab consent after a slow preload.
             port=cfg['gateway'].get('port',18789)
             if type(port) is not int or not 1<=port<=65535:raise ValueError('runtime_port_invalid')
-            headers={'Content-Type':'application/json','Authorization':'Bearer '+cfg['gateway']['auth']['token'],
-                'x-openclaw-agent-id':role,'x-openclaw-message-channel':'mesh',
-                'x-openclaw-session-key':'agent:'+role+':mesh-chat:'+agent}
-            if background:headers['x-openclaw-session-key']='agent:'+role+':mesh-chatter:'+background
+            session='agent:'+role+':mesh-chat:'+agent
+            if background:session='agent:'+role+':mesh-chatter:'+background
             nonce=None if background else self.settings(agent).get('conversation_nonce')
-            if nonce:headers['x-openclaw-session-key']+=':'+nonce
-            if self.settings(agent).get('model','default')!='default':headers['x-openclaw-model']=chosen
-            req=Request(f'http://127.0.0.1:{port}/v1/chat/completions',data=json.dumps({'model':'openclaw/'+role,'stream':False,
-                'messages':[{'role':'user','content':text}],'user':'mesh-conversation-'+agent,**({'max_tokens':384} if background else {})}).encode(),headers=headers)
+            if nonce:session+=':'+nonce
+            override=chosen if self.settings(agent).get('model','default')!='default' else None
+            token=cfg['gateway']['auth']['token']
             self.mark(ident,'processing','Processing your request; waiting for reply text')
-            # OpenClaw postprocessing can replace output after its token events.
-            # Retrieve one final response; progress remains an asynchronous host job.
-            with self.open(req,timeout=response_timeout) as response:
-                raw=response.read(4194305)
-            if len(raw)>4194304:raise ValueError('mesh_reply_too_large')
-            payload=json.loads(raw)
-            if payload.get('error'):raise ValueError('mesh_reply_failed')
-            choices=payload.get('choices',[])
-            if not choices:raise ValueError('mesh_reply_incomplete')
-            answer=choices[0].get('message',{}).get('content')
-            if isinstance(answer,list):answer=''.join(c.get('text','') for c in answer if isinstance(c,dict) and c.get('type')=='text')
+            if isinstance(token,dict):
+                answer=gateway_agent_reply(cfg,role,session,text,response_timeout,ident,override)
+            else:
+                if not isinstance(token,str) or not token:raise ValueError('runtime_auth_unavailable')
+                headers={'Content-Type':'application/json','Authorization':'Bearer '+token,
+                    'x-openclaw-agent-id':role,'x-openclaw-message-channel':'mesh','x-openclaw-session-key':session}
+                if override:headers['x-openclaw-model']=override
+                req=Request(f'http://127.0.0.1:{port}/v1/chat/completions',data=json.dumps({'model':'openclaw/'+role,'stream':False,
+                    'messages':[{'role':'user','content':text}],'user':'mesh-conversation-'+agent,**({'max_tokens':384} if background else {})}).encode(),headers=headers)
+                # Retrieve the final response; never infer native cancellation from
+                # a timed-out/disconnected HTTP client.
+                try:
+                    with self.open(req,timeout=response_timeout) as response:
+                        raw=response.read(4194305)
+                except HTTPError:raise
+                except (TimeoutError,URLError):raise ValueError('mesh_runtime_completion_unconfirmed') from None
+                if len(raw)>4194304:raise ValueError('mesh_reply_too_large')
+                payload=json.loads(raw)
+                if payload.get('error'):raise ValueError('mesh_reply_failed')
+                choices=payload.get('choices',[])
+                if not choices:raise ValueError('mesh_reply_incomplete')
+                answer=choices[0].get('message',{}).get('content')
+                if isinstance(answer,list):answer=''.join(c.get('text','') for c in answer if isinstance(c,dict) and c.get('type')=='text')
             if not isinstance(answer,str) or not answer.strip():raise ValueError('mesh_reply_incomplete')
             if len(answer)>1048576:raise ValueError('mesh_reply_too_large')
             self.mark(ident,'writing','Reply generated; preparing delivery')

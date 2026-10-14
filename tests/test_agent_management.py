@@ -122,4 +122,14 @@ class BoundBridgeConversationTests(unittest.TestCase):
                 self.assertEqual(json.loads(request.data)['model'],'openclaw/researcher')
                 self.assertEqual(result['reply'],'reply')
                 self.assertEqual(transport.call_args.kwargs['timeout'],300)
+            with patch('control_center.rend_bridge.urlopen',side_effect=TimeoutError('private diagnostic')):
+                with self.assertRaisesRegex(ValueError,'^mesh_runtime_completion_unconfirmed$'):
+                    provider.dispatch('rend--researcher','communication.chat',{'text':'Bounded timeout fixture'})
+            cfg['gateway']['auth']['token']={'source':'store','provider':'default','id':'fixture-reference'}
+            (root/'.openclaw/openclaw.json').write_text(json.dumps(cfg))
+            with patch('control_center.mesh_runtime.gateway_agent_reply',return_value='secretref reply') as transport:
+                result=provider.dispatch('rend--researcher','communication.chat',{'text':'Hello again'})
+                self.assertEqual(result['reply'],'secretref reply')
+                self.assertEqual(transport.call_args.args[1:5],('researcher','agent:researcher:mesh-chat:rend--researcher','Hello again',300))
+                self.assertEqual(transport.call_args.args[-1],'local/light')
             self.assertEqual(json.loads((root/'.openclaw/openclaw.json').read_text()),cfg)
