@@ -247,6 +247,30 @@ class RuntimeTests(unittest.TestCase):
         result=self.done('host',self.runtime.chat('host','fixture'))
         self.assertEqual(result['error'],'mesh_runtime_completion_unconfirmed')
 
+    def test_native_failure_diagnostic_is_bound_and_excludes_native_text(self):
+        cfg=json.loads((self.home/'.openclaw/openclaw.json').read_text())
+        cfg['gateway']['auth']['token']={'source':'store','provider':'default','id':'private-reference'}
+        (self.home/'.openclaw/openclaw.json').write_text(json.dumps(cfg))
+        def response(command,**kwargs):
+            params=json.loads(command[command.index('--params')+1])
+            return SimpleNamespace(returncode=0,stdout=json.dumps({'runId':params['idempotencyKey'],'status':'ok','result':{'meta':{'error':{'kind':'incomplete_turn','message':'private diagnostic'},'finalAssistantVisibleText':'private final reply','systemPromptReport':'private prompt'},'payloads':[{'text':'private tool output','isError':True}]}}))
+        with patch('control_center.mesh_runtime.subprocess.run',side_effect=response):
+            result=self.done('host--coder',self.runtime.chat('host--coder','bounded fixture',mission=True))
+        self.assertEqual(result['error'],'mesh_provider_rejected')
+        diagnostic=result['native_diagnostic']
+        self.assertEqual(diagnostic['run_id'],'mesh-'+result['job_id'])
+        self.assertEqual(diagnostic['source'],'native-transport')
+        self.assertEqual(diagnostic['error_kind'],'incomplete_turn')
+        self.assertTrue(diagnostic['flags']['error']);self.assertTrue(diagnostic['payload_error'])
+        self.assertTrue(diagnostic['visible_final_present'])
+        self.assertNotIn('private',json.dumps(diagnostic))
+
+    def test_native_failure_unknown_kind_and_timeout_are_bounded(self):
+        from control_center.mesh_runtime import NativeReplyError
+        diagnostic=NativeReplyError('mesh_provider_rejected',{'result':{'meta':{'error':{'kind':'private-value'},'timeoutPhase':{'secret':'value'}}}}).diagnostic
+        self.assertEqual(diagnostic['error_kind'],'other');self.assertEqual(diagnostic['timeout_phase'],'other')
+        self.assertNotIn('private',json.dumps(diagnostic));self.assertNotIn('secret',json.dumps(diagnostic))
+
     def test_failed_job_finishes_even_if_signal_write_fails(self):
         self.runtime.signal=lambda *a:(_ for _ in ()).throw(OSError('fixture'))
         value=self.done('host',self.runtime.start('host','chat',lambda j:(_ for _ in ()).throw(ValueError('mesh_context_limit'))))

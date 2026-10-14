@@ -152,6 +152,32 @@ def provider_error(exc):
 
 
 
+class NativeReplyError(ValueError):
+    """Transport-owned, allowlisted facts; never native diagnostic text."""
+    def __init__(self, code, payload):
+        super().__init__(code)
+        result=payload.get('result')
+        result=result if isinstance(result,dict) else {}
+        meta=result.get('meta')
+        meta=meta if isinstance(meta,dict) else {}
+        error=meta.get('error')
+        kind=error.get('kind') if isinstance(error,dict) else None
+        known_kinds=('context_overflow','compaction_failure','compaction_replay_refresh_required','role_ordering','image_size','retry_limit','incomplete_turn','hook_block')
+        phase=meta.get('timeoutPhase')
+        fallback=meta.get('modelFallbackStopReason')
+        rows=result.get('payloads')
+        self.diagnostic={
+            'source':'native-transport',
+            'terminal_status':payload.get('status') if payload.get('status') in ('ok','error','timeout','aborted') else 'unknown',
+            'error_kind':kind if isinstance(kind,str) and kind in known_kinds else 'other' if error else None,
+            'fallback_stop_reason':fallback if isinstance(fallback,str) and fallback in ('agent_run_terminal_timeout','idle_timeout_circuit_breaker','provider_review_continuation') else 'other' if fallback else None,
+            'timeout_phase':phase if isinstance(phase,str) and phase in ('queue','provider','compaction','tool') else 'other' if phase else None,
+            'flags':{key:bool(meta.get(key)) for key in ('error','aborted','replayInvalid','timedOut','timeoutPhase','terminalToolFailure','yielded','continuationPending')},
+            'payload_error':any(isinstance(row,dict) and bool(row.get('isError')) for row in rows) if isinstance(rows,list) else None,
+            'visible_final_present':isinstance(meta.get('finalAssistantVisibleText'),str) and bool(meta['finalAssistantVisibleText'].strip()),
+        }
+
+
 def gateway_agent_reply(cfg, role, session, text, timeout, request_id, model=None):
     """Use OpenClaw's SecretRef-aware gateway client without resolving secrets here.
 
@@ -175,17 +201,17 @@ def gateway_agent_reply(cfg, role, session, text, timeout, request_id, model=Non
         raise ValueError('mesh_runtime_completion_unconfirmed') from None
     if not isinstance(payload,dict) or payload.get('runId')!='mesh-'+request_id or payload.get('status') not in {'ok','error','timeout','aborted'}:
         raise ValueError('mesh_runtime_completion_unconfirmed')
-    if payload['status']!='ok':raise ValueError('mesh_provider_rejected')
+    if payload['status']!='ok':raise NativeReplyError('mesh_provider_rejected',payload)
     result=payload.get('result')
     if not isinstance(result,dict) or not isinstance(result.get('payloads'),list):
-        raise ValueError('mesh_runtime_completion_unconfirmed')
+        raise NativeReplyError('mesh_runtime_completion_unconfirmed',payload)
     meta=result.get('meta') or {}
     if not isinstance(meta,dict) or meta.get('yielded') or meta.get('continuationPending'):
-        raise ValueError('mesh_runtime_completion_unconfirmed')
+        raise NativeReplyError('mesh_runtime_completion_unconfirmed',payload)
     if any(meta.get(key) for key in ('error','aborted','replayInvalid','timedOut','timeoutPhase','terminalToolFailure')) or meta.get('modelFallbackStopReason') in {'agent_run_terminal_timeout','idle_timeout_circuit_breaker'}:
-        raise ValueError('mesh_provider_rejected')
+        raise NativeReplyError('mesh_provider_rejected',payload)
     if any(isinstance(row,dict) and row.get('isError') for row in result['payloads']):
-        raise ValueError('mesh_provider_rejected')
+        raise NativeReplyError('mesh_provider_rejected',payload)
     answer='\n'.join(row['text'] for row in result['payloads'] if isinstance(row,dict) and isinstance(row.get('text'),str) and not row.get('isReasoning') and not row.get('isCommentary') and not row.get('isCompactionNotice') and not row.get('isFallbackNotice') and not row.get('isStatusNotice') and row.get('visible') is not False)
     if isinstance(meta.get('finalAssistantVisibleText'),str) and meta['finalAssistantVisibleText'].strip():
         answer=meta['finalAssistantVisibleText']
@@ -469,7 +495,10 @@ class MeshRuntime:
                 if kind=='chat' and error not in {'mesh_chatter_deferred','mesh_chatter_cancelled'}:
                     try:self.signal(agent,'error',error)
                     except OSError:pass
-                with self.lock:self.jobs[ident].update(done=True,error=error)
+                with self.lock:
+                    self.jobs[ident].update(done=True,error=error)
+                    if isinstance(exc,NativeReplyError):
+                        self.jobs[ident]['native_diagnostic']={'run_id':'mesh-'+ident,**exc.diagnostic}
         threading.Thread(target=run,daemon=True,name='mesh-'+kind).start()
         return self.get(agent,ident)
 
