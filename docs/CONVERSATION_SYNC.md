@@ -21,7 +21,8 @@ OpenHands Agent Server 1.49.6 has an authenticated POST
 `/api/conversations/{id}/events/sync` display projection for the exact named-role ACP
 bridge. It appends deterministic assistant display events under the SDK state lock,
 without calling `send_message`, `run`, or changing task/goal state. The adapter
-updates the most recent conversation for each role. Busy conversations are deferred.
+updates the most recent conversation for each role and any older conversation
+currently open in the browser. Busy conversations are deferred.
 SDK upgrades require revalidating the small event-router patch. Existing OpenHands
 bridge edits are preserved by before/after hash checks during installation.
 
@@ -29,8 +30,9 @@ Mirrors contain text and absolute file paths only. Media directives and Markdown
 image embeds are converted to file notices. Telegram uses text-only `sendMessage`.
 Originating Mesh replies receive download buttons; other Mesh tabs do not receive
 automatic attachment cards. Native channel attachments retain their original
-channel delivery. OpenHands retains its existing output-file capabilities; this
-adapter does not add a binary attachment protocol to ACP.
+channel delivery. OpenHands adds download links and validated image previews only
+to the originating conversation, using its existing authenticated file API.
+Published files up to 10 MB are eligible; other surfaces retain only the paths.
 
 New Mesh generated files go to `/mnt/pt-context/deliverables/mesh-<agent>/`;
 Mesh prompt uploads go to `/mnt/pt-context/job-artifacts/mesh-attachments-<runtime>/`.
@@ -55,7 +57,19 @@ or token files. The binding file is local, mode 0600. Unknown owners and roles a
 not auto-enrolled. Additional tools need an explicit adapter and owner binding;
 sharing a model or a MemPalace identity alone cannot synchronize their UI.
 
-Install from the reviewed task checkout with:
+Object-shaped credential references are not resolved by this adapter. Those
+accounts remain unsent until their runtime integration is qualified; do not copy
+tokens into configuration to work around that boundary.
+
+The source adapter is opt-in. The October 14 host inspection found no installed
+conversation-sync extension or enabled plugin entry, and neither pinned OpenHands
+runtime path was present. Merging this source does not activate mirroring. Before
+activation, qualify the actual SDK/Canvas versions, refresh the reviewed
+bridge/router evidence against current files, and verify credential compatibility.
+The installer checks pinned dependencies and reviewed source before copying plugin
+files; it does not provision missing runtimes.
+
+Install only from an independently reviewed task checkout with:
 
 ```
 python3 conversation_sync/install.py --evidence /mnt/pt-context/job-artifacts/agent-chat-sync-20261003

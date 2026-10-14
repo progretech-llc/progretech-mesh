@@ -14,7 +14,7 @@ export function route(ctx, config) {
     if (!binding || sender!==String(binding.owner)) return null;
     return {agent,origin:'telegram',session:key,project:'ProgreTech'};
   }
-  if ((tail==='main' || tail.startsWith('dashboard:')) && (!ctx.channel || ['webchat','openclaw'].includes(ctx.channel)))
+  if ((tail==='main' || tail.startsWith('dashboard:') || tail.startsWith('explicit:')) && (!ctx.channel || ['webchat','openclaw'].includes(ctx.channel)))
     return {agent,origin:'openclaw',session:key,project:'ProgreTech'};
   return null;
 }
@@ -29,7 +29,16 @@ export function finalText(messages) {
 }
 export const eventKey=(ctx,event)=>ctx.runId || event.currentUserMessageId || crypto.createHash('sha256').update(ctx.sessionKey+'\0'+event.prompt).digest('hex');
 export function chunks(text, size=3400) {
-  const chars=Array.from(text),out=[];
-  for(let i=0;i<chars.length;i+=size)out.push(chars.slice(i,i+size).join(''));
+  const out=[];let chunk='';
+  for(const character of text){if(chunk.length+character.length>size){out.push(chunk);chunk='';}chunk+=character;}
+  if(chunk)out.push(chunk);
   return out;
+}
+
+export function telegramBinding(event,ctx,config,outbound=false){
+  if(ctx.channelId!=='telegram')return null;
+  const normalize=value=>String(value??'').replace(/^telegram:/,'');
+  const target=normalize(outbound?event.to:(ctx.conversationId||event.from));
+  const sender=normalize(event.senderId||event.from);
+  return config.telegram?.find(b=>config.agents?.includes(b.agent) && b.account===(ctx.accountId||'default') && String(b.owner)===target && (outbound || String(b.owner)===sender)) || null;
 }

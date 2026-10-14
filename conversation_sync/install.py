@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parent
 HOME=Path.home()
+ARTIFACT_ROOT=Path("/mnt/pt-context/job-artifacts")
 
 
 def write(path,text):
@@ -22,16 +23,20 @@ def backup(path,folder):
 def install(evidence):
     if not os.path.ismount('/mnt/pt-context'):raise RuntimeError('PT_CONTEXT unavailable')
     evidence=Path(evidence).resolve()
-    if not evidence.is_relative_to('/mnt/pt-context/job-artifacts'):raise ValueError('Evidence must be on PT_CONTEXT')
-    private=evidence/'private-backup';private.mkdir(parents=True,exist_ok=True,mode=0o700);private.chmod(0o700)
-    extension=HOME/'.openclaw/extensions/progretech-conversation-sync';extension.mkdir(parents=True,exist_ok=True)
-    for name in ['index.js','hooks.js','client.js','store.py','openhands_sync.py','openhands_server.py','openclaw.plugin.json','package.json']:
-        dest=extension/name
-        if dest.exists():backup(dest,private)
-        shutil.copy2(ROOT/name,dest)
-    modules=extension/'node_modules';modules.mkdir(exist_ok=True)
-    if not (modules/'openclaw').exists():(modules/'openclaw').symlink_to(HOME/'.openclaw/tools/node-v24.21.0/lib/node_modules/openclaw')
-    binding_path=Path('/mnt/pt-context/agents/shared/conversation-sync/config.json');binding_path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+    if not evidence.is_relative_to(ARTIFACT_ROOT):raise ValueError('Evidence must be on PT_CONTEXT')
+    # Check pinned runtimes and reviewed source before copying any plugin files.
+    sdk=HOME/'.local/share/uv/tools/openhands-agent-server/lib/python3.12/site-packages'
+    if not (sdk/'openhands_sdk-1.49.6.dist-info').exists():raise RuntimeError('Revalidate OpenHands SDK version')
+    canvas=HOME/'.local/share/progretech-openhands/node_modules/@openhands/agent-canvas'
+    if json.loads((canvas/'package.json').read_text())['version']!='1.24.0':raise RuntimeError('Revalidate Agent Canvas attachment UI')
+    markup=(canvas/'build/index.html').read_text()
+    if '</body>' not in markup:raise RuntimeError('Unexpected Agent Canvas HTML')
+    bridge=HOME/'software-factory-setup/openhands-20260928/integration/factory_acp.py'
+    router=sdk/'openhands/agent_server/event_router.py'
+    for target,prefix in [(bridge,'openhands'),(router,'event-router')]:
+        before=(evidence/(prefix+'-before.py')).read_bytes()
+        after=(evidence/(prefix+'-after.py')).read_bytes()
+        if target.read_bytes() not in (before,after):raise RuntimeError('Reviewed OpenHands source changed; rebase the patch')
     runtime_path=HOME/'.openclaw/openclaw.json';runtime_before=runtime_path.read_bytes();runtime=json.loads(runtime_before)
     telegram=runtime.get('channels',{}).get('telegram',{});accounts=telegram.get('accounts',{})
     default_owners=accounts.get('default',{}).get('allowFrom',[])
@@ -42,6 +47,15 @@ def install(evidence):
         owners=accounts[account].get('allowFrom',default_owners)
         if len(owners)!=1 or not str(owners[0]).isdigit():raise ValueError('An unambiguous existing owner binding is required')
         bindings.append({'agent':row['agentId'],'account':account,'owner':str(owners[0])})
+    private=evidence/'private-backup';private.mkdir(parents=True,exist_ok=True,mode=0o700);private.chmod(0o700)
+    extension=HOME/'.openclaw/extensions/progretech-conversation-sync';extension.mkdir(parents=True,exist_ok=True)
+    for name in ['index.js','hooks.js','client.js','store.py','openhands_sync.py','openhands_server.py','openclaw.plugin.json','package.json']:
+        dest=extension/name
+        if dest.exists():backup(dest,private)
+        shutil.copy2(ROOT/name,dest)
+    modules=extension/'node_modules';modules.mkdir(exist_ok=True)
+    if not (modules/'openclaw').exists():(modules/'openclaw').symlink_to(HOME/'.openclaw/tools/node-v24.21.0/lib/node_modules/openclaw')
+    binding_path=Path('/mnt/pt-context/agents/shared/conversation-sync/config.json');binding_path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
     if binding_path.exists():backup(binding_path,private)
     write(binding_path,json.dumps({'agents':list(runtime['agents']['entries']),'telegram':bindings,'openhands':True},indent=2)+'\n')
     # Apply the reviewed bridge diff to the current file, never replacing another task's edits.
@@ -57,6 +71,14 @@ def install(evidence):
     if router.read_bytes()!=after:
         if router.read_bytes()!=before:raise RuntimeError('OpenHands event router changed; rebase the reviewed patch')
         backup(router,private);write(router,after.decode())
+    canvas=HOME/'.local/share/progretech-openhands/node_modules/@openhands/agent-canvas'
+    if json.loads((canvas/'package.json').read_text())['version']!='1.24.0':raise RuntimeError('Revalidate Agent Canvas attachment UI')
+    index=canvas/'build/index.html';markup=index.read_text()
+    tag='<script src="/progretech-files.js" defer></script>'
+    if tag not in markup:
+        if '</body>' not in markup:raise RuntimeError('Unexpected Agent Canvas HTML')
+        backup(index,private);write(index,markup.replace('</body>',tag+'</body>'))
+    shutil.copy2(ROOT/'openhands-files.js',canvas/'build/progretech-files.js')
     backup(runtime_path,private)
     runtime.setdefault('plugins',{}).setdefault('entries',{})['progretech-conversation-sync']={'enabled':True}
     if runtime_path.read_bytes()!=runtime_before:raise RuntimeError('Runtime settings changed during installation; rebase configuration')
