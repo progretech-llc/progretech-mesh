@@ -73,6 +73,12 @@ Five recorded agent errors in the recent upstream breaker window pause the offic
 
 ## Bounded task tool for native agents
 
+Task comments and matching events carry a host-owned origin. `native-tool` means
+the bounded CLI accepted an update against the current task, actor and run
+capability; `native-reply` means the host parsed the model’s final response.
+Public requests and model JSON cannot choose these origins. A completion claim
+alone is not evidence that a native tool ran.
+
 Each admitted actor receives a command for `control_center/office_task.py` with
 a capability scoped to its current task, actor and execution lease. Through its
 normal native command tool it may send one JSON object on stdin:

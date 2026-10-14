@@ -77,10 +77,10 @@ function dependencies(id, deps) {
   const visit=(key,seen=new Set())=>{if(key===id)throw Error('dependency_cycle');if(seen.has(key))return;seen.add(key);const t=tasks.find(t=>t.id===key);if(!t)throw Error('dependency_not_found');for(const d of t.dependsOn||[])visit(d,seen);};
   for(const dep of deps)visit(dep);
 }
-function comment(t,text,author,kind='comment') {
-  const entry={id:randomUUID(),author,text:text.slice(0,6000),kind,createdAt:now()};
+function comment(t,text,author,kind='comment',source='host') {
+  const entry={id:randomUUID(),author,text:text.slice(0,6000),kind,source,createdAt:now()};
   hive.patchTask(t.id,{comments:[...(t.comments||[]),entry].slice(-200),updatedAt:now()});
-  log({kind:'task.'+kind,taskId:t.id,agentId:author,summary:text.slice(0,1000)});
+  log({kind:'task.'+kind,taskId:t.id,agentId:author,source,commentId:entry.id,summary:text.slice(0,1000)});
 }
 // Additive migration: preserve legacy IDs, assignments and unknown ledger fields.
 for(const t of hive.tasks().tasks)if(!t.stage)hive.patchTask(t.id,{stage:stageOf(t),order:t.order??0,comments:t.comments||[]});
@@ -345,14 +345,17 @@ switch (body.operation) {
   case "mission.update": {
     const t=getTask(args.id);
     if(!args.runId || t.runId!==args.runId || t.activeAgent!==args.actor)throw Error('mission_lease_invalid');
-    if(args.action==='comment')comment(t,args.text,args.actor);
+    // Internal callers supply origin; public schemas and model decisions reject it.
+    const source=args.source || 'native-reply';
+    if(!['native-tool','native-reply'].includes(source))throw Error('invalid_mission_update');
+    if(args.action==='comment')comment(t,args.text,args.actor,'comment',source);
     else if(args.action==='question') {
       hive.patchTask(t.id,{pendingDecision:{action:'question',text:args.text,actor:args.actor},updatedAt:now()});
-      comment(t,args.text,args.actor,'question');
+      comment(t,args.text,args.actor,'question',source);
     } else if(args.action==='delegate') {
       if(args.actor!==t.coordinator)throw Error('scrum_master_required');agent(args.to);
       hive.patchTask(t.id,{pendingDecision:{action:'delegate',to:args.to,text:args.text},updatedAt:now()});
-      comment(t,args.text,args.actor,'assignment');
+      comment(t,args.text,args.actor,'assignment',source);
     } else throw Error('invalid_mission_update');
     result={saved:true};break;
   }

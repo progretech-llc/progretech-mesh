@@ -15,7 +15,7 @@ def update(home, office, task, actor, run, payload):
         raise ValueError('invalid_mission_update')
     if 'to' in payload and (not isinstance(payload['to'],str) or len(payload['to'])>80):
         raise ValueError('invalid_mission_update')
-    result=engine(home,office,'mission.update',{'id':task,'actor':actor,'runId':run,**payload})
+    result=engine(home,office,'mission.update',{'id':task,'actor':actor,'runId':run,**payload,'source':'native-tool'})
     return result['result']
 
 

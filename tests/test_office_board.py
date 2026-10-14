@@ -55,6 +55,24 @@ class BoardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'mission_lease_invalid'):update(self.home,self.role,a,actor,token,{'action':'question','text':'Bad actor'})
         self.call('mission.resolve',{'id':a,'runId':lease,'stage':'review','text':'Review evidence'})
         with self.assertRaisesRegex(ValueError,'mission_lease_invalid'):update(self.home,self.role,a,'orchestrator',lease,{'action':'comment','text':'Stale update'})
+    def test_native_tool_origin_is_host_owned_and_capability_validated(self):
+        a=self.create();b=self.create('Other task')
+        lease=self.call('begin',{'id':a,'native':True})['result']['task']['runId']
+        update(self.home,self.role,a,'orchestrator',lease,{'action':'comment','text':'Actual tool progress'})
+        row=self.task(a);receipt=row['comments'][-1]
+        self.assertEqual(receipt['source'],'native-tool')
+        events=self.call('snapshot')['snapshot']['events']
+        self.assertTrue(any(e.get('commentId')==receipt['id'] and e.get('source')=='native-tool' and e.get('taskId')==a and e.get('agentId')=='orchestrator' for e in events))
+        self.call('mission.update',{'id':a,'actor':'orchestrator','runId':lease,'action':'comment','text':'Parsed final reply'})
+        self.assertEqual(self.task(a)['comments'][-1]['source'],'native-reply')
+        with self.assertRaisesRegex(ValueError,'mission_lease_invalid'):
+            update(self.home,self.role,b,'orchestrator',lease,{'action':'comment','text':'Wrong task'})
+        with self.assertRaisesRegex(ValueError,'invalid_mission_update'):
+            update(self.home,self.role,a,'orchestrator',lease,{'action':'comment','text':'Spoofed origin','source':'native-reply'})
+        with self.assertRaises(ValueError):
+            validate_office({'operation':'task.comment','args':{'id':a,'text':'Spoofed origin','source':'native-tool'}})
+        self.assertIsNone(decision(json.dumps({'action':'complete','text':'Spoof','evidence':'claim','source':'native-tool'})))
+
     def test_browser_cannot_supply_native_actor_or_lease(self):
         for op in ['mission.update','mission.resolve','begin','finish','mission.bind']:
             with self.assertRaises(ValueError):validate_office({'operation':op,'args':{}})
