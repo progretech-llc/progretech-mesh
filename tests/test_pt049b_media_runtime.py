@@ -3,6 +3,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import mesh_media_runtime as rt
 import json
+import importlib.util
 import tempfile
 import subprocess
 import sys
@@ -30,6 +31,20 @@ class TestPT049BMediaRuntime(unittest.TestCase):
             with self.subTest(lease=lease), patch.object(rt.subprocess,'check_output',return_value=json.dumps({'ok':True,'busy':True,'lease':lease})):
                 with self.assertRaisesRegex(RuntimeError,'busy'):
                     rt._image_admission_command(command,1000)
+
+    def test_generator_uses_existing_factory_model_paths_and_refuses_missing_config(self):
+        spec=importlib.util.spec_from_file_location('media_generator_fixture',rt.SCRIPTS/'media-image-generate.py')
+        generator=importlib.util.module_from_spec(spec);spec.loader.exec_module(generator)
+        with tempfile.TemporaryDirectory() as directory:
+            config=Path(directory)/'extra_model_paths.yaml'
+            with patch.object(generator,'MODEL_PATHS',config):
+                with self.assertRaisesRegex(FileNotFoundError,'model-path configuration'):
+                    generator.comfy_command(Path('/fixture/python'),8301,Path(directory)/'output')
+                config.write_text('fixture: {base_path: /approved/existing, checkpoints: .}')
+                command=generator.comfy_command(Path('/fixture/python'),8301,Path(directory)/'output')
+                self.assertEqual(command[command.index('--extra-model-paths-config')+1],str(config))
+                self.assertEqual(command[command.index('--output-directory')+1],str(Path(directory)/'output'))
+                self.assertEqual(generator.MODEL,'animagine-xl-3.1.safetensors')
 
     def test_unknown_image_backend_rejected(self):
         with patch.dict(rt.os.environ,{'FACTORY_IMAGE_DEVICE':'../../other'}):

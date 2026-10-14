@@ -95,10 +95,14 @@ def install(host, home=None):
             snapshot = result.get('snapshot')
             if snapshot:
                 director = next((row for row in snapshot.get('agents', []) if row.get('isDirector')), None)
-                native_ready = bool(director and native_binding(provider, gateway, director.get('runtime_id')))
+                binding = native_binding(provider, gateway, director.get('runtime_id')) if director else None
+                admission = mesh.chat_admission(binding) if binding else {'available':False,'reason':'office_runtime_binding_required'}
+                native_ready = bool(binding and admission['available'])
+                snapshot['nativeRuntimeBound'] = bool(binding)
                 snapshot['nativeRuntimeReady'] = native_ready
-                snapshot['runtimeReady'] = bool(snapshot.get('runtimeReady') or native_ready)
-                snapshot['runtimeMode'] = 'openclaw' if native_ready else ('crewai' if snapshot.get('runtimeReady') else 'unavailable')
+                snapshot['nativeAdmissionReason'] = admission['reason']
+                snapshot['runtimeReady'] = native_ready if binding else bool(snapshot.get('runtimeReady'))
+                snapshot['runtimeMode'] = 'openclaw' if binding else ('crewai' if snapshot.get('runtimeReady') else 'unavailable')
             return result
         if action.startswith('factory.'):
 
