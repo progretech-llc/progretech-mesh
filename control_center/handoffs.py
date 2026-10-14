@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from control_center.artifacts import catalog, public, write, ROLES
+from control_center.artifacts import catalog, public, write, ROLES, output_directory
 
 
 def validate(action,args):
@@ -162,8 +162,11 @@ class Handoffs:
                 except (ValueError,KeyError,OSError):continue
                 match=next((f for f in files if f['producer']==row['source'] and f['id'] not in row.get('baseline',[]) and f['downloadable']),None)
                 if not match:continue
+                try:destination=output_directory(self.home,self.provider.bindings[row['target']])
+                except ValueError:
+                    row.update(state='waiting',note='Publication storage unavailable; no native request admitted.');self.save();continue
                 row.update(state='dispatching',artifact=public(match));self.save()
-                text=row['text']+'\nDependency delivered by '+row['source']+': '+match['path']+'\nRead this published artifact before answering. Report what you actually reviewed. If producing files, save them under '+str(self.home/'Rend/artifacts'/row['target_role'])+'.'
+                text=row['text']+'\nDependency delivered by '+row['source']+': '+match['path']+'\nRead this published artifact before answering. Report what you actually reviewed. If producing files, save them under '+str(destination)+'.'
                 try:
                     job=self.mesh.chat(row['target'],text,**({'image_paths':[match['path']]} if Path(match['path']).suffix.lower() in {'.png','.jpg','.jpeg','.webp'} else {}));row.update(state='running',job_id=job['job_id'],note='Dependency received; follow-up admitted to the runtime queue.')
                 except ValueError as e:
@@ -236,10 +239,13 @@ class Handoffs:
                     row.update(state='complete',finished=now)
                     if row.get('experimental'):
                         from control_center.artifacts import safe
-                        output=safe(self.home,self.home/'Rend/artifacts/rend')
-                        output.mkdir(parents=True,exist_ok=True,mode=0o700)
-                        proposal=output/('group-proposal-'+row['id']+'.md')
-                        proposal.write_text('# Experimental group proposal: '+row['topic']+'\n\nParticipants: '+', '.join(m['agent'] for m in row['messages'])+'\n\nDiscussion draft for Lyra and Scrum Master. Public-source claims need verification; demo previews have not been executed by this discussion.\n\n'+row['messages'][-1]['text']+'\n')
+                        try:
+                            output=safe(self.home,output_directory(self.home,'main'))
+                            output.mkdir(parents=True,exist_ok=True,mode=0o700)
+                            proposal=output/('group-proposal-'+row['id']+'.md')
+                            proposal.write_text('# Experimental group proposal: '+row['topic']+'\n\nParticipants: '+', '.join(m['agent'] for m in row['messages'])+'\n\nDiscussion draft for Lyra and Scrum Master. Public-source claims need verification; demo previews have not been executed by this discussion.\n\n'+row['messages'][-1]['text']+'\n')
+                        except (ValueError,OSError):
+                            row.update(state='failed',note='Discussion finished but proposal publication failed; recorded messages are preserved.');self.save();continue
                         row['proposal_path']=str(proposal)
                         row['director_notified']=self.notify('Experimental group proposal for Lyra and Scrum Master: '+row['topic']+'\nPublished draft: '+str(proposal)+'\n'+ '\n'.join(m['agent']+': '+m['text'] for m in row['messages'])[:3500])
                 else:row.update(state='reply_wait')

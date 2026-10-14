@@ -143,6 +143,18 @@ class NativeWorkflowTests(BoardTests):
         row=self.task(a);self.assertTrue(row['running']);self.assertEqual(row['stage'],'blocked')
         with self.assertRaisesRegex(ValueError,'task_running'):self.call('task.delete',{'id':a})
 
+    def test_unavailable_role_controls_are_known_never_admitted(self):
+        self.role=namespace('main','host')
+        self.call('runtime.sync',{'agents':[{'runtime_id':'main','name':'Rend','role':'SRE'}],'host_runtime':'main'})
+        a=self.create();provider=SimpleNamespace(bindings={'host':'main'})
+        def rejected(*args,**kwargs):raise ValueError('runtime_controls_unavailable')
+        mesh=SimpleNamespace(chat=rejected)
+        with self.assertRaisesRegex(ValueError,'runtime_controls_unavailable'):
+            dispatch_native_mission(self.home,'main',a,'host',provider,mesh)
+        row=self.task(a);self.assertEqual(row['stage'],'blocked');self.assertFalse(row['running'])
+        self.call('task.approve',{'id':a,'answer':'Restore actual controls before retry'})
+        self.assertEqual(self.task(a)['stage'],'ready')
+
     def test_native_transport_uncertainty_preserves_run_lease(self):
         self.role=namespace('main','host')
         self.call('runtime.sync',{'agents':[{'runtime_id':'main','name':'Rend','role':'SRE'}],'host_runtime':'main'})

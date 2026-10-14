@@ -1,4 +1,5 @@
 """Local image tasks return checked files, never a model's unsupported completion claim."""
+from control_center.host_paths import factory_tool
 import hashlib
 import os
 import re
@@ -126,7 +127,7 @@ def record_activity(home,role,ident,path,digest,model,kind='generation'):
           'technical_steps':['Local provider: '+model,('Structured visual review recorded; model judgments need owner review.' if kind=='review' else 'Validated 1024x1024 PNG; visual brief compliance requires review.'),'Published '+str(path),'SHA-256: '+digest],
           'outcome':'completed','evidence':[str(path),'mesh-image-job:'+ident],'teaching_refs':[]}
     try:
-        p=subprocess.run([str(home/'Rend/bin/factory-memory-activity'),'--agent',role,'--project','ProgreTech','--event','mesh-image-job-'+ident],input=json.dumps(body),text=True,capture_output=True,timeout=30)
+        p=subprocess.run([str(factory_tool(home,'factory-memory-activity')),'--agent',role,'--project','ProgreTech','--event','mesh-image-job-'+ident],input=json.dumps(body),text=True,capture_output=True,timeout=30)
         receipt=json.loads(p.stdout)
         if p.returncode or not receipt.get('ok') or not receipt.get('recall_verified'):return {'status':'write-failed'}
         result={'status':'saved-and-recalled','memory_id':receipt['memory_id']}
