@@ -7,3 +7,5 @@ Google runs in a fixed same-origin measurement document with a generic product t
 The Google tag is fetched in browser tests; collection endpoints are intercepted locally so test events are not delivered. Coverage includes seeded private URL/title canaries, denial, grant, repeat grant, withdrawal/reload, offline transitions, storage failure and localhost. Public deployment evidence is separate from fixture evidence. The Google Analytics account/report UI is not verified by these tests.
 
 Only mesh.progretech.com is enabled. Local/offline Mesh and factory-host controls are excluded. The app CSP remains restrictive; only the fixed frame permits Google script/connect.
+
+The authenticated browser fixture deliberately returns503 for operational APIs; its refreshFleet code can report missing connected-state data. This is a fixture limitation, not a claim of a clean full-app console or hosted authenticated workflow acceptance. Analytics wire/CSP assertions are checked separately.

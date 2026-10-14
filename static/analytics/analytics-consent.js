@@ -10,7 +10,7 @@
       if(frame)return;
       frame=document.createElement("iframe");frame.src="/static/analytics/analytics-frame.html";
       frame.setAttribute("sandbox","allow-scripts allow-same-origin");frame.referrerPolicy="no-referrer";
-      frame.hidden=true;frame.title="Optional anonymous analytics";document.body.appendChild(frame);
+      frame.hidden=true;frame.title="Optional analytics";document.body.appendChild(frame);
     }else {
       if(frame){frame.remove();frame=null;}
       document.cookie.split(";").forEach(cookie=>{

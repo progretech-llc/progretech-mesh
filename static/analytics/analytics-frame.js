@@ -2,6 +2,7 @@
 (() => {
   "use strict";
   if (window === window.top || location.search || location.hash || location.protocol !== "https:" || !["mesh.progretech.com"].includes(location.hostname) || !navigator.onLine) return;
+  try { if (localStorage.getItem("progretech.analytics.consent.v1") !== "accepted") return; } catch (_) { return; }
   const ID = "G-7VCZVY3N3Z";
   const safe = {page_location: "https://mesh.progretech.com/", page_title: "ProgreTech Mesh", page_referrer: "", allow_google_signals: false, allow_ad_personalization_signals: false};
   window.dataLayer = [];
