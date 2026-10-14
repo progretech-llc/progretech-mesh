@@ -143,7 +143,9 @@ def gateway_agent_reply(cfg, role, session, text, timeout, request_id, model=Non
     meta=result.get('meta') or {}
     if not isinstance(meta,dict) or meta.get('yielded') or meta.get('continuationPending'):
         raise NativeReplyError('mesh_runtime_completion_unconfirmed',payload)
-    if any(meta.get(key) for key in ('error','aborted','replayInvalid','timedOut','timeoutPhase','terminalToolFailure')) or meta.get('modelFallbackStopReason') in {'agent_run_terminal_timeout','idle_timeout_circuit_breaker'}:
+    # OpenClaw replayInvalid also marks successful side-effecting tool runs:
+    # it forbids replay, not consumption of this exact terminal receipt.
+    if any(meta.get(key) for key in ('error','aborted','timedOut','timeoutPhase','terminalToolFailure')) or meta.get('modelFallbackStopReason') in {'agent_run_terminal_timeout','idle_timeout_circuit_breaker'}:
         raise NativeReplyError('mesh_provider_rejected',payload)
     if any(isinstance(row,dict) and row.get('isError') for row in result['payloads']):
         raise NativeReplyError('mesh_provider_rejected',payload)

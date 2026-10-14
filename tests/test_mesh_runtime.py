@@ -230,7 +230,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_gateway_success_envelope_does_not_override_native_failure_or_pending(self):
         cfg={'gateway':{'port':18789}}
-        for meta,code in [({'error':{'kind':'incomplete_turn'}},'mesh_provider_rejected'),({'aborted':True},'mesh_provider_rejected'),({'replayInvalid':True},'mesh_provider_rejected'),({'continuationPending':True},'mesh_runtime_completion_unconfirmed')]:
+        for meta,code in [({'error':{'kind':'incomplete_turn'}},'mesh_provider_rejected'),({'aborted':True},'mesh_provider_rejected'),({'replayInvalid':True,'error':{'kind':'incomplete_turn'}},'mesh_provider_rejected'),({'replayInvalid':True,'timedOut':True},'mesh_provider_rejected'),({'replayInvalid':True,'continuationPending':True},'mesh_runtime_completion_unconfirmed')]:
             payload={'runId':'mesh-id','status':'ok','result':{'meta':meta,'payloads':[{'text':'Claimed done'}]}}
             with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))):
                 with self.assertRaisesRegex(ValueError,'^'+code+'$'):gateway_agent_reply(cfg,'coder','agent:coder:mesh-chat:x','bounded',30,'id')
@@ -241,6 +241,17 @@ class RuntimeTests(unittest.TestCase):
         with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))):
             with self.assertRaisesRegex(ValueError,'^mesh_reply_incomplete$'):
                 gateway_agent_reply(cfg,'coder','agent:coder:mesh-chat:x','bounded',30,'id')
+
+    def test_successful_side_effecting_native_turn_is_consumed_once_not_replayed(self):
+        payload={'runId':'mesh-id','status':'ok','result':{'meta':{'replayInvalid':True,'finalAssistantVisibleText':'Verified terminal decision'},'payloads':[{'text':'Verified terminal decision'}]}}
+        with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))) as run:
+            self.assertEqual(gateway_agent_reply({'gateway':{'port':18789}},'coder','agent:coder:mesh-chat:x','bounded',30,'id'),'Verified terminal decision')
+            self.assertEqual(run.call_count,1)
+        payload['result']['payloads'].append({'text':'fatal native failure','isError':True})
+        with patch('control_center.mesh_runtime.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(payload))) as run:
+            with self.assertRaisesRegex(ValueError,'^mesh_provider_rejected$'):
+                gateway_agent_reply({'gateway':{'port':18789}},'coder','agent:coder:mesh-chat:x','bounded',30,'id')
+            self.assertEqual(run.call_count,1)
 
     def test_http_timeout_is_unconfirmed_not_cancellation(self):
         self.runtime.open=lambda *a,**k:(_ for _ in ()).throw(TimeoutError('private diagnostic'))
