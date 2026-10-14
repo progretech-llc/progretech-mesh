@@ -5,6 +5,14 @@ from PIL import Image, ImageStat
 
 COMFY=Path.home()/".local/share/rend/runtimes/comfyui-rocm/ComfyUI"
 MODEL="animagine-xl-3.1.safetensors"
+MODEL_PATHS=Path.home()/"ptinternal/factory/extra_model_paths.yaml"
+
+def comfy_command(python, prt, out):
+    if not MODEL_PATHS.is_file():
+        raise FileNotFoundError('Canonical factory model-path configuration unavailable')
+    return [str(python),str(COMFY/"main.py"),"--listen","127.0.0.1","--port",str(prt),
+            "--disable-auto-launch","--fp32-vae","--output-directory",str(out),
+            "--extra-model-paths-config",str(MODEL_PATHS)]
 
 def port():
     for p in range(8301,8350):
@@ -49,8 +57,9 @@ def main():
         if free<11000:
             raise RuntimeError('CUDA VRAM occupied; schedule cache release under admission before image generation')
     prt=port()
+    command=comfy_command(python,prt,out)
     log=(out/"comfyui.log").open("w")
-    proc=subprocess.Popen([str(python),str(COMFY/"main.py"),"--listen","127.0.0.1","--port",str(prt),"--disable-auto-launch","--fp32-vae","--output-directory",str(out)],
+    proc=subprocess.Popen(command,
                           cwd=COMFY,stdout=log,stderr=subprocess.STDOUT,text=True)
     def stop_requested(signum, frame):
         raise InterruptedError('image_generation_cancelled')
