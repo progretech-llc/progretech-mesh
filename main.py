@@ -1673,6 +1673,15 @@ def create_app() -> Flask:
             "base-uri 'self'; "
             "frame-ancestors 'none';",
         )
+        if request.path == "/static/analytics/analytics-frame.html":
+            # Only this empty, sandboxed document can load the optional Google tag.
+            response.headers["X-Frame-Options"] = "SAMEORIGIN"
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; script-src 'self' https://www.googletagmanager.com; "
+                "connect-src https://*.google-analytics.com https://*.analytics.google.com; "
+                "img-src https://*.google-analytics.com; frame-ancestors 'self'; base-uri 'none'"
+            )
         if response.mimetype == "text/html":
             response.headers["Cache-Control"] = "no-cache, must-revalidate"
         return response

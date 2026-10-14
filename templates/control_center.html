@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/control-center.css') }}">
   <script src="{{ url_for('static', filename='js/control-center.js') }}" defer></script>
-</head>
+<link rel="stylesheet" href="/static/analytics/analytics-consent.css"><script defer src="/static/analytics/analytics-consent.js"></script></head>
 <body>
 <div class="app cc-app" id="controlCenter" data-agent-id="{{ agent.id }}" data-connected="{{ 'true' if agent.connected and agent.verified else 'false' }}">
   <header class="topbar"><a class="brand" href="/"><div class="brand-mark" aria-hidden="true"></div><div class="brand-copy"><strong>ProgreTech Mesh</strong><span>ProgreTech Control Center</span></div></a><a class="ghost-btn" href="/">← Agent fleet</a></header>
