@@ -1,4 +1,11 @@
 """Version-pinned Agent Server display projection; never calls run/send_message."""
+import base64
+import mimetypes
+import os
+import re
+import stat
+from itertools import islice
+from urllib.parse import quote
 import asyncio
 import json
 import shlex
@@ -6,6 +13,11 @@ import uuid
 from pathlib import Path
 from store import Store
 
+DELIVERABLE_ROOT=Path('/mnt/pt-context/deliverables')
+MAX_ATTACHMENT_FILES=4
+MAX_ATTACHMENT_CANDIDATES=32
+MAX_ATTACHMENT_BYTES=10*1024*1024
+MAX_TOTAL_ATTACHMENT_BYTES=10*1024*1024
 BRIDGE=str(Path.home()/'software-factory-setup/openhands-20260928/integration/factory_acp.py')
 
 
@@ -18,6 +30,43 @@ def role_for(agent):
     role={'rend':'main','lyra':'researcher','mak':'coder'}.get(command[index],command[index])
     config=json.loads(Path('/mnt/pt-context/agents/shared/conversation-sync/config.json').read_text())
     return role if role in config.get('agents',[]) else None
+
+
+def origin_files(text):
+    """Only actual published files can become origin-only attachment cards."""
+    from openhands.sdk.llm import TextContent, ImageContent
+    prefix=re.escape(str(DELIVERABLE_ROOT))
+    candidates=re.finditer(prefix+r'/[^\s`<>"\)]+',text)
+    content=[];seen=set();files=0;total_bytes=0
+    for match in islice(candidates,MAX_ATTACHMENT_CANDIDATES):
+        if files>=MAX_ATTACHMENT_FILES or total_bytes>=MAX_TOTAL_ATTACHMENT_BYTES:break
+        value=match.group()
+        path=Path(value.rstrip('.,;'))
+        if path in seen:continue
+        seen.add(path)
+        if not path.is_relative_to(DELIVERABLE_ROOT) or '..' in path.parts:continue
+        if any(p.is_symlink() for p in [path,*path.parents]):continue
+        try:
+            fd=os.open(path,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0))
+            with os.fdopen(fd,'rb') as stream:
+                info=os.fstat(stream.fileno())
+                remaining=MAX_TOTAL_ATTACHMENT_BYTES-total_bytes
+                if not stat.S_ISREG(info.st_mode) or not 0<info.st_size<=min(MAX_ATTACHMENT_BYTES,remaining):continue
+                data=stream.read(info.st_size+1)
+                if len(data)!=info.st_size:continue
+        except OSError:continue
+        files+=1;total_bytes+=len(data)
+        label=path.name.replace('[','').replace(']','')
+        content.append(TextContent(text=f'Generated file: {path}\n[Download {label}](#progretech-file={quote(str(path),safe="")})'))
+        if path.suffix.lower() in {'.png','.jpg','.jpeg','.webp','.gif'}:
+            try:
+                from PIL import Image
+                import io
+                with Image.open(io.BytesIO(data)) as image:image.verify()
+                mime=mimetypes.guess_type(path.name)[0] or 'image/png'
+                content.append(ImageContent(image_urls=['data:'+mime+';base64,'+base64.b64encode(data).decode()]))
+            except Exception:pass
+    return content
 
 
 def project_events(conversation):
@@ -36,6 +85,11 @@ def project_events(conversation):
             for row in db.pending(role,target,limit=100):
                 own=row['origin']=='openhands' and sid and row['session'].endswith(':'+sid)
                 ident=str(uuid.uuid5(uuid.NAMESPACE_URL,'progretech-sync:'+str(conversation.id)+':'+str(row['seq'])))
+                if own and row['speaker']=='assistant' and ident not in conversation.state.events:
+                    content=origin_files(row['text'])
+                    if content:
+                        conversation._on_event(MessageEvent(id=ident,source='agent',sender='origin-attachments',llm_message=Message(role='assistant',content=content)))
+                        count+=1
                 if not own and ident not in conversation.state.events:
                     label='You' if row['speaker']=='user' else role if row['speaker']=='assistant' else 'Task status'
                     event=MessageEvent(id=ident,source='agent',sender='conversation-sync',llm_message=Message(role='assistant',content=[TextContent(text=f"[{row['origin']} · {label} · #{row['seq']}]\n{row['text']}")]))
