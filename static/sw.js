@@ -1,10 +1,12 @@
-const CACHE_NAME = "progretech-mesh-shell-v20-agent-tools";
+const CACHE_NAME = "progretech-mesh-shell-v21-optional-analytics";
 // Retain the prior cache marker for release-contract and rollback checks.
 const LEGACY_CACHE_NAME = "progretech-mesh-shell-v13-all-avatars";
 const SHELL_ASSETS = [
   "/",
   "/how-it-works",
   "/static/css/app.css",
+  "/static/analytics/analytics-consent.js",
+  "/static/analytics/analytics-consent.css",
   "/static/js/app.js",
   "/static/js/avatars.js?v=moxy-teal-20261007",
   "/static/js/agent-management.js",
