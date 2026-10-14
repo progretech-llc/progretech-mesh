@@ -1,5 +1,20 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
 const context={window:{},Date,setTimeout};vm.runInNewContext(readFileSync(new URL('../static/js/runtime-client.js',import.meta.url),'utf8'),context);const api=context.window.MeshRuntime;
+test('unmanaged native chat does not require optional scheduler controls',()=>{
+ const agent={mesh_runtime:{chat_available:true,controls_available:false,sleeping:null,scheduler:'unmanaged'}};
+ assert.equal(api.canStartConversation(agent),true);
+ assert.equal(api.canStartConversation({mesh_runtime:{...agent.mesh_runtime,chat_available:false}}),false);
+ assert.equal(api.canStartConversation({mesh_runtime:{controls_available:true}}),false);
+ assert.equal(api.canStartConversation({}),false);
+});
+test('Factory readiness text never promotes a binding or failed admission to ready',()=>{
+ assert.match(api.officeReadinessNotice({nativeRuntimeBound:true,nativeRuntimeReady:true}),/can accept tasks/);
+ assert.match(api.officeReadinessNotice({nativeRuntimeBound:true,nativeRuntimeReady:false,nativeAdmissionReason:'mesh_agent_sleeping'}),/paused or sleeping/);
+ const unavailable=api.officeReadinessNotice({nativeRuntimeBound:true,nativeRuntimeReady:false,runtimeReady:true,nativeAdmissionReason:'runtime_controls_unavailable'});
+ assert.match(unavailable,/admission is unavailable/);assert.doesNotMatch(unavailable,/can accept tasks|provider is ready/);
+ assert.match(api.officeReadinessNotice({nativeRuntimeBound:true}),/admission is unavailable/);
+ assert.match(api.officeReadinessNotice({}),/Connect your OpenClaw agents/);
+});
 test('fleet and Factory use identical state and last-event color',()=>{
  const fleet=[{id:'rend--coder',runtime_id:'coder',state:'idle',transport:'connected',mesh_runtime:{sleeping:false},last_event:{type:'heartbeat',payload:{}}}];
  const floor=api.factoryAgent({id:'mak',runtime_id:'coder',state:'unknown'},fleet,'rend');

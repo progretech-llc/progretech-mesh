@@ -122,5 +122,15 @@
     const result=await run(agent,'runtime.recover',{},progress);
     return (result.steps || []).map(s=>s.name+' · '+s.state+': '+s.detail).join('\n')+'\n'+result.note;
   }
-  window.MeshRuntime={history,request,run,errors,indicator,workLabel,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice};
+  function canStartConversation(agent={}) {
+    return agent.mesh_runtime?.chat_available===true;
+  }
+  function officeReadinessNotice(snapshot={}) {
+    if(snapshot.nativeRuntimeReady)return 'The selected OpenClaw agent can accept tasks. Pausing stops coordination at the next agent step.';
+    if(snapshot.nativeRuntimeBound)return snapshot.nativeAdmissionReason==='mesh_agent_sleeping'
+      ? 'The selected agent is paused or sleeping. Resume it through its configured scheduler before starting work.'
+      : 'The selected agent is connected, but host admission is unavailable. Check its runtime and configured scheduler; tasks remain on the board.';
+    return snapshot.runtimeReady?'The host execution provider is ready.':'Connect your OpenClaw agents before starting work. You can organize tasks now.';
+  }
+  window.MeshRuntime={history,request,run,errors,indicator,workLabel,memoryLabel,recover,terminalDirection,factoryAgent,factoryRoster,unifiedOffice,canStartConversation,officeReadinessNotice};
 })();

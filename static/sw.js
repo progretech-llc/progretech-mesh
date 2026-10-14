@@ -1,4 +1,4 @@
-const CACHE_NAME = "progretech-mesh-shell-v18-scrum-factory";
+const CACHE_NAME = "progretech-mesh-shell-v19-gateway-capabilities";
 // Retain the prior cache marker for release-contract and rollback checks.
 const LEGACY_CACHE_NAME = "progretech-mesh-shell-v13-all-avatars";
 const SHELL_ASSETS = [
