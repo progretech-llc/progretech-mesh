@@ -9,6 +9,7 @@ import threading
 import time
 from pathlib import Path
 from control_center.file_lock import lock, unlock
+from control_center.host_paths import factory_tool
 
 SPECKLET_OBSERVER=None
 
@@ -107,7 +108,7 @@ def dispatch_native_mission(home, role, task_id, gateway, provider, mesh):
 def dispatch_office(home, role, args, agent_id=None):
     validate_office(args)
     if args['operation'] == 'workday.control':
-        body=args['args']; command=[str(Path(home)/'Rend/bin/factory-workday'),body['action'],'--agent',body['role']]
+        body=args['args']; command=[str(factory_tool(home,'factory-workday')),body['action'],'--agent',body['role']]
         if body['action']=='sleep': command += ['--for',body['duration']]
         result=subprocess.run(command,capture_output=True,text=True,timeout=90,check=False)
         if result.returncode: raise ValueError('workday_control_failed')

@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from urllib.error import URLError, HTTPError
 from urllib.request import Request, urlopen
+from control_center.host_paths import factory_tool
 
 
 _CONTROL_CACHE = {}
@@ -58,7 +59,7 @@ def role_controls(home, refresh=False):
     with _CONTROL_LOCK:
         saved=_CONTROL_CACHE.get(key)
         if saved and not refresh and time.monotonic()-saved[0]<1:return copy.deepcopy(saved[1])
-        command=Path(home)/'Rend/bin/factory-workday'
+        command=factory_tool(home,'factory-workday')
         if not command.is_file():raise ValueError('runtime_controls_unavailable')
         result=subprocess.run([str(command),'status'],capture_output=True,text=True,timeout=10)
         if result.returncode:raise ValueError('runtime_controls_unavailable')
@@ -297,7 +298,7 @@ class MeshRuntime:
     def control(self, agent, awake):
         role=ROLE_NAMES.get(self.provider.bindings[agent])
         if not role:raise ValueError('runtime_controls_unavailable')
-        result=subprocess.run([str(self.home/'Rend/bin/factory-workday'),'resume' if awake else 'pause','--agent',role],capture_output=True,text=True,timeout=90)
+        result=subprocess.run([str(factory_tool(self.home,'factory-workday')),'resume' if awake else 'pause','--agent',role],capture_output=True,text=True,timeout=90)
         if result.returncode:raise ValueError('runtime_control_failed')
         rows=role_controls(self.home,refresh=True)
         if role not in rows or is_sleeping(rows[role])==awake:raise ValueError('runtime_control_not_confirmed')
