@@ -9,6 +9,28 @@ import sys
 from pathlib import Path
 
 class TestPT049BMediaRuntime(unittest.TestCase):
+    def setUp(self):
+        self.admission=patch.object(rt, '_image_admission_command', side_effect=lambda command,timeout:command)
+        self.admission.start(); self.addCleanup(self.admission.stop)
+
+    def test_image_admission_wraps_direct_caller_and_preserves_owned_lease(self):
+        self.admission.stop()
+        command=['fixture-python','fixture-generator']
+        with patch.object(rt.subprocess,'check_output',return_value='{"ok":true,"busy":false,"lease":{}}'), patch.dict(rt.os.environ,{},clear=True):
+            wrapped=rt._image_admission_command(command,1000)
+            self.assertEqual(Path(wrapped[0]).name,'factory-heavy-command')
+            self.assertIn('--owned-backend',wrapped)
+            self.assertEqual(wrapped[-2:],command)
+            self.assertEqual(wrapped[wrapped.index('--role')+1],'imagen')
+            self.assertEqual(wrapped[wrapped.index('--timeout')+1],'970')
+        receipt={'ok':True,'busy':True,'lease':{'state':'active','pid':rt.os.getpid()}}
+        with patch.object(rt.subprocess,'check_output',return_value=json.dumps(receipt)):
+            self.assertEqual(rt._image_admission_command(command,1000),command)
+        for lease in ({'state':'uncertain','pid':rt.os.getpid()}, {'state':'active','pid':99999999}):
+            with self.subTest(lease=lease), patch.object(rt.subprocess,'check_output',return_value=json.dumps({'ok':True,'busy':True,'lease':lease})):
+                with self.assertRaisesRegex(RuntimeError,'busy'):
+                    rt._image_admission_command(command,1000)
+
     def test_unknown_image_backend_rejected(self):
         with patch.dict(rt.os.environ,{'FACTORY_IMAGE_DEVICE':'../../other'}):
             with self.assertRaisesRegex(ValueError,'Unsupported'):
@@ -43,7 +65,7 @@ class TestPT049BMediaRuntime(unittest.TestCase):
         with patch.dict(rt.os.environ,{},clear=True):
             self.assertIn('comfyui-rocm',str(rt._image_python()))
         with patch.dict(rt.os.environ,{'FACTORY_IMAGE_DEVICE':'cuda'}):
-            self.assertIn('comfyui-cuda',str(rt._image_python()))
+            self.assertEqual(rt._image_python(),Path('/mnt/pt-context/factory/runtime/comfyui-cuda/bin/python'))
         with patch.dict(rt.os.environ,{'FACTORY_IMAGE_DEVICE':'rocm'}):
             self.assertIn('comfyui-rocm',str(rt._image_python()))
 

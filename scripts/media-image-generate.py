@@ -29,7 +29,7 @@ def main():
         ancestors.add(ancestor)
         if ancestor<=1: break
         ancestor=int(Path(f'/proc/{ancestor}/stat').read_text().rsplit(')',1)[1].split()[1])
-    if not lease.get('ok') or not lease.get('busy') or lease.get('lease',{}).get('pid') not in ancestors:
+    if not lease.get('ok') or not lease.get('busy') or lease.get('lease',{}).get('state') != 'active' or lease.get('lease',{}).get('pid') not in ancestors:
         raise RuntimeError('Image generation requires an owned factory-heavy-command admission lease')
     out=Path(a.output_dir).resolve()
     if not out.is_relative_to(Path('/mnt/pt-context/job-artifacts')):
@@ -37,7 +37,8 @@ def main():
     if subprocess.check_output(['findmnt','-n','-o','TARGET','-T','/mnt/pt-context'],text=True,timeout=10).strip()!='/mnt/pt-context':
         raise RuntimeError('PT_CONTEXT unavailable')
     out.mkdir(parents=True,exist_ok=True)
-    python=Path.home()/f'.local/share/rend/runtimes/comfyui-{a.device}/bin/python'
+    python=(Path('/mnt/pt-context/factory/runtime/comfyui-cuda/bin/python') if a.device=='cuda'
+            else Path.home()/'.local/share/rend/runtimes/comfyui-rocm/bin/python')
     # Device selection must be observable; never silently fall back to CPU/AMD.
     probe="import torch,json; print(json.dumps({'cuda':torch.version.cuda,'hip':torch.version.hip,'available':torch.cuda.is_available(),'name':torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}))"
     device=json.loads(subprocess.check_output([str(python),'-c',probe],text=True,timeout=45))

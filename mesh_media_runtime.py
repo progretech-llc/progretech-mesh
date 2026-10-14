@@ -19,13 +19,36 @@ def _image_python():
     device=os.environ.get('FACTORY_IMAGE_DEVICE','rocm')
     if device not in {'cuda','rocm'}:
         raise ValueError('Unsupported image backend')
-    return Path.home()/f'.local/share/rend/runtimes/comfyui-{device}/bin/python'
+    if device == 'cuda':
+        return Path('/mnt/pt-context/factory/runtime/comfyui-cuda/bin/python')
+    return Path.home()/'.local/share/rend/runtimes/comfyui-rocm/bin/python'
 
 def _require_output_root():
     if subprocess.check_output(['findmnt','-n','-o','TARGET','-T','/mnt/pt-context'],text=True,timeout=10).strip()!='/mnt/pt-context':
         raise RuntimeError('PT_CONTEXT unavailable; no alternate artifact destination')
     if not OUT_ROOT.resolve().is_relative_to(Path('/mnt/pt-context/job-artifacts')):
         raise ValueError('Invalid artifact destination')
+
+def _image_admission_command(command, timeout):
+    helper = Path.home() / 'ptinternal/bin/factory-admission'
+    status = json.loads(subprocess.check_output([str(helper), 'status'], text=True, timeout=10))
+    ancestors=set(); pid=os.getpid()
+    for _ in range(64):
+        ancestors.add(pid)
+        if pid <= 1: break
+        pid=int(Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[1])
+    lease=status.get('lease', {})
+    if not status.get('ok'):
+        raise RuntimeError('Image admission unavailable')
+    if status.get('busy'):
+        if lease.get('state') == 'active' and lease.get('pid') in ancestors:
+            return command
+        raise RuntimeError('Image admission busy; backend not started')
+    return [str(Path.home()/'ptinternal/bin/factory-heavy-command'),
+            '--role', os.environ.get('FACTORY_ADMISSION_ROLE', 'imagen'),
+            '--project', os.environ.get('FACTORY_PROJECT', 'ProgreTech'),
+            '--task', 'mesh-image-generation', '--timeout', str(max(1, min(3600, int(timeout)-30))),
+            '--admission-timeout', '0', '--owned-backend', '--', *command]
 
 def _run_backend(command, timeout):
     # Every subprocess belongs to this new session, never another factory job.
@@ -35,7 +58,9 @@ def _run_backend(command, timeout):
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
             try:
-                os.killpg(proc.pid, signal.SIGTERM)
+                # SIGINT lets the supported admission executor run its
+                # BaseException cleanup for its separately owned child group.
+                os.killpg(proc.pid, signal.SIGINT)
             except ProcessLookupError:
                 pass
             try:
@@ -116,6 +141,9 @@ def invoke_intent(intent: str, *, prompt: str | None=None, timeout: int=1800) ->
       "--output-dir",str(outdir),
     ]
 
+    if route.role == 'image_generation':
+        cmd=_image_admission_command(cmd,timeout)
+
     t0=time.monotonic()
     proc=_run_backend(cmd,timeout)
     elapsed=time.monotonic()-t0
@@ -130,10 +158,11 @@ def invoke_intent(intent: str, *, prompt: str | None=None, timeout: int=1800) ->
         except Exception:
             meta={"error":"invalid_result_json"}
 
-    owned=isinstance(artifact,str) and Path(artifact).resolve().is_relative_to(outdir.resolve())
+    owned=isinstance(artifact,str) and (route.role!='image_generation' or Path(artifact).resolve().is_relative_to(outdir.resolve()))
     ok=proc.returncode==0 and owned and Path(artifact).is_file() and Path(artifact).stat().st_size>0
     if artifact and not owned:
         meta['error']='artifact_outside_owned_job'; meta.pop('artifact',None); artifact=None
+    meta['owned_output_dir']=str(outdir.resolve())
     return MediaResult(
       ok=ok,
       role=route.role,
