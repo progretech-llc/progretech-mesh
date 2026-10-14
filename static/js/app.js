@@ -1013,7 +1013,8 @@
         <div class="agent-card-role">${agent.office_agent_id?`<button data-orchestrator="${escapeHtml(agent.id)}" ${agent.is_orchestrator?'disabled':''}>${agent.is_orchestrator?'● Scrum Master':'Make Scrum Master'}</button>`:'<span>Import into your Factory to assign a role.</span>'}</div>
         <details class="agent-card-tools"><summary>Agent tools</summary><div class="agent-tool-grid">
           ${agent.owner_bound===false?`<button data-claim-owner="${escapeHtml(agent.id)}">Claim ownership</button>`:!agent.control_center_gateway?`<button data-pair="${escapeHtml(agent.id)}" ${agent.trust_state!=='verified'?'disabled':''}>Connect gateway</button>`:''}
-          ${agent.mesh_runtime?.controls_available&&typeof agent.mesh_runtime.sleeping==='boolean'?`<button data-power="${escapeHtml(agent.id)}">${agent.mesh_runtime.sleeping?'Wake up':'Sleep'}</button><button data-new-conversation="${escapeHtml(agent.id)}">New chat</button>`:''}
+          ${agent.mesh_runtime?.controls_available&&typeof agent.mesh_runtime.sleeping==='boolean'?`<button data-power="${escapeHtml(agent.id)}">${agent.mesh_runtime.sleeping?'Wake up':'Sleep'}</button>`:''}
+          ${agent.mesh_runtime?.chat_available?`<button data-new-conversation="${escapeHtml(agent.id)}">New chat</button>`:''}
           <button data-agent-memory="${escapeHtml(agent.id)}" data-memory-name="${escapeHtml(agent.name)}">Memory search</button>
           ${agent.control_center_available?`<a href="/agents/${encodeURIComponent(agent.id)}/control-center">Control Center</a>`:''}
           ${agent.owner_bound?`<button data-ide-access="${escapeHtml(agent.id)}">Copy API relay setup</button>`:''}

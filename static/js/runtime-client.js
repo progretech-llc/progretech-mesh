@@ -18,6 +18,7 @@
     mesh_reply_timeout:'The reply timed out. Check agent activity before sending again.',
     model_memory_headroom_required:'Not enough free memory to load this model alongside current models.',
     runtime_controls_unavailable:'Shared agent controls are unavailable on this host.',
+    runtime_context_unavailable:'This host has no active-session steering integration. Send a new chat or use the native agent interface.',
     mesh_queue_timeout:'The shared model slot stayed busy. Check host activity.',
   };
   async function request(agent, action, args={}) {

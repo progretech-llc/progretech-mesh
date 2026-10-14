@@ -1,6 +1,9 @@
 """Host-owned progress jobs and shared agent availability through Factory controls."""
 import copy
 import json
+import math
+import os
+import re
 import secrets
 import subprocess
 import threading
@@ -14,6 +17,7 @@ from control_center.host_paths import factory_tool
 _CONTROL_CACHE = {}
 _CONTROL_LOCK = threading.Lock()
 ROLE_NAMES = {'main':'rend','researcher':'lyra','coder':'mak','progre':'progre','imagen':'imagen','codex':'codex','moxy':'moxy'}
+LEGACY_SCHEDULED_ROLES = {'rend','lyra','mak','progre','imagen'}
 SIGNAL_TTL_SECONDS = 900
 
 
@@ -54,17 +58,78 @@ def sync_gateway_status_file(home):
         return None
 
 
+def scheduler_record(home):
+    return Path(home)/'.progretech-mesh/scheduler-capabilities.json'
+
+
+def scheduler_configured(home):
+    # lstat distinguishes absence from unreadable metadata and dangling links.
+    for path in (Path(home)/'ptinternal/bin/factory-workday',Path(home)/'Rend/bin/factory-workday',
+                 scheduler_record(home),Path(home)/'.local/state/progretech-workday'):
+        try:path.lstat()
+        except FileNotFoundError:continue
+        return True
+    return False
+
+
+def known_scheduler_roles(home):
+    try:data=json.loads(scheduler_record(home).read_text())
+    except FileNotFoundError:
+        if scheduler_record(home).is_symlink():raise ValueError('runtime_controls_unavailable') from None
+        return set()
+    except (OSError,ValueError):raise ValueError('runtime_controls_unavailable') from None
+    if (not isinstance(data,dict) or data.get('version')!=1 or data.get('configured') is not True
+            or not isinstance(data.get('roles'),list) or len(data['roles'])>1000
+            or any(not isinstance(role,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',role) for role in data['roles'])):
+        raise ValueError('runtime_controls_unavailable')
+    return set(data['roles'])
+
+
+def remember_scheduler_roles(home, roles):
+    """Retain capability ownership, never credentials or actual pause values."""
+    path=scheduler_record(home)
+    data={'version':1,'configured':True,'roles':sorted(roles)}
+    if path.exists() and json.loads(path.read_text())==data:return
+    path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+    temporary=path.with_name(path.name+'.'+secrets.token_hex(8)+'.tmp')
+    try:
+        fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'w') as stream:
+            json.dump(data,stream);stream.flush();os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def role_controls(home, refresh=False):
     key=str(home)
     with _CONTROL_LOCK:
         saved=_CONTROL_CACHE.get(key)
         if saved and not refresh and time.monotonic()-saved[0]<1:return copy.deepcopy(saved[1])
         command=factory_tool(home,'factory-workday')
-        if not command.is_file():raise ValueError('runtime_controls_unavailable')
-        result=subprocess.run([str(command),'status'],capture_output=True,text=True,timeout=10)
-        if result.returncode:raise ValueError('runtime_controls_unavailable')
-        data=json.loads(result.stdout)
-        rows={row['role']:{k:row.get(k) for k in ('mode','until')} for row in data['controls'] if row.get('role') in ROLE_NAMES.values()}
+        if not command.is_file():
+            if scheduler_configured(home):raise ValueError('runtime_controls_unavailable')
+            return {}  # Ordinary gateway host with no optional scheduler integration.
+        try:
+            known=known_scheduler_roles(home)
+            result=subprocess.run([str(command),'status'],capture_output=True,text=True,timeout=10)
+            if result.returncode:raise ValueError('runtime_controls_unavailable')
+            data=json.loads(result.stdout)
+            if not isinstance(data,dict) or not isinstance(data.get('controls'),list) or len(data['controls'])>1000:
+                raise ValueError('runtime_controls_unavailable')
+            rows={}
+            for row in data['controls']:
+                if not isinstance(row,dict):raise ValueError('runtime_controls_unavailable')
+                role,mode,until=row.get('role'),row.get('mode'),row.get('until')
+                if (not isinstance(role,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',role)
+                        or role in rows or not isinstance(mode,str) or mode not in {'running','paused','stopped','sleeping'}
+                        or (until is not None and (type(until) not in (int,float) or not math.isfinite(until)))):
+                    raise ValueError('runtime_controls_unavailable')
+                rows[role]={'mode':mode,'until':until}
+            if known-set(rows):raise ValueError('runtime_controls_unavailable')
+            remember_scheduler_roles(home,known|set(rows))
+        except (OSError,ValueError,subprocess.SubprocessError):
+            raise ValueError('runtime_controls_unavailable') from None
         _CONTROL_CACHE[key]=(time.monotonic(),rows)
         return copy.deepcopy(rows)
 
@@ -245,16 +310,19 @@ class MeshRuntime:
         health=self.health(agent) if signal.get('severity')=='error' else None
         try: configured_model = self.config(agent)[2]
         except (OSError, ValueError, KeyError): configured_model = ''
+        admission=self.chat_admission(agent)
+        capabilities={'chat_available':admission['available'],'admission_reason':admission['reason'],
+                      'scheduler':admission['scheduler'],'active_context_available':(self.home/'.local/state/progretech-workday/activity.json').is_file()}
         try:asleep = self.sleeping(agent)
         except (ValueError,KeyError,OSError,subprocess.SubprocessError):
-            return {'specklet_enabled':specklet,'specklet_error':getattr(self.provider,'specklet_observer_error',None),'memory':memory,'scope':'agent','sleeping':None,'model':configured_model,'resident':None,'preload_available':False,'controls_available':False,'last_result':signal,'health':health}
+            return {**capabilities,'specklet_enabled':specklet,'specklet_error':getattr(self.provider,'specklet_observer_error',None),'memory':memory,'scope':'agent','sleeping':None,'model':configured_model,'resident':None,'preload_available':False,'controls_available':False,'last_result':signal,'health':health}
         try:
             model = self.model(agent)
             names = {m['name'] for m in self.api('ps').get('models',[])}
             resident = model in names
-            return {'specklet_enabled':specklet,'specklet_error':getattr(self.provider,'specklet_observer_error',None),'memory':memory,'scope':'agent', 'sleeping':asleep, 'model':model, 'resident':resident, 'preload_available':True,'controls_available':True,'last_result':signal,'health':health}
+            return {**capabilities,'specklet_enabled':specklet,'specklet_error':getattr(self.provider,'specklet_observer_error',None),'memory':memory,'scope':'agent', 'sleeping':asleep, 'model':model, 'resident':resident, 'preload_available':True,'controls_available':asleep is not None,'last_result':signal,'health':health}
         except (ValueError, KeyError, OSError, URLError):
-            return {'specklet_enabled':specklet,'specklet_error':getattr(self.provider,'specklet_observer_error',None),'memory':memory,'scope':'agent', 'sleeping':asleep, 'model':configured_model, 'resident':None, 'preload_available':False,'controls_available':True,'last_result':signal,'health':health}
+            return {**capabilities,'specklet_enabled':specklet,'specklet_error':getattr(self.provider,'specklet_observer_error',None),'memory':memory,'scope':'agent', 'sleeping':asleep, 'model':configured_model, 'resident':None, 'preload_available':False,'controls_available':asleep is not None,'last_result':signal,'health':health}
 
     def signal(self, agent, severity, code):
         with self.lock:
@@ -281,23 +349,38 @@ class MeshRuntime:
         return {'started':True,'history_preserved':True}
 
     def sleeping(self, agent):
-        role=ROLE_NAMES.get(self.provider.bindings[agent])
+        runtime=self.provider.bindings[agent]
+        role=ROLE_NAMES.get(runtime,runtime)
         rows=role_controls(self.home)
-        if role not in rows:raise ValueError('runtime_controls_unavailable')
+        if role not in rows:
+            if scheduler_configured(self.home) and (role in LEGACY_SCHEDULED_ROLES or role in known_scheduler_roles(self.home)):
+                raise ValueError('runtime_controls_unavailable')
+            return None  # Unmanaged is distinct from a confirmed awake scheduler role.
         return is_sleeping(rows[role])
 
     def chat_sleeping(self, agent):
-        # Codex and Moxy are bound OpenClaw runtimes but are not managed by the
-        # local-model workday scheduler. Missing scheduler controls do not
-        # disable their owner chat or low-priority chatter.
-        try:return self.sleeping(agent)
-        except ValueError as exc:
-            if self.provider.bindings.get(agent) in {'codex','moxy'} and str(exc)=='runtime_controls_unavailable':return False
-            raise
+        return self.sleeping(agent) is True
+
+    def chat_admission(self, agent):
+        """Describe admission capability; a binding alone is not readiness."""
+        try:
+            cfg,_,chosen=self.config(agent)
+            if not self.settings(agent).get('enabled',True):raise ValueError('mesh_enrollment_removed')
+            if not isinstance(chosen,str) or not chosen:raise ValueError('runtime_model_unavailable')
+            token=cfg.get('gateway',{}).get('auth',{}).get('token')
+            if not isinstance(token,(str,dict)) or not token:raise ValueError('runtime_auth_unavailable')
+            port=cfg.get('gateway',{}).get('port',18789)
+            if type(port) is not int or not 1<=port<=65535:raise ValueError('runtime_port_invalid')
+            asleep=self.sleeping(agent)
+            return {'available':asleep is not True,'reason':'mesh_agent_sleeping' if asleep else None,
+                    'scheduler':'unmanaged' if asleep is None else 'managed'}
+        except (OSError,ValueError,KeyError,subprocess.SubprocessError) as exc:
+            reason=str(exc) if isinstance(exc,ValueError) and str(exc).startswith(('mesh_','runtime_')) else 'runtime_controls_unavailable'
+            return {'available':False,'reason':reason,'scheduler':'unavailable'}
 
     def control(self, agent, awake):
-        role=ROLE_NAMES.get(self.provider.bindings[agent])
-        if not role:raise ValueError('runtime_controls_unavailable')
+        runtime=self.provider.bindings[agent];role=ROLE_NAMES.get(runtime,runtime)
+        if role not in role_controls(self.home):raise ValueError('runtime_controls_unavailable')
         result=subprocess.run([str(factory_tool(self.home,'factory-workday')),'resume' if awake else 'pause','--agent',role],capture_output=True,text=True,timeout=90)
         if result.returncode:raise ValueError('runtime_control_failed')
         rows=role_controls(self.home,refresh=True)
@@ -517,8 +600,9 @@ class MeshRuntime:
     def context(self, agent, text):
         """Owner instruction to an observed active session; no transcript reads."""
         if self.sleeping(agent):raise ValueError('mesh_agent_sleeping')
-        runtime=self.provider.bindings[agent];role=ROLE_NAMES[runtime]
+        runtime=self.provider.bindings[agent];role=ROLE_NAMES.get(runtime,runtime)
         file=self.home/'.local/state/progretech-workday/activity.json'
+        if not file.is_file():raise ValueError('runtime_context_unavailable')
         try:
             data=json.loads(file.read_text());row=data['agents'][role]
             if time.time()-file.stat().st_mtime>90 or row['state']!='active':raise ValueError('mesh_no_active_work')
