@@ -2799,6 +2799,29 @@ def create_app() -> Flask:
     def how_it_works():
         return render_template("how_it_works.html")
 
+    @app.get("/robots.txt")
+    def robots_txt():
+        return Response(
+            "User-agent: *\nAllow: /how-it-works\n"
+            "Disallow: /api/\nDisallow: /v1/\nDisallow: /agents/\n"
+            "Disallow: /factory/\nDisallow: /login\nDisallow: /auth/\n"
+            "Disallow: /static/analytics/\n"
+            "Sitemap: https://mesh.progretech.com/sitemap.xml\n",
+            mimetype="text/plain",
+        )
+
+    @app.get("/sitemap.xml")
+    def sitemap_xml():
+        # Only public documentation belongs here; the console requires a session.
+        # Use the fixed canonical origin, never the untrusted request Host header.
+        return Response(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            '<url><loc>https://mesh.progretech.com/how-it-works</loc></url>'
+            '</urlset>',
+            mimetype="application/xml",
+        )
+
     @app.get("/api/status")
     @require_session
     def api_status():
