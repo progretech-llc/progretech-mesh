@@ -83,6 +83,12 @@ HTTP path’s 384-token chatter cap is unavailable on this transport; the existi
 role/model configuration and bounded request timeout apply. Mesh does not extract secret values, fall back to embedded execution or
 replay a failed request. A missing terminal transport receipt preserves the
 mission lease for runtime reconciliation.
+OpenClaw's `replayInvalid` flag can accompany a successful tool-using turn: it
+means that repeating the request may repeat side effects. Mesh consumes the
+matching terminal reply once while retaining its no-replay policy. Native errors,
+error payloads, aborts, timeouts and pending continuations still prevent completion.
+Failed host jobs retain only bounded transport-owned diagnostic categories and
+flags, never native prompts, reply text or tool output.
 
 Task comments and matching events carry a host-owned origin. `native-tool` means
 the bounded CLI accepted an update against the current task, actor and run
