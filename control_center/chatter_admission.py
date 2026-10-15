@@ -8,6 +8,26 @@ from control_center.memory_search import database
 GiB = 1024**3
 
 
+def unified_gpu(device):
+    """Read AMDGPU's Fusion flag; unknown devices keep the discrete VRAM guard.
+
+    Linux uapi drm/amdgpu_drm.h: INFO_DEV_INFO=0x16, ids_flags at byte
+    136, AMDGPU_IDS_FLAGS_FUSION=1. This query allocates no GPU memory.
+    """
+    try:
+        import ctypes
+        import fcntl
+        import struct
+        node = next(iter((device/'drm').glob('renderD*')))
+        info = ctypes.create_string_buffer(144)
+        query = struct.pack('=QII16x', ctypes.addressof(info), len(info), 0x16)
+        with open('/dev/dri/'+node.name, 'rb', buffering=0) as render:
+            fcntl.ioctl(render.fileno(), 0x40206445, query)
+        return bool(struct.unpack_from('=Q', info.raw, 136)[0] & 1)
+    except (ImportError, OSError, StopIteration, ValueError):
+        return False
+
+
 def resources(mesh, agents):
     """Fail closed on missing telemetry; never evict models or alter runtime limits."""
     try:
@@ -39,7 +59,6 @@ def resources(mesh, agents):
             total_file = device/'mem_info_vram_total'
             if not total_file.is_file(): continue
             total = int(total_file.read_text())
-            if total < 2*GiB: continue  # Shared-memory GPU is covered by RAM.
             used = int((device/'mem_info_vram_used').read_text())
             # Ollama can split weights between VRAM and system RAM. Requiring
             # every non-resident model file to fit wholly in VRAM permanently
@@ -49,6 +68,14 @@ def resources(mesh, agents):
             # floor consumes half of a 2 GiB device and can reject the same
             # admitted request immediately after its model is prepared.
             reserve = max(min(GiB, total*.125), total*.1)
+            if unified_gpu(device):
+                # An APU's reserved VRAM segment is not its inference limit.
+                # Check its shared GTT budget as well as physical RAM above.
+                total = int((device/'mem_info_gtt_total').read_text())
+                used = int((device/'mem_info_gtt_used').read_text())
+                reserve = added + len(models)*2*GiB + max(8*GiB, total*.1)
+            if total <= 0 or used < 0 or used > total:
+                return False, 'Resource telemetry unavailable; chatter deferred'
             if total-used < reserve:
                 return False, 'Waiting for GPU memory headroom'
             busy = device/'gpu_busy_percent'
