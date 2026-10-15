@@ -50,6 +50,19 @@ class AdmissionTests(unittest.TestCase):
             device=Path(d)
             for name,value in [('mem_info_vram_total',16*GiB),('mem_info_vram_used',GiB)]: (device/name).write_text(str(value))
             with patch('control_center.chatter_admission.Path.glob',return_value=[device]):self.assertTrue(resources(self.mesh,['a','b'])[0])
+    def test_small_gpu_reserve_allows_prepared_model_but_keeps_pressure_guards(self):
+        with tempfile.TemporaryDirectory() as d:
+            device=Path(d)
+            (device/'mem_info_vram_total').write_text(str(2*GiB))
+            (device/'mem_info_vram_used').write_text(str(2*GiB-320*1024**2))
+            (device/'gpu_busy_percent').write_text('1')
+            with patch('control_center.chatter_admission.Path.glob',return_value=[device]):
+                self.assertTrue(resources(self.mesh,['a','b'])[0])
+                (device/'gpu_busy_percent').write_text('90')
+                self.assertEqual(resources(self.mesh,['a','b']),(False,'Waiting for GPU capacity'))
+                (device/'gpu_busy_percent').write_text('1')
+                (device/'mem_info_vram_used').write_text(str(2*GiB-128*1024**2))
+                self.assertEqual(resources(self.mesh,['a','b']),(False,'Waiting for GPU memory headroom'))
     def test_memory_scope_and_attribution_before_limit(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'memory.db'

@@ -45,7 +45,11 @@ def resources(mesh, agents):
             # every non-resident model file to fit wholly in VRAM permanently
             # blocks otherwise safe serial chatter on smaller GPUs; the RAM
             # check above already reserves the full weights and context budget.
-            if total-used < max(GiB, total*.1):
+            # Scale the fixed reserve down on small graphics devices. A 1 GiB
+            # floor consumes half of a 2 GiB device and can reject the same
+            # admitted request immediately after its model is prepared.
+            reserve = max(min(GiB, total*.125), total*.1)
+            if total-used < reserve:
                 return False, 'Waiting for GPU memory headroom'
             busy = device/'gpu_busy_percent'
             if busy.is_file() and int(busy.read_text()) > 80:
