@@ -2134,11 +2134,11 @@ ELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"
     return true;
   }
   memory(id) {
-    const result = spawnSync("/home/edwin/ptinternal/bin/factory-office-memory", [], {
+    const result = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || "/home/edwin/ptinternal/bin/factory-office-memory", [], {
       input: JSON.stringify({action:"get",subject:id,namespace:createHash("sha256").update(this.root()).digest("hex").slice(0,20)}), encoding:"utf8",timeout:15000,
       env:process.env,maxBuffer:1024*1024
     });
-    if (result.status !== 0) throw Error("hindsight_office_memory_unavailable");
+    if (result.status !== 0) return "Hindsight memory unavailable on this host; no memory was recalled. Configure the identity-bound factory memory helper.";
     return JSON.parse(result.stdout).text;
   }
   hasMemory(id) { return false; } // Memory is available on demand from Hindsight.
@@ -4298,7 +4298,7 @@ switch (body.operation) {
   case "memory.save":
     agent(args.id);
     {
-      const saved = spawnSync("/home/edwin/ptinternal/bin/factory-office-memory", [], {
+      const saved = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || "/home/edwin/ptinternal/bin/factory-office-memory", [], {
         input:JSON.stringify({action:"save",subject:args.id,namespace:createHash("sha256").update(hive.root()).digest("hex").slice(0,20),text:args.text}),encoding:"utf8",timeout:20000,
         env:process.env,maxBuffer:1024*1024
       });
