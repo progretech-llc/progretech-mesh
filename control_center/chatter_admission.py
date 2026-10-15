@@ -16,9 +16,18 @@ def resources(mesh, agents):
             return False, 'Waiting for CPU capacity'
         if psutil.swap_memory().percent > 20 and memory.available < memory.total*.25:
             return False, 'Waiting for memory pressure to subside'
-        resident = {m['name'] for m in mesh.api('ps')['models']}
-        installed = {m['name']: m['size'] for m in mesh.api('tags')['models']}
-        models = {mesh.model(a) for a in agents}
+        models = set()
+        for a in agents:
+            try:models.add(mesh.model(a))
+            except ValueError as error:
+                if str(error) != 'local_preload_unavailable':raise
+                # A gateway-managed API model has no Ollama weights to reserve.
+                # Its native provider still owns authentication and rate admission.
+                _, _, chosen = mesh.config(a)
+                if not isinstance(chosen,str) or '/' not in chosen or chosen.startswith('ollama/'):
+                    return False, 'Configured model telemetry unavailable; chatter deferred'
+        resident = {m['name'] for m in mesh.api('ps')['models']} if models else set()
+        installed = {m['name']: m['size'] for m in mesh.api('tags')['models']} if models else {}
         if any(m not in installed for m in models):
             return False, 'Waiting for configured local models to be available'
         # Both models can remain resident between serial turns. Reserve weights,
@@ -26,7 +35,7 @@ def resources(mesh, agents):
         added = sum(installed[m] * 1.3 for m in models if m not in resident)
         if memory.available < added + max(8*GiB, memory.total*.15) + len(models)*2*GiB:
             return False, 'Waiting for RAM headroom'
-        for device in Path('/sys/class/drm').glob('card[0-9]*/device'):
+        for device in (Path('/sys/class/drm').glob('card[0-9]*/device') if models else []):
             total_file = device/'mem_info_vram_total'
             if not total_file.is_file(): continue
             total = int(total_file.read_text())

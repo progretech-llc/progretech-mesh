@@ -24,6 +24,21 @@ class AdmissionTests(unittest.TestCase):
     def test_missing_telemetry_fails_closed(self):
         self.mesh.api=lambda p: (_ for _ in ()).throw(OSError())
         self.assertIn('unavailable',resources(self.mesh,['a','b'])[1])
+    def test_api_participant_does_not_require_ollama_telemetry(self):
+        self.mesh.model=lambda a: (_ for _ in ()).throw(ValueError('local_preload_unavailable'))
+        self.mesh.config=lambda a: ({},a,'openai/configured-model')
+        self.mesh.api=lambda p: (_ for _ in ()).throw(AssertionError('API models have no local weights'))
+        self.assertTrue(resources(self.mesh,['remote'])[0])
+        self.memory.available=2*GiB
+        self.assertIn('RAM',resources(self.mesh,['remote'])[1])
+
+    def test_mixed_api_local_pair_preserves_local_weight_and_capacity_checks(self):
+        self.mesh.model=lambda a: 'a' if a=='local' else (_ for _ in ()).throw(ValueError('local_preload_unavailable'))
+        self.mesh.config=lambda a: ({},a,'openai/configured-model')
+        self.assertTrue(resources(self.mesh,['local','remote'])[0])
+        self.mesh.api=lambda p: (_ for _ in ()).throw(OSError())
+        self.assertIn('unavailable',resources(self.mesh,['local','remote'])[1])
+
     def test_gpu_headroom_defer(self):
         with tempfile.TemporaryDirectory() as d:
             device=Path(d)
