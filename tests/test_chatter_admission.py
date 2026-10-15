@@ -1,12 +1,31 @@
 import sqlite3
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
-from control_center.chatter_admission import resources, teaching, GiB
+from unittest.mock import patch, mock_open
+from control_center.chatter_admission import resources, teaching, unified_gpu, GiB
 
 class AdmissionTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux DRM ABI')
+    def test_unified_detection_uses_kernel_fusion_flag_and_unknown_stays_discrete(self):
+        import ctypes
+        import struct
+        def query(fd, request, data):
+            self.assertEqual(request,0x40206445)
+            address,size,kind=struct.unpack_from('=QII',data)
+            self.assertEqual((size,kind),(144,0x16))
+            ctypes.memmove(address+136,struct.pack('=Q',flags),8)
+        with patch('control_center.chatter_admission.Path.glob',return_value=iter([Path('renderD129')])), patch('builtins.open',mock_open()), patch('fcntl.ioctl',side_effect=query):
+            flags=25
+            self.assertTrue(unified_gpu(Path('/fake-device')))
+        with patch('control_center.chatter_admission.Path.glob',return_value=iter([Path('renderD129')])), patch('builtins.open',mock_open()), patch('fcntl.ioctl',side_effect=query):
+            flags=24
+            self.assertFalse(unified_gpu(Path('/fake-device')))
+        with patch('control_center.chatter_admission.Path.glob',return_value=iter([Path('renderD129')])), patch('builtins.open',side_effect=PermissionError()):
+            self.assertFalse(unified_gpu(Path('/fake-device')))
+
     def setUp(self):
         self.mesh=SimpleNamespace(model=lambda a:a,api=lambda p:{'models':[{'name':'a','size':GiB},{'name':'b','size':GiB}]} if p=='tags' else {'models':[]})
         self.memory=SimpleNamespace(total=64*GiB,available=40*GiB)
@@ -63,6 +82,21 @@ class AdmissionTests(unittest.TestCase):
                 (device/'gpu_busy_percent').write_text('1')
                 (device/'mem_info_vram_used').write_text(str(2*GiB-128*1024**2))
                 self.assertEqual(resources(self.mesh,['a','b']),(False,'Waiting for GPU memory headroom'))
+    def test_unified_gpu_checks_shared_budget_and_utilization_not_reserved_segment(self):
+        with tempfile.TemporaryDirectory() as d:
+            device=Path(d)
+            for name,value in [('mem_info_vram_total',2*GiB),('mem_info_vram_used',2*GiB),
+                               ('mem_info_gtt_total',100*GiB),('mem_info_gtt_used',40*GiB),('gpu_busy_percent',1)]:
+                (device/name).write_text(str(value))
+            with patch('control_center.chatter_admission.Path.glob',return_value=[device]), patch('control_center.chatter_admission.unified_gpu',return_value=True):
+                self.assertTrue(resources(self.mesh,['a','b'])[0])
+                (device/'gpu_busy_percent').write_text('90')
+                self.assertEqual(resources(self.mesh,['a','b']),(False,'Waiting for GPU capacity'))
+                (device/'gpu_busy_percent').write_text('1')
+                (device/'mem_info_gtt_used').write_text(str(99*GiB))
+                self.assertEqual(resources(self.mesh,['a','b']),(False,'Waiting for GPU memory headroom'))
+                (device/'mem_info_gtt_used').unlink()
+                self.assertIn('unavailable',resources(self.mesh,['a','b'])[1])
     def test_memory_scope_and_attribution_before_limit(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'memory.db'
