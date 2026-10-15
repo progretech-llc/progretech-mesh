@@ -248,3 +248,40 @@ Installed factory helper commands resolve from `~/ptinternal/bin` first, with
 This applies to actual role controls and host image activity receipts. New
 handoff proposals use the established PT_CONTEXT deliverable directories;
 legacy artifact locations remain readable without receiving new publications.
+
+## Floor encounters and reviewed ideas
+
+Idle, connected agents roam even when chatter is off. A busy native role holds
+position and shows its host-reported activity color. Active board tasks appear as
+neon boxes with solid links to the Scrum Master, assignee and active actor.
+Only dispatched conversations show dotted links; proximity itself is not work.
+
+The controlling Factory tab submits nearby encounters to the host. The host checks
+the tab lease, enrolled gateway, participant availability, office pause, shared
+model slot and concurrency limit before admitting a real conversation. The
+three-agent option permits a third nearby participant; pairs can still meet.
+Session minutes set the repeating discussion window, not an inference timeout.
+Changing these limits does not cancel an already admitted native turn. Turning
+off chatter stops queued turns and requests cancellation of current background
+work; it cannot undo completed tool actions. Reloading, leaving the tab or a
+lost lease requires explicit enablement again.
+
+A completed discussion may return a structured idea with a title and context.
+It becomes a neon diamond on the floor. Nearby available agents review the
+proposal and prior feedback through their native runtime. A visit is not a vote:
+only a nonempty successful reply counts, once per conversation. The same agent
+cannot provide consecutive reviews, but can revisit after another reviewer;
+small teams can therefore complete five review rounds. Failed, stopped and
+unconfirmed turns never add reviews. Discussion prompts restrict study to bounded
+approved-reference retrieval and require actual source/page evidence.
+
+After five reviews, the host creates one durable board item assigned to the
+current Scrum Master, preserving all review receipts. The idea disappears only
+after the board acknowledges it. A stable task ID makes retries safe across host
+restarts. The task remains blocked and unqueued for owner approval; approval
+allows the Scrum Master to assess and scope the proposal before executing or
+assigning work. Idea content never grants execution permission. Existing nodes
+and feedback persist while chatter is off, but no new reviews are admitted.
+
+Release the web application, host Python bridge, generated office engine and
+OpenClaw adapter together. An older adapter does not support `chatter.encounter`.

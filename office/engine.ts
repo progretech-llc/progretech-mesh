@@ -169,6 +169,22 @@ switch (body.operation) {
     hive.setArchived(args.id, true);
     break;
   }
+  case "chatter.promote": {
+    // Internal host operation: public office validation never admits this action.
+    const idea=args.idea;
+    if(!/^task-[a-f0-9]{12}$/.test(args.id) || !idea || idea.reviews?.length!==5 || new Set(idea.reviews.map(r=>r.conversation_id)).size!==5 || idea.reviews.some(r=>!r.text?.trim()))throw Error('invalid_chatter_proposal');
+    const existing=hive.tasks().tasks.find(t=>t.id===args.id);
+    if(existing){if(existing.chatterIdeaId!==idea.id)throw Error('invalid_chatter_proposal');result={id:existing.id};break;}
+    if(hive.tasks().tasks.filter(t=>t.status!=='done').length>=100)throw Error('task_capacity');
+    const coordinator=hive.registry().godId;
+    hive.addTask({id:args.id,title:idea.title,description:idea.context,assignee:coordinator,coordinator,
+      status:'blocked',stage:'blocked',queued:false,order:hive.tasks().tasks.length,dependsOn:[],priority:1,createdAt:now(),
+      chatterIdeaId:idea.id,chatterReviews:idea.reviews,scrumReviewRequired:true,
+      humanQA:[{q:'Five completed agent reviews are attached to this chatter idea. Approve Scrum Master assessment and scoped work? No execution has been authorized.',askedAt:now()}],
+      comments:idea.reviews.map(r=>({id:randomUUID(),author:r.agent,text:r.text,kind:'idea-review',source:'native-chatter',createdAt:new Date(r.at*1000).toISOString()}))});
+    hive.send({to:coordinator,act:'inform',subject:'Chatter idea awaiting owner approval: '+idea.title,body:'Review the five completed agent comments on '+args.id+'. Do not execute this proposal before owner approval.'},'chatter');
+    log({kind:'chatter.promoted',taskId:args.id,ideaId:idea.id});result={id:args.id};break;
+  }
   case "task.create": {
     if (hive.tasks().tasks.filter((t) => t.status !== "done").length >= 100) throw Error("task_capacity");
     if (args.assignee) agent(args.assignee);

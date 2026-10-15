@@ -55,3 +55,9 @@ test('chunked artifact transfer is owner-bound and bounded separately from ordin
  await assert.rejects(forwardControlCenter({action:'files.chunk',args:{data:'A'.repeat(65536)}},'rend','fixture'),/too_large/);
  await assert.rejects(forwardControlCenter({action:'profile.save',args:{data:'A'.repeat(20000)}},'rend','fixture'),/too_large/);
 });
+test('floor encounters use the scoped host bridge without changing their receipt data', async()=>{
+ const args={tab_id:'a'.repeat(32),participants:['rend','rend--imagen'],positions:[{x:500,y:350},{x:600,y:350}],idea_id:''};let sent;
+ await forwardControlCenter({action:'chatter.encounter',args},'rend','fixture',async(_,opts)=>{sent=JSON.parse(opts.body);return {ok:true,json:async()=>({ok:true,result:{state:'approaching'}})};});
+ assert.deepEqual(sent,{agent_id:'rend',action:'chatter.encounter',args});
+ await assert.rejects(forwardControlCenter({action:'chatter.encounter',agent_id:'other',args},'rend','fixture'),/agent_binding_required/);
+});

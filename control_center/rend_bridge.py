@@ -58,7 +58,7 @@ def install(host, home=None):
         if action.startswith('memory.'):
             from control_center.memory_search import dispatch
             return dispatch(provider,home,agent,action,args)
-        if action.startswith('handoff.') or action in {'chatter.configure','chatter.history','chatter.pair','chatter.group','chatter.topic'}:
+        if action.startswith('handoff.') or action in {'chatter.encounter','chatter.configure','chatter.history','chatter.pair','chatter.group','chatter.topic'}:
             result=provider.handoffs.dispatch(agent,action,args)
             if action=='handoff.create' or (action=='chatter.configure' and args['enabled']):provider.handoffs.start()
             return result

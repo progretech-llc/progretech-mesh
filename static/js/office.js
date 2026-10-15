@@ -5,6 +5,9 @@
   const stages = {intake:'Intake',ready:'Ready',working:'In progress',blocked:'Needs input',review:'Review',done:'Done'};
   let snapshot=null, fleet=[], chatter=null, pending=false, sharedPending=false, online=false, epoch=0, zoom=1;
   let positions={}, selected=null, taskId=null, draggedTask=null, artifacts=[], sharedSignature='';
+  const motion=new MeshFloorMotion(), reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+  let draggingAgent=null,lastFrame=0,lastPaint=0,lastEncounter=0,encounterPending=false;
+  let floorEdges=[],floorObjects={},encounterCooldown={};
   const host=()=>$('officeHost').value;
   const say=text=>{$('officeStatus').textContent=text;};
   const scrum=a=>Boolean(a.isScrumMaster || a.isDirector);
@@ -32,6 +35,7 @@
   function renderFloor() {
     const agents=snapshot.agents,workers=agents.filter(a=>!scrum(a));
     $('floorEmpty').hidden=agents.length>0;
+    for(const id of Object.keys(positions))if(!agents.some(a=>a.id===id))delete positions[id];
     for(const a of agents) {
       if(!positions[a.id]){
         const angle=2*Math.PI*workers.indexOf(a)/Math.max(1,workers.length)-Math.PI/2;
@@ -62,24 +66,77 @@
       node.onpointerdown=e=>{
         if(e.button!==0)return;
         const start={x:e.clientX,y:e.clientY},id=node.dataset.agent,origin={...positions[id]},scale=Math.min($('officeFloor').clientWidth/1000,$('officeFloor').clientHeight/700)*zoom;
-        node.setPointerCapture(e.pointerId);
+        draggingAgent=id;node.setPointerCapture(e.pointerId);
         node.onpointermove=move=>{if(Math.hypot(move.clientX-start.x,move.clientY-start.y)<5)return;node.dataset.dragged='true';positions[id]={x:Math.max(85,Math.min(915,origin.x+(move.clientX-start.x)/scale)),y:Math.max(100,Math.min(600,origin.y+(move.clientY-start.y)/scale))};node.style.left=positions[id].x+'px';node.style.top=positions[id].y+'px';renderLinks();};
-        node.onpointerup=()=>{node.onpointermove=null;savePositions();};node.onpointercancel=()=>{node.onpointermove=null;};
+        node.onpointerup=()=>{draggingAgent=null;delete motion.targets[id];node.onpointermove=null;savePositions();};node.onpointercancel=()=>{draggingAgent=null;node.onpointermove=null;};
       };
     });
     renderLinks();fit();
   }
   function renderLinks() {
     if(!snapshot)return;
-    const links=[...(snapshot.interactions||[])];
+    if(!online){floorEdges=[];$('floorLinks').replaceChildren();return;}
+    const tasks=snapshot.tasks.filter(t=>t.running || stage(t)==='working');
+    const links=(snapshot.interactions||[]).filter(l=>l.kind!=='conversation' && tasks.some(t=>t.id===l.task_id));
+    floorObjects={};
+    tasks.forEach((t,index)=>{
+      const id='task:'+t.id;floorObjects[id]={x:200+(index%3)*300,y:70+Math.floor(index/3)*90};
+      const ids=[...new Set([t.coordinator||snapshot.orchestratorId,t.assignee,t.activeAgent].filter(a=>positions[a]))];
+      ids.forEach(a=>links.push({id:id+':'+a,from:a,to:id,title:t.title,task_id:t.id}));
+      if(ids.length>1)for(const a of ids.slice(1))links.push({id:id+':scrum:'+a,from:ids[0],to:a,title:t.title,task_id:t.id});
+    });
+    const ideas=(chatter?.ideas||[]).filter(i=>!i.task_id && i.host===host().split('--')[0]);
+    ideas.forEach(i=>{floorObjects['idea:'+i.id]={x:i.x,y:i.y};});
+    $('floorObjects').innerHTML=tasks.map(t=>{const p=floorObjects['task:'+t.id];return `<button class="floor-task" data-floor-task="${esc(t.id)}" style="left:${p.x}px;top:${p.y}px" title="${esc(t.title)}">${esc(t.title)}</button>`;}).join('')+ideas.map(i=>`<button class="floor-idea" data-floor-idea="${esc(i.id)}" style="left:${i.x}px;top:${i.y}px" title="${esc(i.title)} · ${i.reviews.length}/5 reviews" aria-label="Idea: ${esc(i.title)}, ${i.reviews.length} of 5 reviews"><span>◇</span><small>${i.reviews.length}/5</small></button>`).join('');
+    $('floorObjects').querySelectorAll('[data-floor-task]').forEach(n=>n.onclick=()=>openTask(n.dataset.floorTask));
+    $('floorObjects').querySelectorAll('[data-floor-idea]').forEach(n=>n.onclick=()=>{const i=ideas.find(i=>i.id===n.dataset.floorIdea);$('interactionDetails').textContent=i.title+'\n\n'+i.context+'\n\n'+i.reviews.map(r=>r.agent+': '+r.text).join('\n\n')+(i.promotion_error?'\n'+i.promotion_error:'');$('interactionDialog').showModal();});
     if(chatter?.enabled)for(const c of chatter.conversations||[]){
       if(!['first','second','third','reply_wait'].includes(c.state))continue;
-      const ids=[c.a_role,c.b_role,c.c_role].filter(Boolean).map(role=>snapshot.agents.find(a=>a.native?.runtime_id===role || a.runtime_id===role || a.native?.id===role)?.id).filter(Boolean);
-      for(let i=1;i<ids.length;i++)links.push({id:'chatter-'+c.id+'-'+i,from:ids[0],to:ids[i],kind:'conversation',title:c.topic});
+      const ids=conversationAgents(c);
+      if(c.idea_id && ids[0])links.push({id:'review-'+c.id,from:ids[0],to:'idea:'+c.idea_id,kind:'conversation',title:c.topic});
+      for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++)links.push({id:'chatter-'+c.id+'-'+i+'-'+j,from:ids[i],to:ids[j],kind:'conversation',title:c.topic});
     }
-    $('floorLinks').innerHTML=links.filter(l=>positions[l.from]&&positions[l.to]).map(l=>{const a=positions[l.from],b=positions[l.to];return `<path tabindex="0" role="button" data-interaction="${esc(l.id)}" class="floor-link ${l.kind==='conversation'?'conversation':''}" aria-label="${esc(l.title || 'Agent collaboration')}" d="M${a.x} ${a.y-20} L${b.x} ${b.y-20}"><title>${esc(l.title)}</title></path>`;}).join('');
-    $('floorLinks').querySelectorAll('[data-interaction]').forEach(node=>{const open=()=>{const l=links.find(x=>String(x.id)===node.dataset.interaction);$('interactionDetails').textContent=`${agentName(l.from)} ↔ ${agentName(l.to)}\n${l.title || 'Working together'}\n${l.source || 'Recorded host activity'}`;$('interactionDialog').showModal();};node.onclick=open;node.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();open();}};});
+    const points={...positions,...floorObjects};
+    floorEdges=links.filter(l=>points[l.from]&&points[l.to]);
+    $('floorLinks').innerHTML=floorEdges.map(l=>{const a=points[l.from],b=points[l.to];return `<path tabindex="0" role="button" data-interaction="${esc(l.id)}" class="floor-link ${l.kind==='conversation'?'conversation':''}" aria-label="${esc(l.title || 'Agent collaboration')}" d="M${a.x} ${a.y-20} L${b.x} ${b.y-20}"><title>${esc(l.title)}</title></path>`;}).join('');
+    $('floorLinks').querySelectorAll('[data-interaction]').forEach(node=>{const open=()=>{const l=floorEdges.find(x=>String(x.id)===node.dataset.interaction);$('interactionDetails').textContent=`${agentName(l.from)} ↔ ${agentName(l.to)}\n${l.title || 'Working together'}\n${l.source || 'Recorded host activity'}`;$('interactionDialog').showModal();};node.onclick=open;node.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();open();}};});
   }
+  function conversationAgents(c){
+    const bindings=c.idea_id?[c.a]:[c.a,c.b,c.c].filter(Boolean);
+    const aliases={rend:'main',lyra:'researcher',mak:'coder'};
+    return [...new Set(bindings.map((binding,index)=>snapshot?.agents.find(a=>a.mesh_agent_id===binding || (a.runtime_id && a.runtime_id===(fleet.find(f=>f.id===binding)?.runtime_id || aliases[[c.a_role,c.b_role,c.c_role][index]] || [c.a_role,c.b_role,c.c_role][index])))?.id).filter(Boolean))];
+  }
+  function occupied(){return new Set((chatter?.enabled?chatter.conversations||[]:[]).filter(c=>['queued','approaching','dispatching','first','second','third','reply_wait'].includes(c.state)).flatMap(conversationAgents));}
+  function floorAgents(){return (snapshot?.agents||[]).map(a=>({...a,roaming:online && (a.native?MeshRuntime.indicator(a.native).state:(a.state||'idle'))==='idle' && !snapshot.tasks.some(t=>(t.running||stage(t)==='working') && [t.assignee,t.activeAgent,t.coordinator].includes(a.id))}));}
+  async function encounter(now){
+    if(encounterPending || now-lastEncounter<3000 || !online || !chatterTab.owns(host(),chatter) || document.hidden)return;
+    lastEncounter=now;
+    const busy=occupied(),available=floorAgents().filter(a=>a.roaming && !busy.has(a.id) && a.id!==draggingAgent && a.mesh_agent_id && (encounterCooldown[a.id]||0)<now);
+    const ideas=(chatter.ideas||[]).filter(i=>!i.task_id && i.host===host().split('--')[0] && i.reviews.length<5);
+    const found=motion.nearby(available,positions,ideas,chatter.experimental_group_chat);if(!found)return;
+    encounterPending=true;const generation=epoch;
+    found.agents.forEach(a=>encounterCooldown[a.id]=now+12000);
+    try{await MeshRuntime.request(host(),'chatter.encounter',{tab_id:chatterTab.tabId,participants:found.agents.map(a=>a.mesh_agent_id),positions:found.agents.map(a=>({x:positions[a.id].x,y:positions[a.id].y})),idea_id:found.idea?.id||''});if(generation===epoch)await loadShared();}
+    catch(e){if(generation===epoch)$('chatterNotice').textContent='Chatter is waiting: '+e.message;}
+    finally{encounterPending=false;}
+  }
+  function animate(now){
+    const elapsed=lastFrame?(now-lastFrame)/1000:0;lastFrame=now;
+    if(snapshot && online && !document.hidden){
+      const held=occupied();if(draggingAgent)held.add(draggingAgent);
+      // Reduced motion uses infrequent discrete positions, without drifting or pulses.
+      motion.step(positions,floorAgents(),elapsed,held);
+      if(now-lastPaint>(reducedMotion.matches?5000:32)){
+        lastPaint=now;
+        $('floorNodes').querySelectorAll('[data-agent]').forEach(n=>{const p=positions[n.dataset.agent];if(p){n.style.left=p.x+'px';n.style.top=p.y+'px';}});
+        const points={...positions,...floorObjects};
+        $('floorLinks').querySelectorAll('[data-interaction]').forEach(n=>{const edge=floorEdges.find(l=>l.id===n.dataset.interaction),a=points[edge?.from],b=points[edge?.to];if(a&&b)n.setAttribute('d',`M${a.x} ${a.y-20} L${b.x} ${b.y-20}`);});
+      }
+      encounter(now);
+    }
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
   async function makeScrum(id){
     if(!online)return;
     const a=snapshot.agents.find(a=>a.id===id);if(!a || scrum(a))return;
@@ -160,7 +217,7 @@
       renderFloor();renderBoard();say(snapshot.paused?'Work paused · your board remains available':'Connected · tasks and agent state come from your gateway');
       if($('taskDialog').open && $('taskEditForm').dataset.dirty!=='true' && !$('taskDialog').contains(document.activeElement?.closest('input,textarea,select'))) {const current=snapshot.tasks.find(t=>t.id===taskId);if(current)fillTask(current);}
       if($('taskDialog').open && !snapshot.tasks.some(t=>t.id===taskId)){$('taskDialog').close();taskId=null;}
-    }catch(e){if(requestEpoch!==epoch)return;online=false;$('officeSignal').classList.remove('online');for(const id of ['openMission','officePause','saveOfficeSettings'])$(id).disabled=true;say(e.message);}
+    }catch(e){if(requestEpoch!==epoch)return;online=false;$('officeSignal').classList.remove('online');for(const id of ['openMission','officePause','saveOfficeSettings'])$(id).disabled=true;renderLinks();say(e.message);}
     finally{pending=false;}
   }
   async function loadShared(){
@@ -173,14 +230,14 @@
   }
   function renderChatter(){
     const enabled=Boolean(chatter?.enabled),feed=$('chatterFeed');feed.hidden=!enabled;
-    $('chatterNotice').textContent=enabled?`${chatterTab.owns(host(),chatter)?'Chatter on in this tab':'Chatter on in another tab'} · Idle agents only. ${chatter.admission||'Waiting for available agents.'} Leaving the controlling tab turns chatter off.`:'Chatter is off. Turn it on to see the team’s live conversation.';
+    $('chatterNotice').textContent=enabled?`${chatterTab.owns(host(),chatter)?'Chatter on in this tab':'Chatter on in another tab'} · Idle agents only. ${chatter.admission||'Waiting for available agents.'} Nearby idle agents meet and review idea nodes. Five completed reviews send an idea to the board for Scrum Master assessment and your approval. Leaving the controlling tab turns chatter off.`:'Chatter is off. Turn it on to see the team’s live conversation.';
     if(!enabled){feed.replaceChildren();sharedSignature='';return;}
     const rows=(chatter.conversations||[]).flatMap(c=>(c.messages||[]).map(m=>({agent:m.agent,text:m.text,time:m.created||m.at||c.created})));const signature=JSON.stringify(rows);if(signature===sharedSignature)return;sharedSignature=signature;
     const follow=feed.scrollHeight-feed.scrollTop-feed.clientHeight<50;
     feed.innerHTML=rows.map(m=>`<div class="chatter-line"><time>${esc(m.time?new Date(typeof m.time==='number'?m.time*1000:m.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'Live')}</time><strong>${esc(m.agent)}</strong><span>${esc(m.text)}</span></div>`).join('')||'<p class="muted">Waiting for idle agents to begin a conversation…</p>';if(follow)feed.scrollTop=feed.scrollHeight;
   }
-  $('officeChatter').onchange=async()=>{const b=$('officeChatter'),enabled=b.checked;b.disabled=true;try{await chatterTab.configure(host(),{enabled});await loadShared();}catch(e){b.checked=!enabled;say(e.message);}finally{b.disabled=false;}};
-  for(const id of ['chatterMinutes','chatterConcurrency','chatterGroup'])$(id).onchange=async()=>{if(!chatterTab.owns(host(),chatter)||!$('chatterMinutes').reportValidity()||!$('chatterConcurrency').reportValidity())return;try{await chatterTab.configure(host(),{enabled:true,session_minutes:Number($('chatterMinutes').value),max_conversations:Number($('chatterConcurrency').value),experimental_group_chat:$('chatterGroup').checked});await loadShared();}catch(e){say(e.message);await loadShared();}};
+  $('officeChatter').onchange=async()=>{const b=$('officeChatter'),enabled=b.checked;b.disabled=true;try{await chatterTab.configure(host(),{enabled,...(enabled?{floor_encounters:true}:{})});await loadShared();}catch(e){b.checked=!enabled;say(e.message);}finally{b.disabled=false;}};
+  for(const id of ['chatterMinutes','chatterConcurrency','chatterGroup'])$(id).onchange=async()=>{if(!chatterTab.owns(host(),chatter)||!$('chatterMinutes').reportValidity()||!$('chatterConcurrency').reportValidity())return;try{await chatterTab.configure(host(),{enabled:true,floor_encounters:true,session_minutes:Number($('chatterMinutes').value),max_conversations:Number($('chatterConcurrency').value),experimental_group_chat:$('chatterGroup').checked});await loadShared();}catch(e){say(e.message);await loadShared();}};
   async function loadArtifacts(){const requestEpoch=epoch;$('artifactStatus').textContent='Loading published files…';try{const result=await MeshRuntime.request(host(),'files.list');if(requestEpoch!==epoch)return;artifacts=result.files||[];renderArtifacts();$('artifactStatus').textContent='Published files from your connected host.';}catch(e){$('artifactStatus').textContent=e.message;}}
   function renderArtifacts(){const query=$('artifactSearch').value.toLowerCase();$('artifactItems').innerHTML=artifacts.filter(f=>(f.name+' '+f.producer).toLowerCase().includes(query)).map(f=>`<li><strong>${esc(f.name)}</strong><p>${esc(f.producer)} · ${(f.size/1024).toFixed(1)} KB</p><button data-file="${esc(f.id)}" ${!f.downloadable?'disabled':''}>Download</button></li>`).join('')||'<li>No matching artifacts.</li>';$('artifactItems').querySelectorAll('[data-file]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await FactoryFiles.download(host(),artifacts.find(f=>f.id===b.dataset.file),false);}catch(e){$('artifactStatus').textContent=e.message;}finally{b.disabled=false;}});}
   $('openArtifacts').onclick=()=>{$('artifactDialog').showModal();loadArtifacts();};$('artifactRefresh').onclick=loadArtifacts;$('artifactSearch').oninput=renderArtifacts;
@@ -190,6 +247,6 @@
   $('zoomIn').onclick=()=>{zoom=Math.min(1.8,zoom+.15);fit();};$('zoomOut').onclick=()=>{zoom=Math.max(.6,zoom-.15);fit();};$('zoomReset').onclick=()=>{zoom=1;fit();};new ResizeObserver(fit).observe($('officeFloor'));
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
   function restoreLayout(){try{positions=JSON.parse(sessionStorage.getItem('mesh-office-layout:'+host())||'{}');for(const [id,p] of Object.entries(positions))if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<80||p.x>920||p.y<90||p.y>620)delete positions[id];}catch{positions={};}}
-  $('officeHost').onchange=()=>{chatterTab.release();epoch++;snapshot=null;fleet=[];chatter=null;online=false;selected=null;taskId=null;positions={};sharedSignature='';for(const d of document.querySelectorAll('dialog[open]'))d.close();$('floorNodes').replaceChildren();$('floorLinks').replaceChildren();$('officeBoard').replaceChildren();$('floorEmpty').hidden=false;restoreLayout();renderChatter();refresh();loadShared();};
+  $('officeHost').onchange=()=>{chatterTab.release();epoch++;snapshot=null;fleet=[];chatter=null;online=false;selected=null;taskId=null;positions={};motion.targets={};floorEdges=[];floorObjects={};encounterCooldown={};draggingAgent=null;sharedSignature='';$('floorObjects').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();$('floorNodes').replaceChildren();$('floorLinks').replaceChildren();$('officeBoard').replaceChildren();$('floorEmpty').hidden=false;restoreLayout();renderChatter();refresh();loadShared();};
   restoreLayout();refresh();loadShared();const timer=setInterval(refresh,4000),sharedTimer=setInterval(loadShared,5000);window.addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(sharedTimer);});
 })();
