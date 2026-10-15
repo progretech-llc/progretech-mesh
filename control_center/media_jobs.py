@@ -66,7 +66,7 @@ def generate(mesh,agent,text,ident):
         temp.replace(target);digest=hashlib.sha256(read_regular(mesh.home,target)).hexdigest()
         mesh.mark(ident,'publishing','Image decoded and published; ready for artifact review')
         activity=record_activity(mesh.home,role,ident,target,digest,route.capability_id)
-        return {'activity':activity,'reply':'Generated and validated a local PNG artifact: '+str(target)+'\nDimensions: 1024 × 1024. Model: '+route.capability_id+'. SHA-256: '+digest+'\n'+('Contains an alpha channel; visual quality still needs review.' if alpha else 'This provider produced an opaque background. Transparency and visual quality are not verified.')+'\nMemPalace activity: '+activity['status']+'.\nAvailable in Factory Artifacts. A reviewer must inspect the actual file before approving it.', 'role':mesh.provider.bindings[agent],'model':route.capability_id,'artifacts':[{'path':str(target),'sha256':digest,'size':len(data),'dimensions':dimensions,'alpha':alpha,'validated':True}]}
+        return {'activity':activity,'reply':'Generated and validated a local PNG artifact: '+str(target)+'\nDimensions: 1024 × 1024. Model: '+route.capability_id+'. SHA-256: '+digest+'\n'+('Contains an alpha channel; visual quality still needs review.' if alpha else 'This provider produced an opaque background. Transparency and visual quality are not verified.')+'\nHindsight activity: '+activity['status']+'.\nAvailable in Factory Artifacts. A reviewer must inspect the actual file before approving it.', 'role':mesh.provider.bindings[agent],'model':route.capability_id,'artifacts':[{'path':str(target),'sha256':digest,'size':len(data),'dimensions':dimensions,'alpha':alpha,'validated':True}]}
     finally:os.close(fd)
 
 
@@ -117,7 +117,7 @@ def review(mesh,agent,text,ident,paths):
     directory=safe(mesh.home,output_directory(mesh.home,mesh.provider.bindings[agent]));directory.mkdir(parents=True,exist_ok=True,mode=0o700)
     target=directory/('review-'+ident+'.json');write(target,result)
     activity=record_activity(mesh.home,role,ident,target,hashlib.sha256(read_regular(mesh.home,target)).hexdigest(),model,kind='review')
-    return {'role':mesh.provider.bindings[agent],'model':chosen,'activity':activity,'review':result,'reply':'Visual review: '+result['verdict']+'\nObserved: '+ '; '.join(result['observations'])+'\nConcerns: '+('; '.join(result['concerns']) or 'None reported by model')+'\nFile inspection: '+('alpha channel present; transparency coverage requires review' if has_alpha else 'opaque image; no alpha channel')+'\nReview report: '+str(target)+'\nMemPalace activity: '+activity['status']}
+    return {'role':mesh.provider.bindings[agent],'model':chosen,'activity':activity,'review':result,'reply':'Visual review: '+result['verdict']+'\nObserved: '+ '; '.join(result['observations'])+'\nConcerns: '+('; '.join(result['concerns']) or 'None reported by model')+'\nFile inspection: '+('alpha channel present; transparency coverage requires review' if has_alpha else 'opaque image; no alpha channel')+'\nReview report: '+str(target)+'\nHindsight activity: '+activity['status']}
 
 
 def record_activity(home,role,ident,path,digest,model,kind='generation'):
@@ -134,7 +134,7 @@ def record_activity(home,role,ident,path,digest,model,kind='generation'):
         if p.returncode or not receipt.get('ok') or not receipt.get('recall_verified'):return {'status':'write-failed'}
         result={'status':'saved-and-recalled','memory_id':receipt['memory_id']}
         try:
-            audit=safe(home,home/'.local/state/rend/mempalace/completion-audit.jsonl')
+            audit=safe(home,home/'.local/state/rend/hindsight/completion-audit.jsonl')
             audit.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
             row={'agent':role,'project':'ProgreTech','status':'saved','at':datetime.now(timezone.utc).isoformat(),'activity_kind':'host-image-review' if kind=='review' else 'host-image-execution','activity_memory_id':receipt['memory_id'],'activity_recall_verified':True}
             fd=os.open(audit,os.O_WRONLY|os.O_CREAT|os.O_APPEND|getattr(os,'O_NOFOLLOW',0),0o600)

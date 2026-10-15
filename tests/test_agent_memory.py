@@ -13,14 +13,14 @@ class AgentMemoryTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.home=Path(self.tmp.name)
         self.p=AgentControlProvider(self.home/'profiles',{'rend':'main','rend--lyra':'researcher'},lambda _: {},lambda *a: {})
-        self.db=self.home/'palace.db'
-        with sqlite3.connect(self.db) as db:
-            db.execute('CREATE TABLE memories(memory_id TEXT,title TEXT,content TEXT,author_id TEXT,project_id TEXT,scope TEXT,status TEXT,author_type TEXT,provenance_type TEXT,provenance_ref TEXT,created_at TEXT,confidence TEXT)')
-            db.execute('CREATE VIRTUAL TABLE memory_fts USING fts5(memory_id UNINDEXED,title,content)')
-            for mid,author,scope,status,project in [('shared','lyra','project','active','ProgreTech'),('private','lyra','agent','active','ProgreTech'),('other','rend','project','active','ProgreTech'),('old','lyra','project','retracted','ProgreTech'),('foreign','lyra','project','active','Other')]:
-                db.execute('INSERT INTO memories VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(mid,'fixture <script>','fixture context',author,project,scope,status,'agent','fixture','fixture:source','2026-10-01','high'))
-                db.execute('INSERT INTO memory_fts VALUES(?,?,?)',(mid,'fixture','fixture context'))
-        cfg=self.home/'.local/share/progretech/mempalace-runtime/mempalace/config.example.json';cfg.parent.mkdir(parents=True);cfg.write_text(json.dumps({'database_path':str(self.db)}))
+        self.config=self.home/'client.json';self.config.write_text('{}')
+        self.rows=[]
+        for mid,author,scope,status,project in [('shared','lyra','project','active','ProgreTech'),('private','lyra','agent','active','ProgreTech'),('other','rend','project','active','ProgreTech'),('old','lyra','project','retracted','ProgreTech'),('foreign','lyra','project','active','Other')]:
+            self.rows.append(dict(memory_id=mid,title='fixture <script>',content='fixture context',author_id=author,project_id=project,scope=scope,status=status,author_type='agent',provenance_type='fixture',provenance_ref='fixture:source',created_at='2026-10-01',confidence='high'))
+        from unittest.mock import Mock
+        self.store=Mock();self.store.search.side_effect=lambda query,**kw:self.rows if query=='fixture' else []
+        for target,kw in [('control_center.memory_search.database',{'side_effect':lambda home:self.config if self.config.exists() else None}),('control_center.memory_search.memory_store',{'return_value':self.store})]:
+            patcher=patch(target,**kw);patcher.start();self.addCleanup(patcher.stop)
     def tearDown(self):self.tmp.cleanup()
     def call(self,action,args={},aid='rend--lyra'):return dispatch(self.p,self.home,aid,action,args)
     def test_consent_exact_author_scope_project_and_revocation(self):
@@ -36,7 +36,7 @@ class AgentMemoryTests(unittest.TestCase):
     def test_no_database_created_and_no_query_language_injection(self):
         self.call('memory.share',{'enabled':True})
         self.assertEqual(self.call('memory.search',{'query':'fixture OR private','project':'ProgreTech'})['records'],[])
-        self.db.unlink();self.assertFalse(self.call('memory.status')['available']);self.assertFalse(self.db.exists())
+        self.config.unlink();self.assertFalse(self.call('memory.status')['available']);self.assertFalse(self.config.exists())
     def test_untrusted_args(self):
         for action,args in [('memory.share',{'enabled':1}),('memory.search',{'query':'x','project':'Other'}),('memory.search',{'query':'x'*201,'project':'ProgreTech'}),('memory.search',{'query':'fixture','project':'ProgreTech','author':'rend'}),('memory.status',{'scope':'agent'})]:
             with self.assertRaises(ValueError):validate(action,args)

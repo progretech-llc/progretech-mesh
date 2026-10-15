@@ -1271,13 +1271,6 @@ ELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"
     const identity = join2(dir, "identity.md");
     writeFileSync(identity, this.identityText(meta), "utf8");
     if (opts.skillsDir) this.copyBundledSkills(opts.skillsDir, join2(dir, ".claude", "skills"));
-    const memory = join2(dir, "memory.md");
-    if (!existsSync(memory)) {
-      writeFileSync(memory, `# Memory \u2014 ${meta.name} (${meta.id})
-
-_Append durable facts, decisions, and context below._
-`, "utf8");
-    }
     ensureMineIgnore(dir);
     const cursor = join2(dir, "cursor.json");
     if (!existsSync(cursor)) this.writeJson(cursor, { lastProcessed: null });
@@ -1824,7 +1817,7 @@ _Append durable facts, decisions, and context below._
     const godRegistry = meta.isAssistant ? this.registry() : null;
     const godNameForPrompt = godRegistry ? resolveGodName(godRegistry.agents[godRegistry.godId ?? "god"]?.name) : "";
     const ctxLine = "LIVE CONTEXT: each agent row in the LIVE ROSTER carries a `ctx NN%` tag \u2014 its live context-window occupancy. Treat it as the real headroom signal when routing: prefer an agent with a LOW `ctx` for a big task; treat a HIGH `ctx` (near 100%) as busy rather than idle, even if the cumulative token count looks modest.";
-    const memoryLine = semanticMemory ? 'Semantic memory: the whole hive shares a searchable MemPalace at the path in your MEMPALACE_PALACE_PATH environment variable. To recall relevant past knowledge across the team, run `mempalace search "<query>"`; run `mempalace wake-up` at the start of a task for a memory digest. Your notes in memory.md are mined into the palace automatically \u2014 write durable facts there.' : "";
+    const memoryLine = 'Durable memory is Hindsight, shared across factory tools. Use the runtime-bound memory tools with an explicit canonical project. Unassigned workers use factory-worker; never impersonate a named role. Read /mnt/pt-context/factory-support/hindsight/runtime/MEMORY_POLICY.md. Do not write memory.md or mine transcripts.';
     const hiveNode = this.nodeCommand();
     const kgCli = kgCliPath || (process.platform === "win32" ? "%KG_CLI%" : "$KG_CLI");
     const knowledgeLine = knowledgeGraph ? `Enterprise knowledge: this organisation has a private Knowledge Graph of its own documents, policies, and business context. When a task needs that context \u2014 company-specific facts, house style, internal processes \u2014 query it instead of guessing: run \`"${hiveNode}" "${kgCli}" search "<query>"\` for ranked passages, \`"${hiveNode}" "${kgCli}" list\` to see what is available, and \`"${hiveNode}" "${kgCli}" get <id>\` for a full document. (That first path is the harness's bundled Node \u2014 use it instead of bare \`node\`, which may not be on your PATH.)` : "";
@@ -1839,10 +1832,10 @@ _Append durable facts, decisions, and context below._
       `Your private workspace is ${dir}. The shared hive is ${root}. Full protocol: ${inRoot("PROTOCOL.md")}.`,
       "",
       "HIVE PROTOCOL \u2014 follow it every task:",
-      `1. At the START of a task, read ${inDir("memory.md")} and EVERY file in ${inDir("inbox")} (messages other agents sent you). After handling an inbox message, move its file into ${inDir("inbox", ".done")}.`,
-      `2. Record durable facts, decisions, and context by appending to ${inDir("memory.md")}.`,
+      `1. At the START of a task, recall relevant Hindsight project evidence and read EVERY file in ${inDir("inbox")} (messages other agents sent you). After handling an inbox message, move its file into ${inDir("inbox", ".done")}.`,
+      `2. Record reviewed activities and evidence-linked lessons through the bound Hindsight helper.`,
       `3. To ask another agent for something or share information, write ONE message JSON into ${inDir("outbox")} (schema in PROTOCOL.md). NEVER write into another agent's folder \u2014 the orchestrator delivers your outbox.`,
-      "4. At the END of a task, append what you learned to memory.md so future-you remembers.",
+      "4. At the END of a task, record a structured reviewed Hindsight activity and verify exact recall.",
       guardrailsLine,
       memoryLine,
       knowledgeLine,
@@ -2141,24 +2134,14 @@ _Append durable facts, decisions, and context below._
     return true;
   }
   memory(id) {
-    const p = join2(this.agentDir(id), "memory.md");
-    return existsSync(p) ? readFileSync(p, "utf8") : "";
+    const result = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || "/home/edwin/ptinternal/bin/factory-office-memory", [], {
+      input: JSON.stringify({action:"get",subject:id,namespace:createHash("sha256").update(this.root()).digest("hex").slice(0,20)}), encoding:"utf8",timeout:15000,
+      env:process.env,maxBuffer:1024*1024
+    });
+    if (result.status !== 0) return "Hindsight memory unavailable on this host; no memory was recalled. Configure the identity-bound factory memory helper.";
+    return JSON.parse(result.stdout).text;
   }
-  /** Whether an agent has recorded NON-TRIVIAL memory — i.e. has appended real
-   *  notes beyond the boilerplate header ensureAgent seeds. Lets the voice
-   *  read-layer answer "what has the team remembered" and enumerate who has
-   *  anything worth reading (every registered agent technically has a memory.md,
-   *  but most of the floor's history lives in a handful of them). Cheap: reads a
-   *  small markdown file; never throws. Works for ANY id, active OR archived. */
-  hasMemory(id) {
-    const p = join2(this.agentDir(id), "memory.md");
-    if (!existsSync(p)) return false;
-    try {
-      return readFileSync(p, "utf8").trim().length > 200;
-    } catch {
-      return false;
-    }
-  }
+  hasMemory(id) { return false; } // Memory is available on demand from Hindsight.
   inbox(id) {
     return this.listMessages(join2(this.agentDir(id), "inbox"));
   }
@@ -3014,7 +2997,7 @@ only thing that moves messages between agents.
 
 ## Your workspace \u2014 \`agents/<your-id>/\`
 - \`identity.md\`  \u2014 who you are (read-only; the harness writes it).
-- \`memory.md\`    \u2014 your long-term memory. Read at the start of a task; append to it as you learn.
+- \`memory.md\`    \u2014 retired; use the bound Hindsight tools for reviewed durable memory.
 - \`inbox/\`       \u2014 messages addressed to you. Read them at the start of a task.
 - \`inbox/.done/\` \u2014 move a message here once you've handled it.
 - \`outbox/\`      \u2014 drop messages here to send them. The harness delivers them.
@@ -3099,7 +3082,7 @@ You (god) are responsible for situational awareness. To see the live state of ev
 breaker level, last tool, last-active time, and inbox backlog. Pair it with \`registry.json\` (the roster)
 and \`log.jsonl\` (the event feed). IMPORTANT: \`claude agents\` will NOT show your hive's sibling
 sessions (they're spawned independently) \u2014 \`fleet.json\` is your source of truth for them. For a deeper
-look at one agent, read its \`agents/<id>/memory.md\` and \`inbox/\`, or send it a \`query\`. A full
+look at one agent, retrieve shared attributed Hindsight records and its \`inbox/\`, or send it a \`query\`. A full
 Claude Code command reference (slash = your own session only; CLI = your shell, can target the fleet)
 is in \`COMMANDS.md\` in the hive root.
 
@@ -3139,16 +3122,12 @@ request is NOT failed or deleted, it waits in \`spawn-requests/\` and runs if th
 If a request of yours has sat there without moving, that is why, and it is a decision to raise with the
 human rather than retry. Route work to an agent already on the floor first either way.
 
-## Semantic memory (optional \u2014 when \`mempalace\` is installed)
-When \`MEMPALACE_PALACE_PATH\` is set in your environment, the hive shares a
-searchable MemPalace and you have the \`mempalace\` CLI:
-- \`mempalace search "<query>"\` \u2014 recall relevant past knowledge across the whole
-  team by meaning (not just keywords). Add \`--wing <agent-id>\` to scope to one
-  agent, \`--results N\` to widen.
-- \`mempalace wake-up\` \u2014 a short digest of what matters, good at the start of a task.
+## Durable factory memory
+Hindsight is the sole provider. Use runtime-bound tools and an explicit canonical
+project. Read /mnt/pt-context/factory-support/hindsight/runtime/MEMORY_POLICY.md.
+Never create memory.md, mine conversations, or read another role's private bank.
+Record a reviewed activity and verify exact recall after meaningful work.
 
-Your \`memory.md\` is mined into the palace automatically, so the durable facts you
-write there become searchable by every agent. You don't run \`mine\` yourself.
 `;
 var HOOK_SHIM = `#!/usr/bin/env node
 'use strict';
@@ -4318,8 +4297,14 @@ switch (body.operation) {
     break;
   case "memory.save":
     agent(args.id);
-    writeFileSync2(join3(hive.root(), "agents", args.id, "memory.md"), args.text, { mode: 384 });
-    hive.commit("mesh: reviewed office memory");
+    {
+      const saved = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || "/home/edwin/ptinternal/bin/factory-office-memory", [], {
+        input:JSON.stringify({action:"save",subject:args.id,namespace:createHash("sha256").update(hive.root()).digest("hex").slice(0,20),text:args.text}),encoding:"utf8",timeout:20000,
+        env:process.env,maxBuffer:1024*1024
+      });
+      if(saved.status!==0) throw Error("hindsight_office_memory_save_failed");
+      result=JSON.parse(saved.stdout);
+    }
     break;
   case "mission.queue": {
     if (settings.paused) throw Error("office_paused");

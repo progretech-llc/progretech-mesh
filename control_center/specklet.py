@@ -1,4 +1,4 @@
-"""Agent-owned Specklet JSON; task tracking never writes to MemPalace."""
+"""Agent-owned Specklet JSON; task tracking never writes to Hindsight."""
 import copy
 import json
 import os
