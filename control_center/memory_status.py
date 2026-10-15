@@ -8,7 +8,7 @@ def memory_status(home, role):
     key=str(home);now=time.monotonic()
     if key not in _CACHE or now-_CACHE[key][0]>5:
         latest={};verified={}
-        path=Path(home)/'.local/state/rend/mempalace/completion-audit.jsonl'
+        path=Path(home)/'.local/state/rend/hindsight/completion-audit.jsonl'
         try:
             with path.open('rb') as stream:
                 stream.seek(0,2);size=stream.tell();stream.seek(max(0,size-1048576));data=stream.read(1048576).decode('utf-8',errors='replace')

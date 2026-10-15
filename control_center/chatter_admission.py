@@ -87,17 +87,16 @@ def resources(mesh, agents):
 
 
 def teaching(home, author):
-    """Service reader: only attributed public project lessons, never role-private rows."""
-    path = database(home)
-    if not path: return [], 'Shared MemPalace unavailable'
+    """Bounded shared reviewed lessons; service does not read private banks."""
+    from control_center.memory_search import memory_store
     try:
-        with sqlite3.connect(path.resolve().as_uri()+'?mode=ro', uri=True, timeout=3) as db:
-            db.execute('PRAGMA query_only=ON')
-            rows = db.execute("""SELECT memory_id,title,content,author_id,provenance_ref
-                FROM memories WHERE scope='project' AND status='active'
-                AND project_id='ProgreTech' AND author_type='agent' AND author_id IN (?, 'codex')
-                ORDER BY created_at DESC LIMIT 2""", (author,)).fetchall()
-        return [{'id':r[0], 'title':r[1][:160], 'text':r[2][:700], 'author':r[3],
-                 'evidence':(r[4] or '')[:160]} for r in rows], 'Shared project lessons retrieved' if rows else 'No shared project lessons found'
-    except (sqlite3.Error, OSError, TypeError):
-        return [], 'Shared MemPalace retrieval failed'
+        store=memory_store(home,author)
+        rows=[]
+        for writer in dict.fromkeys(['codex',author]):
+            found=store.search('factory',scope='project',project_id='ProgreTech',author_id=writer,provenance_type='curated-knowledge-file',limit=2,semantic=True)
+            rows.extend(r for r in found if r.get('scope')=='project' and r.get('status')=='active' and str(r.get('project_id')).lower()=='progretech' and r.get('author_id')==writer and r.get('provenance_type')=='curated-knowledge-file')
+        rows=list({r['memory_id']:r for r in rows}.values())[:4]
+        return [{'id':r['memory_id'],'title':r['title'][:160],'text':r['content'][:700],
+                 'author':r['author_id'],'evidence':(r['provenance_ref'] or '')[:160]} for r in rows], 'Shared Hindsight lessons retrieved' if rows else 'No shared project lessons found'
+    except Exception:
+        return [], 'Shared Hindsight retrieval failed'

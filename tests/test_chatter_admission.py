@@ -98,11 +98,10 @@ class AdmissionTests(unittest.TestCase):
                 (device/'mem_info_gtt_used').unlink()
                 self.assertIn('unavailable',resources(self.mesh,['a','b'])[1])
     def test_memory_scope_and_attribution_before_limit(self):
-        with tempfile.TemporaryDirectory() as d:
-            path=Path(d)/'memory.db'
-            with sqlite3.connect(path) as db:
-                db.execute('CREATE TABLE memories(memory_id,title,content,author_id,provenance_ref,scope,status,project_id,author_type,created_at)')
-                for ident,scope,author in [('private','private','reviewer'),('shared','project','reviewer'),('baseline','project','codex'),('other','project','designer')]:
-                    db.execute('INSERT INTO memories VALUES(?,?,?,?,?,?,?,?,?,?)',(ident,ident,ident,author,'evidence',scope,'active','ProgreTech','agent',1))
-            with patch('control_center.chatter_admission.database',return_value=path):
-                rows,status=teaching(d,'reviewer');self.assertEqual({r['id'] for r in rows},{'shared','baseline'});self.assertIn('retrieved',status)
+        from unittest.mock import Mock
+        records=[dict(memory_id=ident,title=ident,content=ident,author_id=author,provenance_ref='evidence',scope=scope,status='active',project_id='ProgreTech',author_type='agent',provenance_type='curated-knowledge-file') for ident,scope,author in [('private','agent','reviewer'),('shared','project','reviewer'),('baseline','project','codex'),('other','project','designer')]]
+        store=Mock();store.search.return_value=records
+        with patch('control_center.memory_search.memory_store',return_value=store):
+            rows,status=teaching('/unused','reviewer')
+            self.assertEqual({r['id'] for r in rows},{'shared','baseline'})
+            self.assertIn('retrieved',status)

@@ -121,7 +121,7 @@ def create_app(home=None, token=None, include_starter=True):
         record=registry.get(aid)
         if record['kind']!='openclaw':
             if action=='memory.status': return jsonify(ok=True,result={'available':False,'shared':False})
-            raise ValueError('specklet_unavailable' if action.startswith('specklet.') else 'mempalace_unavailable')
+            raise ValueError('specklet_unavailable' if action.startswith('specklet.') else 'hindsight_unavailable')
         from mesh_local_host import LocalHost
         host=LocalHost()
         try:
@@ -131,7 +131,7 @@ def create_app(home=None, token=None, include_starter=True):
             return jsonify(host.call('/api/mesh/control-center',{'agent_id':target,'action':action,'args':args}))
         except Exception:
             if action=='memory.status': return jsonify(ok=True,result={'available':False,'shared':False})
-            raise ValueError('specklet_unavailable' if action.startswith('specklet.') else 'mempalace_unavailable')
+            raise ValueError('specklet_unavailable' if action.startswith('specklet.') else 'hindsight_unavailable')
 
     @app.post('/api/agents/<aid>/office')
     def office(aid):

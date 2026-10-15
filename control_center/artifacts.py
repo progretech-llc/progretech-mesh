@@ -32,7 +32,7 @@ def validate(action, args):
 
 
 def allowed(name):
-    return Path(name).suffix.lower() in EXTENSIONS and not name.startswith('.') and not any(w in name.lower() for w in ('credential','secret','private','token','password','backup','mempalace'))
+    return Path(name).suffix.lower() in EXTENSIONS and not name.startswith('.') and not any(w in name.lower() for w in ('credential','secret','private','token','password','backup','mempalace','hindsight'))
 
 
 def storage(home):
@@ -76,7 +76,7 @@ def catalog(home):
     jobs=home/'Rend/jobs'
     if jobs.is_dir() and not jobs.is_symlink():
         for job in sorted(jobs.iterdir(),key=lambda p:p.name,reverse=True)[:200]:
-            if job.is_dir() and not job.is_symlink() and not any(w in job.name.lower() for w in ('private','backup','credential','secret','mempalace')):
+            if job.is_dir() and not job.is_symlink() and not any(w in job.name.lower() for w in ('private','backup','credential','secret','mempalace','hindsight')):
                 roots.append((job/'deliverables','shared',job.name))
     rows=[];scanned=0
     for root,role,source in roots:
