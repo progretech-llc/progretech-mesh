@@ -79,3 +79,21 @@ test('long custom native IDs keep exact configured identity behind hashed fleet 
  },{target,gatewayId:'host-a',agents:[{id:agent,runtime_id:runtime}]});
  assert.equal(out.model,agent+'-code');
 });
+
+test('SecretRef authentication uses supported resolver and never falls back on failure',async()=>{
+ const ref={source:'store',provider:'default',id:'SYNTHETIC_KEY'};
+ const cfg={...config,gateway:{port:18789,auth:{mode:'token',token:ref}}};
+ const body={model:'any-host',messages:[{role:'user',content:'Fixture'}]};
+ let resolutions=0;
+ const resolveSecretInput=async params=>{
+  resolutions++;assert.equal(params.path,'gateway.auth.token');assert.equal(params.value,ref);
+  return {value:'synthetic-resolved-token'};
+ };
+ await forwardRoleCompletion(cfg,body,async(_,options)=>{
+  assert.equal(options.headers.Authorization,'Bearer synthetic-resolved-token');return response;
+ },{...host,resolveSecretInput});
+ assert.equal(resolutions,1);
+ const forbidden=async()=>assert.fail('unresolved credentials must not reach transport');
+ await assert.rejects(forwardRoleCompletion(cfg,body,forbidden,{...host,resolveSecretInput:async()=>({})}),/^Error: ide_gateway_token_auth_required$/);
+ await assert.rejects(forwardRoleCompletion(cfg,body,forbidden,{...host,resolveSecretInput:async()=>{throw Error('private diagnostic')}}),/^Error: ide_gateway_token_auth_required$/);
+});

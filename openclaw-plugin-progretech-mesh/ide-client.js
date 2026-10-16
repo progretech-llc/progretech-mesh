@@ -27,8 +27,16 @@ export async function forwardRoleCompletion(config, body, fetchImpl = fetch, opt
   if (!Object.hasOwn(config?.agents?.entries || {}, agentId)) throw new Error('ide_role_not_available');
   if (Object.keys(body).some(key => !FIELDS.has(key))) throw new Error('ide_unsupported_parameter');
   if (!Array.isArray(body.messages) || !body.messages.length || JSON.stringify(body).length > 1048576) throw new Error('ide_invalid_messages');
-  const token = config?.gateway?.auth?.token || process.env.OPENCLAW_GATEWAY_TOKEN;
-  if (config?.gateway?.auth?.mode !== 'token' || typeof token !== 'string' || !token) throw new Error('ide_gateway_token_auth_required');
+  if (config?.gateway?.auth?.mode !== 'token') throw new Error('ide_gateway_token_auth_required');
+  let token = config?.gateway?.auth?.token;
+  if (token && typeof token === 'object') {
+    try {
+      const resolve = options.resolveSecretInput || (await import('openclaw/plugin-sdk/secret-input-runtime')).resolveConfiguredSecretInputWithFallback;
+      const resolved = await resolve({config, env:process.env, value:token, path:'gateway.auth.token'});
+      token = resolved.value;
+    } catch { throw new Error('ide_gateway_token_auth_required'); }
+  } else if (!token) token = process.env.OPENCLAW_GATEWAY_TOKEN;
+  if (typeof token !== 'string' || !token) throw new Error('ide_gateway_token_auth_required');
   const port = config.gateway.port || 18789;
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('ide_gateway_port_invalid');
   const user = typeof body.user === 'string' ? body.user : '';
