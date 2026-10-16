@@ -181,8 +181,8 @@ SAFE_FILE_EXTENSIONS = {
 }
 SENSITIVE_FILE_EXTENSIONS = {".exe", ".msi", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".so", ".dylib"}
 
-OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.4-roster-relay.2"
-OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.4-roster-relay.2.tgz"
+OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.4-roster-relay.3"
+OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.4-roster-relay.3.tgz"
 UNIVERSAL_ENROLLMENT_PROTOCOL_FILENAME = "universal-agent-enrollment-v1.json"
 AGENT_ADAPTER_CATALOG_FILENAME = "agent-adapter-catalog-v1.json"
 OPENCLAW_SELF_BOOTSTRAP_PLAN_FILENAME = "openclaw-self-bootstrap-plan-v1.json"
@@ -220,7 +220,7 @@ SESSION_FILE_TOTALS: dict[str, int] = {}
 ACTIVATION_CODES: dict[str, dict[str, Any]] = {}
 IDE_PENDING: dict[str, dict[str, Any]] = {}
 IDE_TOKEN_TTL_SECONDS = int(os.environ.get("MESH_IDE_TOKEN_TTL_SECONDS", "604800"))
-IDE_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("MESH_IDE_REQUEST_TIMEOUT_SECONDS", "150"))
+IDE_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("MESH_IDE_REQUEST_TIMEOUT_SECONDS", "600"))
 LIVE_LOCK = threading.RLock()
 
 # PT044_IDENTITY_POP_NONCE_V1

@@ -97,3 +97,11 @@ test('SecretRef authentication uses supported resolver and never falls back on f
  await assert.rejects(forwardRoleCompletion(cfg,body,forbidden,{...host,resolveSecretInput:async()=>({})}),/^Error: ide_gateway_token_auth_required$/);
  await assert.rejects(forwardRoleCompletion(cfg,body,forbidden,{...host,resolveSecretInput:async()=>{throw Error('private diagnostic')}}),/^Error: ide_gateway_token_auth_required$/);
 });
+
+test('large-model budget permits native attempts but rejects unbounded waits',async()=>{
+ const body={model:'any-host',messages:[{role:'user',content:'Fixture'}]};
+ await forwardRoleCompletion(config,body,async()=>response,{...host,timeoutMs:590000});
+ for (const timeoutMs of [0,-1,590001,Infinity,NaN]) {
+  await assert.rejects(forwardRoleCompletion(config,body,async()=>assert.fail('invalid budget dispatched'),{...host,timeoutMs}),/^Error: ide_timeout_invalid$/);
+ }
+});

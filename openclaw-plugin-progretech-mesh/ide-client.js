@@ -41,8 +41,10 @@ export async function forwardRoleCompletion(config, body, fetchImpl = fetch, opt
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('ide_gateway_port_invalid');
   const user = typeof body.user === 'string' ? body.user : '';
   const session = user ? createHash('sha256').update(user).digest('hex').slice(0,32) : randomUUID();
-  const timeoutMs = options.timeoutMs ?? 140000;
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 145000) throw new Error('ide_timeout_invalid');
+  // Native local models may need a 300s attempt before their fallback runs.
+  // Finish before the cloud relay deadline so cancellation remains explicit.
+  const timeoutMs = options.timeoutMs ?? 590000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 590000) throw new Error('ide_timeout_invalid');
   let response;
   try {
     response = await fetchImpl(`http://127.0.0.1:${port}/v1/chat/completions`, {
