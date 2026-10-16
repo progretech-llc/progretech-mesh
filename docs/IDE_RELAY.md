@@ -11,3 +11,5 @@ A gateway token lists its intake agent and the current native roles linked throu
 If no roster is available, setup reports `gateway_roster_unavailable`. Reconnect the gateway and verify its roster before generating setup again. A removed model reports `model_not_allowed`; refresh `/v1/models`. A role removed between discovery and forwarding can report `ide_role_binding_unavailable` or `ide_role_not_available`; do not silently substitute another agent. An expired token must be replaced using that agent's API setup.
 
 The serving agent must keep its actual model provider and fallback assignments. Pointing it back to its own Mesh relay can create recursive routing. The relay credential belongs in the remote client, not as a replacement for the serving agent's inference configuration.
+
+The cloud relay waits up to 600 seconds; the gateway cancels native work after 590 seconds. Use a client request timeout of at least 610 seconds for large local models. Requests remain bounded, and cancellation does not automatically replay an agent turn.
