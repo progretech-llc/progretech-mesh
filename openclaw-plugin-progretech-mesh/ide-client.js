@@ -1,41 +1,42 @@
 import {createHash, randomUUID} from 'node:crypto';
 
-export const IDE_ROLE_ALIASES = Object.freeze({
-  rend:'main', lyra:'researcher', mak:'coder', progre:'progre',
-  imagen:'imagen', codex:'codex', odexi:'codex',
-  'rend-code':'coder',
-  'rend-research':'researcher',
-});
 const FIELDS = new Set(['model','messages','stream','temperature','top_p','max_tokens','max_completion_tokens',
   'tools','tool_choice','parallel_tool_calls','response_format','seed','user','stop','presence_penalty','frequency_penalty']);
 
 export async function forwardRoleCompletion(config, body, fetchImpl = fetch, options = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('ide_invalid_request');
-  let agentId = IDE_ROLE_ALIASES[body.model];
-  if (options.target !== undefined) {
-    const target = options.target;
-    const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value);
-    const runtimeValid = typeof target?.runtime_id === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(target.runtime_id);
-    const suffix = runtimeValid ? (/^[A-Za-z0-9_-]{1,28}$/.test(target.runtime_id) ? target.runtime_id : 'role_' + createHash('sha256').update(target.runtime_id).digest('hex').slice(0,24)) : '';
-    if (!target || typeof target !== 'object' || Array.isArray(target)
-        || Object.keys(target).sort().join(',') !== 'agent_id,gateway_id,runtime_id'
-        || !validId(target.agent_id) || !validId(target.gateway_id) || !runtimeValid
-        || target.gateway_id !== options.gatewayId
-        || target.agent_id !== `${target.gateway_id}--${suffix}`
-        || ![target.agent_id, `${target.agent_id}-code`].includes(body.model)) {
-      throw new Error('ide_role_binding_invalid');
-    }
-    const local = Array.isArray(options.agents) && options.agents.find(item =>
-      item?.id === target.agent_id && item?.runtime_id === target.runtime_id
-      && item.office_worker !== true && item.office_archived !== true);
-    if (!local) throw new Error('ide_role_binding_unavailable');
-    agentId = target.runtime_id;
+  const target = options.target;
+  const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value);
+  const runtimeValid = typeof target?.runtime_id === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(target.runtime_id);
+  const suffix = runtimeValid ? (/^[A-Za-z0-9_-]{1,28}$/.test(target.runtime_id) ? target.runtime_id : 'role_' + createHash('sha256').update(target.runtime_id).digest('hex').slice(0,24)) : '';
+  const isHost = target?.agent_id === target?.gateway_id;
+  const models = isHost ? [target?.agent_id] : [target?.agent_id, `${target?.agent_id}-code`];
+  if (!target || typeof target !== 'object' || Array.isArray(target)
+      || Object.keys(target).sort().join(',') !== 'agent_id,gateway_id,runtime_id'
+      || !validId(target.agent_id) || !validId(target.gateway_id) || !runtimeValid
+      || target.gateway_id !== options.gatewayId
+      || (!isHost && target.agent_id !== `${target.gateway_id}--${suffix}`)
+      || !models.includes(body.model)) {
+    throw new Error('ide_role_binding_invalid');
   }
-  if (!agentId || !Object.hasOwn(config?.agents?.entries || {}, agentId)) throw new Error('ide_role_not_available');
+  const local = Array.isArray(options.agents) && options.agents.find(item =>
+    item?.id === target.agent_id && item?.runtime_id === target.runtime_id
+    && item.office_worker !== true && item.office_archived !== true);
+  if (!local) throw new Error('ide_role_binding_unavailable');
+  const agentId = target.runtime_id;
+  if (!Object.hasOwn(config?.agents?.entries || {}, agentId)) throw new Error('ide_role_not_available');
   if (Object.keys(body).some(key => !FIELDS.has(key))) throw new Error('ide_unsupported_parameter');
   if (!Array.isArray(body.messages) || !body.messages.length || JSON.stringify(body).length > 1048576) throw new Error('ide_invalid_messages');
-  const token = config?.gateway?.auth?.token || process.env.OPENCLAW_GATEWAY_TOKEN;
-  if (config?.gateway?.auth?.mode !== 'token' || typeof token !== 'string' || !token) throw new Error('ide_gateway_token_auth_required');
+  if (config?.gateway?.auth?.mode !== 'token') throw new Error('ide_gateway_token_auth_required');
+  let token = config?.gateway?.auth?.token;
+  if (token && typeof token === 'object') {
+    try {
+      const resolve = options.resolveSecretInput || (await import('openclaw/plugin-sdk/secret-input-runtime')).resolveConfiguredSecretInputWithFallback;
+      const resolved = await resolve({config, env:process.env, value:token, path:'gateway.auth.token'});
+      token = resolved.value;
+    } catch { throw new Error('ide_gateway_token_auth_required'); }
+  } else if (!token) token = process.env.OPENCLAW_GATEWAY_TOKEN;
+  if (typeof token !== 'string' || !token) throw new Error('ide_gateway_token_auth_required');
   const port = config.gateway.port || 18789;
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('ide_gateway_port_invalid');
   const user = typeof body.user === 'string' ? body.user : '';

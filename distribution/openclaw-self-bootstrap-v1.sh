@@ -7,7 +7,8 @@ set -euo pipefail
 
 OPENCLAW="${OPENCLAW:-$(command -v openclaw || true)}"
 PACKAGE_URL="${MESH_PLUGIN_PACKAGE_URL:-}"
-EXPECTED_SHA256="${MESH_PLUGIN_SHA256:-ffcde913f823ea5986c23a2e445e6cfe4ccb262ae38169ece782db321c7675c3}"
+EXPECTED_SHA256="${MESH_PLUGIN_SHA256:?MESH_PLUGIN_SHA256 from the enrollment plan is required}"
+EXPECTED_VERSION="0.10.4-roster-relay.2"
 WORK="${MESH_BOOTSTRAP_WORK_DIR:-${XDG_RUNTIME_DIR:-/tmp}/progretech-mesh-enroll}"
 ARCHIVE="$WORK/progretech-mesh-openclaw.tgz"
 PTM1="${MESH_ENROLLMENT_PAYLOAD:-}"
@@ -99,29 +100,23 @@ PY
 [ "$ACTUAL" = "$EXPECTED_SHA256" ] || fail "SHA-256 mismatch; refusing installation"
 
 # Validate archive shape before handing it to OpenClaw.
-python3 - "$ARCHIVE" <<'PY'
+python3 - "$ARCHIVE" "$EXPECTED_VERSION" <<'PYARCHIVE'
 import tarfile, sys, json
 from pathlib import Path
-p=sys.argv[1]
-with tarfile.open(p, "r:gz") as tf:
+with tarfile.open(sys.argv[1], "r:gz") as tf:
     members=tf.getmembers()
     for m in members:
         q=Path(m.name)
         if q.is_absolute() or ".." in q.parts or m.issym() or m.islnk() or m.isdev():
             raise SystemExit("unsafe archive member")
     names={m.name for m in members}
-required={
-  "progretech-mesh/openclaw.plugin.json",
-  "progretech-mesh/package.json",
-  "progretech-mesh/index.js",
-}
-if not required.issubset(names):
-    raise SystemExit("required plugin files missing")
-pkg_member=tf.extractfile("progretech-mesh/package.json")
-pkg=json.load(pkg_member)
-if pkg.get("name") != "@progretech/openclaw-mesh" or pkg.get("version") != "0.7.7":
-    raise SystemExit("unexpected Mesh plugin identity/version")
-PY
+    required={"package/openclaw.plugin.json", "package/package.json", "package/index.js"}
+    if not required.issubset(names):
+        raise SystemExit("required plugin files missing")
+    pkg=json.load(tf.extractfile("package/package.json"))
+    if pkg.get("name") != "@progretech/openclaw-mesh" or pkg.get("version") != sys.argv[2]:
+        raise SystemExit("unexpected Mesh plugin identity/version")
+PYARCHIVE
 
 printf 'Package downloaded and verified. Proceeding with declared hot-safe managed installation; no generic idle wait and no automatic runtime restart.\n'
 
@@ -134,7 +129,7 @@ v=d.get("version") or d.get("plugin",{}).get("version") or ""
 print(v)
 ' 2>/dev/null || true)"
 
-python3 - "$INSTALLED_VERSION" "0.7.7" <<'PY'
+python3 - "$INSTALLED_VERSION" "${EXPECTED_VERSION}" <<'PY'
 import re,sys
 old,new=sys.argv[1],sys.argv[2]
 def parts(v):
@@ -145,8 +140,8 @@ if o and n and o > n:
     raise SystemExit("refusing Mesh adapter downgrade")
 PY
 
-if [ "$INSTALLED_VERSION" = "0.7.7" ]; then
-  printf 'Mesh OpenClaw adapter 0.7.7 already installed; skipping reinstall.\n'
+if [ "$INSTALLED_VERSION" = "${EXPECTED_VERSION}" ]; then
+  printf 'Mesh OpenClaw adapter ${EXPECTED_VERSION} already installed; skipping reinstall.\n'
 else
   BACKUP_DIR="$STATE/adapter-backups"
   mkdir -p "$BACKUP_DIR"
@@ -154,8 +149,8 @@ else
 
   # Managed installer remains authoritative. Keep the verified archive as rollback input;
   # never touch OpenClaw internals directly.
-  cp "$ARCHIVE" "$BACKUP_DIR/progretech-mesh-openclaw-0.7.7.tgz"
-  chmod 600 "$BACKUP_DIR/progretech-mesh-openclaw-0.7.7.tgz" 2>/dev/null || true
+  cp "$ARCHIVE" "$BACKUP_DIR/progretech-mesh-openclaw-${EXPECTED_VERSION}.tgz"
+  chmod 600 "$BACKUP_DIR/progretech-mesh-openclaw-${EXPECTED_VERSION}.tgz" 2>/dev/null || true
 
   if ! "$OPENCLAW" plugins install "$ARCHIVE" --force --accept-capabilities; then
     fail "managed plugin installation failed; existing agent/runtime left untouched"

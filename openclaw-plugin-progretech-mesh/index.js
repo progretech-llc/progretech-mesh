@@ -712,14 +712,10 @@ function readIdeGatewayToken() {
 }
 
 async function forwardIdeChat(api, body, target) {
-  if (target !== undefined) {
-    const gatewayId = meshIdentity?.agent_id;
-    // Recheck the host-owned provider roster for every imported-role request.
-    // A cloud-supplied native name alone is never enough to select an agent.
-    const agents = await discoverControlAgents(gatewayId, ensureLocalAccessCredential().token);
-    return forwardRoleCompletion(api.runtime.config.current(), body, fetch, {target, gatewayId, agents});
-  }
-  return forwardRoleCompletion(api.runtime.config.current(), body);
+  const gatewayId = meshIdentity?.agent_id;
+  // Every route, including the host, must still exist in the trusted local roster.
+  const agents = await discoverControlAgents(gatewayId, ensureLocalAccessCredential().token);
+  return forwardRoleCompletion(api.runtime.config.current(), body, fetch, {target, gatewayId, agents});
 }
 
 async function handleGatewayCommand(api, msg) {

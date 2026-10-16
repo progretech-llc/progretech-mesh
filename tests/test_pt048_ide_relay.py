@@ -11,7 +11,7 @@ class TestPT048IdeRelay(unittest.TestCase):
         main.IDE_PENDING.clear()
         main.DEV_AGENT_REGISTRY["rend"]={
             "id":"rend","name":"Rend","owner_id":"owner-a",
-            "trust_state":"verified","transport":"connected",
+            "trust_state":"verified","transport":"connected","runtime_id":"main",
         }
 
     def test_token_is_owner_and_agent_bound(self):
@@ -32,13 +32,13 @@ class TestPT048IdeRelay(unittest.TestCase):
         allowed=client.get("/v1/models",headers={"Authorization":f"Bearer {token}"})
         self.assertEqual(allowed.status_code,200)
         ids=[item["id"] for item in allowed.get_json()["data"]]
-        self.assertTrue({"rend","rend-code","rend-research"}.issubset(ids))
+        self.assertEqual(ids,["rend"])
 
     def test_nonstream_chat_roundtrip(self):
         token=main.issue_ide_token("owner-a","rend")["token"]
         completion={
             "id":"chatcmpl-test","object":"chat.completion","created":int(time.time()),
-            "model":"rend-code",
+            "model":"rend",
             "choices":[{"index":0,"message":{"role":"assistant","content":"relay-pass"},"finish_reason":"stop"}],
         }
         def fake_send(agent_id,message):
@@ -52,7 +52,7 @@ class TestPT048IdeRelay(unittest.TestCase):
         with patch.object(main,"send_gateway_message",side_effect=fake_send):
             response=client.post("/v1/chat/completions",
                 headers={"Authorization":f"Bearer {token}"},
-                json={"model":"rend-code","messages":[{"role":"user","content":"test"}],"stream":False})
+                json={"model":"rend","messages":[{"role":"user","content":"test"}],"stream":False})
         self.assertEqual(response.status_code,200,response.get_data(as_text=True))
         self.assertEqual(response.get_json()["choices"][0]["message"]["content"],"relay-pass")
 
