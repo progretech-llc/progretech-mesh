@@ -1069,12 +1069,16 @@
     });
     const data = await response.json();
     if (!response.ok) {
-      showToast(`IDE relay setup failed: ${data.error || response.status}`);
+      showToast(data.error === "gateway_roster_unavailable"
+        ? "Connect this gateway and refresh its agent list before copying API setup."
+        : `IDE relay setup failed: ${data.error || response.status}`);
       return;
     }
     const setup = [
       "ProgreTech Mesh IDE Relay",
+      "API format: OpenAI Chat Completions (not Anthropic Messages)",
       `Base URL: ${data.base_url}`,
+      `Model discovery: GET ${data.base_url}/models with this API key`,
       `API key: ${data.api_key}`,
       `Recommended model: ${data.recommended_model}`,
       `Models: ${(data.models || []).join(", ")}`,
@@ -1082,7 +1086,7 @@
     ].join("\n");
     const copied = await copyTextCompatible(setup);
     if (copied) {
-      showToast("IDE relay setup copied. Paste the Base URL and API key into PyCharm.");
+      showToast("API setup copied. Use the recommended model in an OpenAI-compatible client.");
       return;
     }
     window.prompt("Clipboard access is unavailable. Copy this IDE relay setup manually:", setup);

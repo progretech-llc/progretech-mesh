@@ -181,8 +181,8 @@ SAFE_FILE_EXTENSIONS = {
 }
 SENSITIVE_FILE_EXTENSIONS = {".exe", ".msi", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".so", ".dylib"}
 
-OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.3-chatter-floor.1"
-OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.3-chatter-floor.1.tgz"
+OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.4-roster-relay.1"
+OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.4-roster-relay.1.tgz"
 UNIVERSAL_ENROLLMENT_PROTOCOL_FILENAME = "universal-agent-enrollment-v1.json"
 AGENT_ADAPTER_CATALOG_FILENAME = "agent-adapter-catalog-v1.json"
 OPENCLAW_SELF_BOOTSTRAP_PLAN_FILENAME = "openclaw-self-bootstrap-plan-v1.json"
@@ -1160,14 +1160,36 @@ def ide_bearer_token() -> str:
     return header[7:].strip()
 
 
+def ide_routes(agent_id: str) -> dict[str, dict[str, str]]:
+    """Model IDs come only from this token's current, owner-bound gateway roster."""
+    try:
+        binding = ide_agent_binding(agent_id)
+    except ValueError:
+        return {}
+    if binding.get("runtime_id"):
+        # Keep the existing imported-role alias bound to that same exact role.
+        return {agent_id: binding, f"{agent_id}-code": binding}
+    host = DEV_AGENT_REGISTRY[agent_id]
+    routes = {}
+    runtime = host.get("runtime_id")
+    if (isinstance(runtime, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", runtime)
+            and not host.get("office_worker") and not host.get("office_archived")):
+        routes[agent_id] = {**binding, "runtime_id": runtime}
+    for item in host.get("identified_agents", []):
+        child_id = item.get("id") if isinstance(item, dict) else None
+        if not isinstance(child_id, str):
+            continue
+        try:
+            child = ide_agent_binding(child_id, host["owner_id"])
+        except ValueError:
+            continue
+        if child.get("gateway_id") == agent_id and child.get("runtime_id"):
+            routes[child_id] = child
+    return routes
+
+
 def ide_models(agent_id: str) -> list[str]:
-    models = [agent_id, f"{agent_id}-code"]
-    if agent_id == "rend":
-        models.extend([
-            "rend-research",
-            "lyra", "mak", "progre", "imagen", "codex", "odexi",
-        ])
-    return models
+    return list(ide_routes(agent_id))
 
 
 def resolve_ide_pending(agent_id: str, message: dict[str, Any]) -> bool:
@@ -1191,9 +1213,10 @@ def dispatch_ide_chat(agent_id: str, body: dict[str, Any]) -> tuple[bool, str, d
         binding = ide_agent_binding(agent_id)
     except ValueError as exc:
         return False, str(exc), None
-    gateway_id = binding["gateway_id"]
-    if body.get("model") not in ide_models(agent_id):
+    target = ide_routes(agent_id).get(body.get("model"))
+    if not target:
         return False, "model_not_allowed", None
+    gateway_id = target["gateway_id"]
     request_id = secrets.token_urlsafe(18)
     event = threading.Event()
     pending = {
@@ -1215,7 +1238,7 @@ def dispatch_ide_chat(agent_id: str, body: dict[str, Any]) -> tuple[bool, str, d
         "payload": {
             "request_id": request_id,
             "openai": body,
-            **({"target": binding} if binding.get("runtime_id") else {}),
+            "target": target,
         },
     })
     if not ok:
@@ -1229,7 +1252,8 @@ def dispatch_ide_chat(agent_id: str, body: dict[str, Any]) -> tuple[bool, str, d
     if not completed:
         return False, "ide_request_timeout", None
     try:
-        if ide_agent_binding(agent_id) != binding:
+        if (ide_agent_binding(agent_id) != binding
+                or ide_routes(agent_id).get(body.get("model")) != target):
             return False, "ide_role_binding_invalid", None
     except ValueError as exc:
         return False, str(exc), None
@@ -1525,7 +1549,7 @@ def create_app() -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
         ENVIRONMENT=environment,
-        MESH_VERSION=os.environ.get("MESH_VERSION", "1.20.0-chatter-floor"),
+        MESH_VERSION=os.environ.get("MESH_VERSION", "1.20.1-roster-relay"),
         BUILD_ID=os.environ.get("BUILD_ID", BUILD_ID),
         DEV_AUTH_ENABLED=os.environ.get("DEV_AUTH_ENABLED", dev_auth_default) == "1",
         DEV_SEED_AGENTS=os.environ.get("DEV_SEED_AGENTS", dev_seed_default) == "1",
@@ -2026,6 +2050,9 @@ def create_app() -> Flask:
         token_body = request.get_json(silent=True)
         if token_body not in (None, {}) or (request.get_data(cache=True) and token_body is None):
             return jsonify(ok=False, error="invalid_request"), 400
+        models = ide_models(agent_id)
+        if not models:
+            return jsonify(ok=False, error="gateway_roster_unavailable"), 409
         try:
             issued = issue_ide_token(current_mesh_user_id(), agent_id)
         except ValueError as exc:
@@ -2036,8 +2063,8 @@ def create_app() -> Flask:
             api_key=issued["token"],
             base_url=f"{mesh_public_origin()}/v1",
             expires_at=issued["expires_at"],
-            models=ide_models(agent_id),
-            recommended_model=f"{agent_id}-code",
+            models=models,
+            recommended_model=agent_id if agent_id in models else models[0],
         ), 201
 
     @app.get("/v1/models")
@@ -2092,15 +2119,13 @@ def create_app() -> Flask:
         requested_stream = bool(body.get("stream"))
         relay_body = dict(body)
         relay_body["stream"] = False
-        if (payload or {}).get("runtime_id"):
-            # Token-scoped IDE history never joins native/private conversations or
-            # another API token's history, even when callers reuse a user hint.
-            user_hint = body.get("user", "")
-            if not isinstance(user_hint, str) or len(user_hint) > 1024:
-                return openai_error("invalid_user", 400)
-            relay_body["user"] = hashlib.sha256(json.dumps([
-                payload["owner_id"], agent_id, payload["jti"], user_hint,
-            ], separators=(",", ":")).encode()).hexdigest()
+        # Caller hints never join another token's or role's native/private session.
+        user_hint = body.get("user", "")
+        if not isinstance(user_hint, str) or len(user_hint) > 1024:
+            return openai_error("invalid_user", 400)
+        relay_body["user"] = hashlib.sha256(json.dumps([
+            payload["owner_id"], agent_id, model, payload["jti"], user_hint,
+        ], separators=(",", ":")).encode()).hexdigest()
 
         ok, error, response = dispatch_ide_chat(agent_id, relay_body)
         if not ok:

@@ -1,25 +1,15 @@
 import unittest
+from unittest.mock import patch
 import main
 
-class TestPT049LargeModelRelay(unittest.TestCase):
-    def test_rend_exposes_qualified_specialist_aliases(self):
-        self.assertEqual(
-            [alias for alias in main.ide_models("rend") if alias.startswith("rend")],
-            [
-                "rend",
-                "rend-code",
-                "rend-research",
-            ],
-        )
+class TestRosterModelRelay(unittest.TestCase):
+    def test_no_registry_means_no_invented_models(self):
+        with patch.object(main, 'DEV_AGENT_REGISTRY', {}):
+            for agent in ['rend','mak','lyra','custom-host']:
+                self.assertEqual(main.ide_models(agent), [])
 
-    def test_other_agents_do_not_inherit_rend_specialists(self):
-        self.assertEqual(main.ide_models("mak"), ["mak", "mak-code"])
-        self.assertEqual(main.ide_models("lyra"), ["lyra", "lyra-code"])
-        self.assertNotIn("rend-research", main.ide_models("mak"))
+    def test_host_without_current_runtime_has_no_model(self):
+        with patch.object(main, 'DEV_AGENT_REGISTRY', {'custom-host': {'owner_id':'owner','trust_state':'verified'}}):
+            self.assertEqual(main.ide_models('custom-host'), [])
 
-    def test_research_alias_is_allowlisted_only_as_explicit_model_name(self):
-        self.assertIn("rend-research", main.ide_models("rend"))
-        self.assertNotIn("rend-research", main.ide_models("lyra"))
-
-if __name__ == "__main__":
-    unittest.main()
+if __name__ == '__main__': unittest.main()

@@ -122,9 +122,12 @@ def register_gateway_agents(gateway_id, payload, registry):
     # The gateway and its intake runtime are one agent. Keep signed receipts
     # intact, but exclude its former child alias from discovery and display.
     host_runtime = (host_activity or {}).get('runtime_id')
-    if isinstance(host_runtime, str):
+    if isinstance(host_runtime, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', host_runtime):
         host['runtime_id'] = host_runtime
-        accepted.pop(gateway_id+'--'+host_runtime, None)
+        suffix = host_runtime if re.fullmatch(r'[A-Za-z0-9_-]{1,28}', host_runtime) else 'role_' + hashlib.sha256(host_runtime.encode()).hexdigest()[:24]
+        accepted.pop(gateway_id+'--'+suffix, None)
+    else:
+        host.pop('runtime_id', None)
     host['identified_agents'] = [{'id': aid, 'name': item['name'], 'role': item.get('role', '')}
         for aid, item in accepted.items()]
     # The authenticated gateway owns discovered roles. Keep them usable as

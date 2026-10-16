@@ -41,7 +41,7 @@ def test_imported_mint_models_are_role_bound_and_origin_guarded(relay):
     assert client.post(path,data='{bad',content_type='application/json',headers={'Origin':'http://localhost'}).status_code==400
     issued=mint(client)
     assert issued['models']==['host-a--custom_role','host-a--custom_role-code']
-    assert issued['recommended_model']=='host-a--custom_role-code'
+    assert issued['recommended_model']=='host-a--custom_role'
     good,reason,payload=main.validate_ide_token(issued['api_key'])
     assert good,reason
     assert payload['gateway_id']=='host-a' and payload['runtime_id']=='custom_role'

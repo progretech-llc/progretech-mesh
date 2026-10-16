@@ -15,7 +15,7 @@ class TestOfflinePwaTransport(unittest.TestCase):
  def test_how_it_works(self):
   for value in ('Same network','Different networks','Restrictive networks','Direct only','Offline PWA behavior'): self.assertIn(value,self.how)
  def test_acceptance_surface(self): self.assertIn('/api/transport/acceptance',self.main); self.assertIn('offline_same_lan_reconnect',self.main)
- def test_version(self): self.assertEqual(self.pkg['version'],'0.10.3-chatter-floor.1')
+ def test_version(self): self.assertEqual(self.pkg['version'],'0.10.4-roster-relay.1')
  def test_no_frontend_stage_markers(self):
   joined='\n'.join(p.read_text(errors='ignore') for p in list((ROOT/'templates').glob('*.html'))+list((ROOT/'static/js').glob('*.js'))); self.assertIsNone(re.search(r'\bPhase\s+\d+\b|\bRev(?:ision)?\s+\d+\b',joined,re.I))
 if __name__=='__main__': unittest.main()
