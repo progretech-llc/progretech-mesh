@@ -1,6 +1,10 @@
 'use strict';
 const $ = (selector) => document.querySelector(selector);
 let generation = 0;
+let liveReady = false;
+let renderedHost = null;
+let taskPending = false;
+let requireSelection = false;
 const notice = (text, error = false) => { $('#status').textContent = text; $('#status').classList.toggle('error', error); };
 const hostPath = (host = $('#host').value) => `/api/agents/${encodeURIComponent(host)}`;
 async function jsonFetch(path, options = {}) {
@@ -11,38 +15,53 @@ async function jsonFetch(path, options = {}) {
   return data;
 }
 async function control(action, args = {}, host = $('#host').value) {
-  if (!host) throw new Error('Choose an owned workstation first.');
+  if (!host || !liveReady) throw new Error('Load a connected workstation first.');
   const data = await jsonFetch(`${hostPath(host)}/factory/control`, {method:'POST', body:JSON.stringify({action,args})});
   return data.result;
 }
 function element(tag, text, className) {
   const node = document.createElement(tag); node.textContent = text; if (className) node.className = className; return node;
 }
-function renderStatus(data) {
+function clearStatus(message) {
+  liveReady = false;
+  $('#agents').replaceChildren(element('p', message));
+  $('#controller').replaceChildren(new Option('Load agents first', ''));
+  $('#mail-agent').replaceChildren(new Option('No available mailboxes', ''));
+  $('#providers').replaceChildren(); $('#capabilities').textContent = 'Live status unavailable.';
+  $('#updated').textContent = '';
+  document.querySelectorAll('.panel button').forEach(button => button.disabled = true);
+}
+function renderStatus(data, selectedAgent = '') {
   const agents = Array.isArray(data.agents) ? data.agents : [];
   $('#agents').replaceChildren(); $('#controller').replaceChildren();
+  $('#mail-agent').replaceChildren();
+  const seen = new Set();
   for (const agent of agents) {
+    if (!/^[A-Za-z0-9_.-]{1,128}$/.test(agent.id || '') || seen.has(agent.id)) continue;
+    seen.add(agent.id);
     const card = element('article','', 'factory-agent');
     if (MeshAvatar.source(agent)) {
       const avatar = document.createElement('img'); avatar.src=MeshAvatar.source(agent); avatar.alt=''; avatar.width=64; avatar.height=64; avatar.style.objectFit='cover'; card.append(avatar);
     }
     card.append(element('h3',agent.name || agent.id),element('p',agent.role || 'Role not reported'));
-    card.append(element('span',agent.controller ? 'Controller' : 'Worker','badge'));
-    card.append(element('span',agent.workspace_ready ? 'Workspace ready' : 'Workspace not ready','badge'));
+    const role = element('span', agent.controller === true ? 'Controller' : agent.controller === false ? 'Worker' : 'Role not reported', 'badge');
+    role.title = agent.controller_basis || ''; card.append(role);
+    card.append(element('span',agent.workspace_ready === true ? 'Workspace ready' : agent.workspace_ready === false ? 'Workspace not ready' : 'Workspace not reported','badge'));
     const model = typeof agent.model === 'string' ? agent.model : agent.model?.primary;
     card.append(element('p',`Model: ${model || 'Not reported'}`));
     card.append(element('p',`Hardware: ${agent.hardware_status || 'Not reported'}`,'muted'));
     $('#agents').append(card);
-    if (/^[a-z0-9_-]+$/.test(agent.id || '')) {
-      const option = new Option(agent.name || agent.id,agent.id); option.selected = agent.id === 'lyra'; $('#controller').append(option);
-    }
+    $('#controller').append(new Option(agent.name || agent.id,agent.id));
+    if (agent.mail_identity) $('#mail-agent').append(new Option(agent.name || agent.id,agent.mail_identity));
   }
-  for (const id of ['rend','lyra','mak']) {
-    if (!agents.some(a => a.id === id)) {
-      const card = element('article','', 'factory-agent');
- card.append(element('h3',id[0].toUpperCase()+id.slice(1)),element('p','Not reported by this workstation.','muted')); $('#agents').append(card);
-    }
-  }
+  if (!seen.size) $('#agents').append(element('p','No agents reported by this gateway.'));
+  if (!$('#mail-agent').options.length) $('#mail-agent').append(new Option('No available mailboxes',''));
+  liveReady = true;
+  document.querySelectorAll('.panel button').forEach(button => button.disabled = button.closest('.panel').dataset.busy === 'true');
+  if (seen.has(selectedAgent)) $('#controller').value = selectedAgent;
+  else if (selectedAgent) $('#controller').prepend(new Option('Choose a current agent','',true,true));
+  $('#task-form button').disabled = taskPending || !$('#controller').value;
+  $('form[data-action="mail.status"] button').disabled = !$('#mail-agent').value;
   $('#providers').replaceChildren();
   for (const [name, value] of Object.entries(data.providers || {})) {
     const details = document.createElement('details');details.append(element('summary',name),element('pre',JSON.stringify(value,null,2)));$('#providers').append(details);
@@ -52,15 +71,37 @@ function renderStatus(data) {
   $('#updated').textContent = `Reported: ${data.timestamp || 'timestamp unavailable'}`;
 }
 async function refresh() {
-  const token = ++generation; const host = $('#host').value;
-  if (!host) return notice('No owned workstation is enrolled. Connect Rend from the Mesh console.',true);
-  notice('Requesting live factory status…'); $('#refresh').disabled = true;
+  const token = ++generation;
+  const selected = $('#host').value;
+  const selectedAgent = renderedHost === selected ? $('#controller').value : '';
+  if (renderedHost !== selected) {
+    clearStatus('Loading the selected gateway’s agents…');
+    document.querySelectorAll('.result').forEach(node => node.textContent = 'Not checked for this workstation.');
+    $('#task-result').textContent = 'No task submitted for this workstation.';
+  }
+  notice('Checking connected workstations…'); $('#refresh').disabled = true;
   try {
-    const data = await jsonFetch(`${hostPath(host)}/factory`);
+    const inventory = await jsonFetch('/api/factory/gateways');
     if (token !== generation) return;
-    renderStatus(data.result || {}); notice('Live workstation status received.');
-  } catch (error) {if(token===generation){notice(error.message,true);$('#agents').replaceChildren(element('p','Live agent status unavailable.'));$('#controller').replaceChildren(new Option('Load agents first',''));$('#providers').replaceChildren();$('#capabilities').textContent='Live status unavailable.';$('#updated').textContent='';}}
-  finally {if(token===generation) $('#refresh').disabled=false;}
+    const hosts = Array.isArray(inventory.gateways) ? inventory.gateways : [];
+    $('#host').replaceChildren(...hosts.map(host => new Option(`${host.name || host.id} · connected`, host.id)));
+    const present = hosts.some(host => host.id === selected);
+    if (present) {$('#host').value = selected; requireSelection = false;}
+    else if (selected || !hosts.length || requireSelection) {
+      requireSelection = true;
+      $('#host').prepend(new Option(hosts.length ? 'Choose a connected workstation' : 'No connected workstations','',true,true));
+      clearStatus('The selected workstation is unavailable. Connect a gateway or choose an available workstation.');
+      renderedHost = null;
+      return notice('Choose a connected workstation. Connections can be managed from the Mesh console.',true);
+    }
+    const host = $('#host').value;
+    clearStatus('Requesting the gateway’s current agents…');
+    const data = await jsonFetch(`${hostPath(host)}/factory`);
+    if (token !== generation || host !== $('#host').value) return;
+    renderedHost = host; renderStatus(data.result || {}, selectedAgent); notice('Live workstation status received.');
+  } catch (error) {
+    if (token === generation) {clearStatus('Live agent status unavailable. Use Refresh status to try again.');notice(error.message,true);}
+  } finally {if(token===generation) $('#refresh').disabled=false;}
 }
 function loadDevices(data) {
   for (const kind of ['source','sink']) {
@@ -74,6 +115,8 @@ async function perform(target, args) {
   const host = $('#host').value;
   if(target.dataset.confirm && !window.confirm(target.dataset.confirm)) return;
   const panel = target.closest('.panel');const output = panel.querySelector('.result');
+  if (panel.dataset.busy === 'true' || !liveReady) return;
+  panel.dataset.busy = 'true';
   const buttons = [...panel.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);output.textContent='Waiting for workstation…';
   try {
     const data = await control(action,args,host);
@@ -85,7 +128,7 @@ async function perform(target, args) {
       for(const key of ['enabled','quiet']) if(typeof settings?.[key]==='boolean') panel.querySelector(`[name="${key}"]`).checked=settings[key];
     }
   } catch(error) {output.textContent=error.message;}
-  finally {buttons.forEach(b=>b.disabled=false);}
+  finally {delete panel.dataset.busy;buttons.forEach(b=>b.disabled=!liveReady || host !== $('#host').value);}
 }
 document.querySelectorAll('button[data-action]').forEach(button=>button.addEventListener('click',()=>perform(button,{})));
 document.querySelectorAll('form[data-action]').forEach(form=>form.addEventListener('submit',event=>{
@@ -96,20 +139,26 @@ document.querySelectorAll('form[data-action]').forEach(form=>form.addEventListen
 }));
 $('#task-form').addEventListener('submit', async event=>{
   event.preventDefault();const host=$('#host').value;const agent=$('#controller').value;const text=$('#task').value.trim();
-  if(!host||!agent||!text) return;
+  if(taskPending||!liveReady||!host||!agent||!text) return;
+  taskPending = true;
   const button=$('#task-form button');button.disabled=true;$('#task-result').textContent='Sending…';
   try {
     const sent=await jsonFetch(`${hostPath(host)}/message`,{method:'POST',body:JSON.stringify({text:`/agent ${agent} ${text}`})});
+    if (host !== $('#host').value) return;
     $('#task-result').textContent=`Accepted by ${agent}. Waiting for a correlated response…`;
     for(let attempt=0;attempt<120;attempt++) {
       await new Promise(resolve=>setTimeout(resolve,2000));
+      if(host !== $('#host').value) return;
       const events=await jsonFetch(`${hostPath(host)}/events`);
+      if(host !== $('#host').value) return;
       const matches=(events.events || []).filter(e=>e.payload?.request_id===sent.request_id && e.type!=='user_message');
       if(matches.length) $('#task-result').textContent=matches.map(e=>e.message || JSON.stringify(e.payload)).join('\n\n');
       if(matches.some(e=>['agent_message','message_response','error'].includes(e.type)||e.payload?.final===true||e.payload?.status==='completed')) return;
     }
     $('#task-result').textContent+='\nLive waiting ended. The task may still be running; open the Mesh conversation for further updates. No duplicate task was submitted.';
-  } catch(error) {$('#task-result').textContent=error.message;}
-  finally {button.disabled=false;}
+  } catch(error) {if (host === $('#host').value) $('#task-result').textContent=error.message;}
+  finally {taskPending=false;button.disabled=!liveReady || !$('#controller').value;}
 });
+$('#controller').addEventListener('change',()=>{$('#task-form button').disabled=taskPending||!liveReady||!$('#controller').value;});
 $('#refresh').addEventListener('click',refresh);$('#host').addEventListener('change',refresh);refresh();
+setInterval(() => {if (!document.hidden && !$('#refresh').disabled) refresh();}, 30000);

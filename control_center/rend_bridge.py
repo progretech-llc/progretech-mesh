@@ -15,6 +15,8 @@ from control_center.provider import AgentControlProvider, register_provider_rout
 
 def install(host, home=None):
     home = Path(home or Path.home())
+    from control_center.gateway_roster import native_roster
+    host.roster = lambda: native_roster(home)
     state = home / '.progretech-mesh'
     # Explicit local bindings are mandatory, including for Rend. Random enrollment
     # IDs must not be guessed from names or silently bound to the main role.

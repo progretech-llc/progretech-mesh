@@ -88,10 +88,25 @@ class FactoryRelay:
 factory_relay = FactoryRelay()
 
 def register_factory_routes(app, require_session, user_id, registry, gateways, send):
+    def available_hosts():
+        owner = user_id()
+        if not owner:
+            return []
+        return sorted([{'id': key, 'name': value.get('name') or key,
+                        'connected': True, 'verified': True}
+                       for key, value in list(registry.items())
+                       if str(value.get('owner_id') or '').strip() == owner
+                       and value.get('trust_state') == 'verified'
+                       and key in gateways and not value.get('control_center_gateway')
+                       and not value.get('office_worker') and not value.get('office_archived')],
+                      key=lambda row: (row['name'].casefold(), row['id']))
+
     def owned(agent_id):
         record = registry.get(agent_id)
         if not record or not user_id() or str(record.get('owner_id') or '').strip() != user_id():
             return {'ok': False, 'error': 'agent_not_found'}, 404
+        if record.get('control_center_gateway') or record.get('office_worker') or record.get('office_archived'):
+            return {'ok': False, 'error': 'gateway_required'}, 403
         if record.get('trust_state') != 'verified':
             return {'ok': False, 'error': 'verified_gateway_required'}, 403
         if agent_id not in gateways:
@@ -101,10 +116,14 @@ def register_factory_routes(app, require_session, user_id, registry, gateways, s
     @app.get('/mission-control')
     @require_session
     def factory_page():
-        agents = [{'id': key, 'name': value.get('name', key), 'connected': key in gateways,
-                   'verified': value.get('trust_state') == 'verified'} for key, value in registry.items()
-                  if str(value.get('owner_id') or '').strip() == user_id()]
-        return render_template('mission_control.html', hosts=agents)
+        return render_template('mission_control.html', hosts=available_hosts())
+
+    @app.get('/api/factory/gateways')
+    @require_session
+    def factory_gateways():
+        response = jsonify(ok=True, gateways=available_hosts())
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @app.get('/factory')
     @require_session

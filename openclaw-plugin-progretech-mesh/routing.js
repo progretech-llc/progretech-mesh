@@ -17,15 +17,17 @@ export function resolveMeshTarget(body, config, defaultAgent = "rend") {
   if (typeof body?.text !== "string" || !body.text.trim()) throw new Error("empty_message");
   if (body.text.length > 32000) throw new Error("message_too_long");
   let text = body.text.trim();
-  if (Object.hasOwn(body, 'target_agent') &&
-      (typeof body.target_agent !== 'string' || !Object.hasOwn(aliases, body.target_agent.toLowerCase()))) {
+  const entries = config?.agents?.entries || {};
+  const configured = value => typeof value === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(value)
+    ? (Object.hasOwn(entries, value) ? value : Object.hasOwn(aliases, value.toLowerCase()) ? aliases[value.toLowerCase()] : null) : null;
+  if (Object.hasOwn(body, 'target_agent') && !configured(body.target_agent)) {
     throw new Error('unknown_agent');
   }
-  let requested = String(body.target_agent || body.agent_id || defaultAgent).toLowerCase();
-  const command = text.match(/^\/agent\s+([a-z0-9_-]+)\s+([\s\S]+)$/i);
+  let requested = String(body.target_agent || body.agent_id || defaultAgent);
+  const command = text.match(/^\/agent\s+([A-Za-z0-9_.-]{1,128})\s+([\s\S]+)$/);
   if (command) [, requested, text] = command;
-  else if (/^\/agent(?:\s|$)/i.test(text)) throw new Error("usage: /agent <rend|mak|lyra|progre|imagen|odexi> <message>");
-  const agentId = aliases[requested.toLowerCase()];
+  else if (/^\/agent(?:\s|$)/i.test(text)) throw new Error("usage: /agent <configured-agent-id> <message>");
+  const agentId = configured(requested);
   if (!agentId || !Object.hasOwn(config?.agents?.entries || {}, agentId)) throw new Error("unknown_agent");
   return { agentId, text };
 }
