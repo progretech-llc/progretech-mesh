@@ -52,3 +52,12 @@ test('consolidated aliases preserve IDs and retired roles fail closed', () => {
   }
   for (const name of ['designer','fast','tec','architect','revie','reviewer']) assert.throws(()=>resolveMeshTarget({target_agent:name,text:'check'},cfg),/unknown_agent/);
 });
+
+test('Mission Control routes exact arbitrary native IDs and removals fail closed', () => {
+  const cfg={agents:{entries:{'Lead.Custom':{},'worker-new':{},mak:{}}}};
+  assert.equal(resolveMeshTarget({agent_id:'custom-host',text:'/agent Lead.Custom inspect'},cfg).agentId,'Lead.Custom');
+  assert.equal(resolveMeshTarget({target_agent:'worker-new',text:'inspect'},cfg).agentId,'worker-new');
+  assert.equal(resolveMeshTarget({target_agent:'mak',text:'inspect'},cfg).agentId,'mak');
+  delete cfg.agents.entries['worker-new'];
+  assert.throws(()=>resolveMeshTarget({target_agent:'worker-new',text:'inspect'},cfg),/unknown_agent/);
+});

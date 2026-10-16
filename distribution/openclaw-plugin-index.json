@@ -1,10 +1,10 @@
 {
   "package_id": "progretech-mesh-openclaw",
-  "version": "0.10.4-roster-relay.3",
+  "version": "0.10.4-roster-relay.4",
   "runtime": "openclaw",
   "min_openclaw_version": "2026.9.3",
-  "filename": "progretech-mesh-openclaw-0.10.4-roster-relay.3.tgz",
-  "sha256": "c559682aef9dec39e9b3fc443cd057c61c27c435d76381ae88e8cd39875e9e43",
+  "filename": "progretech-mesh-openclaw-0.10.4-roster-relay.4.tgz",
+  "sha256": "9eefa798a27e1e551c0180759772ce931da91d65bb750eddcb5860442dc375e8",
   "signature": {
     "mode": "unconfigured",
     "codeseal_verified": false,

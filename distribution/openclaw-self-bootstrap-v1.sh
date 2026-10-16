@@ -8,7 +8,7 @@ set -euo pipefail
 OPENCLAW="${OPENCLAW:-$(command -v openclaw || true)}"
 PACKAGE_URL="${MESH_PLUGIN_PACKAGE_URL:-}"
 EXPECTED_SHA256="${MESH_PLUGIN_SHA256:?MESH_PLUGIN_SHA256 from the enrollment plan is required}"
-EXPECTED_VERSION="0.10.4-roster-relay.3"
+EXPECTED_VERSION="0.10.4-roster-relay.4"
 WORK="${MESH_BOOTSTRAP_WORK_DIR:-${XDG_RUNTIME_DIR:-/tmp}/progretech-mesh-enroll}"
 ARCHIVE="$WORK/progretech-mesh-openclaw.tgz"
 PTM1="${MESH_ENROLLMENT_PAYLOAD:-}"

@@ -181,8 +181,8 @@ SAFE_FILE_EXTENSIONS = {
 }
 SENSITIVE_FILE_EXTENSIONS = {".exe", ".msi", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".so", ".dylib"}
 
-OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.4-roster-relay.3"
-OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.4-roster-relay.3.tgz"
+OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.4-roster-relay.4"
+OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.4-roster-relay.4.tgz"
 UNIVERSAL_ENROLLMENT_PROTOCOL_FILENAME = "universal-agent-enrollment-v1.json"
 AGENT_ADAPTER_CATALOG_FILENAME = "agent-adapter-catalog-v1.json"
 OPENCLAW_SELF_BOOTSTRAP_PLAN_FILENAME = "openclaw-self-bootstrap-plan-v1.json"
@@ -1549,7 +1549,7 @@ def create_app() -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
         ENVIRONMENT=environment,
-        MESH_VERSION=os.environ.get("MESH_VERSION", "1.20.1-roster-relay"),
+        MESH_VERSION=os.environ.get("MESH_VERSION", "1.20.2-mission-roster"),
         BUILD_ID=os.environ.get("BUILD_ID", BUILD_ID),
         DEV_AUTH_ENABLED=os.environ.get("DEV_AUTH_ENABLED", dev_auth_default) == "1",
         DEV_SEED_AGENTS=os.environ.get("DEV_SEED_AGENTS", dev_seed_default) == "1",

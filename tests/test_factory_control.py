@@ -64,6 +64,31 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(status,504);self.assertEqual(response['error'],'factory_timeout');self.assertEqual(relay.pending,{})
     def test_capacity(self):
         relay=factory.FactoryRelay(capacity=0);self.assertEqual(relay.dispatch('rend','factory.status',{},lambda *_:None)[1],429)
+    def test_gateway_choices_are_owned_verified_connected_hosts_only(self):
+        self.login()
+        self.registry.update({
+            'host-two': {'owner_id':'owner','trust_state':'verified','name':'Second workstation'},
+            'offline': {'owner_id':'owner','trust_state':'verified','name':'Offline fixture'},
+            'foreign': {'owner_id':'other','trust_state':'verified','name':'Other owner'},
+            'pending': {'owner_id':'owner','trust_state':'unsigned','name':'Pending trust'},
+            'rend--worker': {'owner_id':'owner','trust_state':'verified','control_center_gateway':'rend','name':'Linked worker'},
+            'archived': {'owner_id':'owner','trust_state':'verified','office_archived':True,'name':'Archived fixture'}})
+        self.gateways.update({k:object() for k in self.registry if k!='offline'})
+        response=self.client.get('/api/factory/gateways')
+        self.assertEqual({row['id'] for row in response.json['gateways']},{'rend','host-two'})
+        self.assertEqual(response.headers['Cache-Control'],'no-store')
+        page=self.client.get('/mission-control').data
+        for label in [b'Offline fixture',b'Other owner',b'Pending trust',b'Linked worker',b'Archived fixture']:
+            self.assertNotIn(label,page)
+        self.assertEqual(self.client.get('/api/agents/rend--worker/factory').status_code,403)
+        self.gateways.clear()
+        self.assertEqual(self.client.get('/api/factory/gateways').json['gateways'],[])
+        self.assertIn(b'No connected workstations',self.client.get('/mission-control').data)
+
+    def test_gateway_choices_require_authenticated_owner(self):
+        self.assertEqual(self.client.get('/api/factory/gateways').status_code,401)
+        self.login('other');self.assertEqual(self.client.get('/api/factory/gateways').json['gateways'],[])
+
     def test_signed_in_page(self):
         self.login();response=self.client.get('/mission-control');self.assertEqual(response.status_code,200);self.assertIn(b'Mission Control',response.data)
         response=self.client.get('/factory');self.assertEqual(response.status_code,200);self.assertIn(b'The agent factory',response.data)
