@@ -225,6 +225,7 @@ def register_control_center_routes(app, require_session, user_id, registry, gate
             return jsonify(ok=False, error='agent_not_found'), 404
         return render_template('control_center.html', agent={
             'id': agent_id, 'name': record.get('name', agent_id), 'role': record.get('role', ''),
+            'saved_profile': record.get('account_profile'),
             'model': record.get('model', 'Not reported'), 'connected': gateway_for(record) in gateways,
             'verified': record.get('trust_state') == 'verified' and gateway_for(record) is not None})
 
@@ -257,4 +258,6 @@ def register_control_center_routes(app, require_session, user_id, registry, gate
         except (ValueError, TypeError) as exc:
             return jsonify(ok=False, error=str(exc)), 400
         result, status = control_relay.dispatch(agent_id, action, args, send, gateway_id)
+        if result.get('ok') and action == 'profile.save':
+            record['account_profile'] = args
         return jsonify(result), status

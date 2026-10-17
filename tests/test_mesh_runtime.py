@@ -19,7 +19,7 @@ class RuntimeTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.home=Path(self.tmp.name)
         (self.home/'.openclaw').mkdir();(self.home/'.progretech-mesh').mkdir()
-        (self.home/'.openclaw/openclaw.json').write_text(json.dumps({'agents':{'entries':{'main':{'model':'remote/model'},'coder':{'model':'remote/model'}}},'gateway':{'port':18789,'auth':{'token':'fixture'}}}))
+        (self.home/'.openclaw/openclaw.json').write_text(json.dumps({'agents':{'entries':{'main':{'model':'remote/model'},'coder':{'model':'remote/model'}}},'gateway':{'port':18789,'auth':{'token':'fixture'},'http':{'endpoints':{'chatCompletions':{'enabled':True}}}}}))
         self.provider=AgentControlProvider(self.home/'profiles',{'host':'main','host--main':'main','host--coder':'coder'},lambda r:{},lambda *a:{})
         self.runtime=MeshRuntime(self.provider,self.home)
         self.runtime.idle=lambda:True
@@ -220,6 +220,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(params['idempotencyKey'],'mesh-'+result['job_id']);self.assertEqual(run.call_count,1)
         self.assertNotIn('fixture-reference',str(command));self.assertNotIn('--token',command)
         self.assertEqual(json.loads((self.home/'.openclaw/openclaw.json').read_text()),cfg)
+
+    def test_default_disabled_http_endpoint_uses_native_gateway_without_replay(self):
+        path=self.home/'.openclaw/openclaw.json'
+        cfg=json.loads(path.read_text());cfg['gateway'].pop('http');path.write_text(json.dumps(cfg))
+        self.runtime.open=lambda *a,**kw:self.fail('Disabled HTTP endpoint must not be called')
+        with patch('control_center.mesh_runtime.gateway_agent_reply',return_value='native reply') as transport:
+            result=self.done('host--coder',self.runtime.chat('host--coder','bounded request'))
+        self.assertEqual(result['result']['reply'],'native reply')
+        self.assertEqual(transport.call_count,1)
+        self.assertEqual(transport.call_args.args[1],'coder')
 
     def test_unconfirmed_gateway_cli_never_replays_or_exposes_diagnostics(self):
         cfg={'gateway':{'port':18789}}

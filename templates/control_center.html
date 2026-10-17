@@ -5,13 +5,14 @@
   <meta name="color-scheme" content="dark"><title>{{ agent.name }} · ProgreTech Control Center</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/control-center.css') }}">
+  <script src="{{ url_for('static', filename='js/runtime-client.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/control-center.js') }}" defer></script>
 <link rel="stylesheet" href="/static/analytics/analytics-consent.css"><script defer src="/static/analytics/analytics-consent.js"></script></head>
 <body>
-<div class="app cc-app" id="controlCenter" data-agent-id="{{ agent.id }}" data-connected="{{ 'true' if agent.connected and agent.verified else 'false' }}">
+<div class="app cc-app" id="controlCenter" data-saved-profile='{{ agent.saved_profile|tojson|forceescape }}' data-agent-id="{{ agent.id }}" data-connected="{{ 'true' if agent.connected and agent.verified else 'false' }}">
   <header class="topbar"><a class="brand" href="/"><div class="brand-mark" aria-hidden="true"></div><div class="brand-copy"><strong>ProgreTech Mesh</strong><span>ProgreTech Control Center</span></div></a><a class="ghost-btn" href="/">← Agent fleet</a></header>
   <main class="cc-main">
-    <section class="cc-hero"><div><div class="eyebrow">AGENT PROFILE</div><h1>{{ agent.name }}</h1><p>{{ agent.role or 'Role not reported' }}</p></div><div><span class="cc-badge">{{ 'Linked · verified' if agent.verified else 'Verification required' }}</span><p>{{ 'Gateway connected' if agent.connected else 'Gateway offline' }}</p><button id="ccRefresh" type="button" class="primary-btn">Load agent settings</button></div></section>
+    <section class="cc-hero"><div><div class="eyebrow">AGENT PROFILE</div><h1>{{ agent.name }}</h1><p>{{ agent.role or 'Role not reported' }}</p></div><div><span class="cc-badge">{{ 'Linked · verified' if agent.verified else 'Verification required' }}</span><p id="ccConnection">{{ 'Gateway connected' if agent.connected else 'Gateway offline' }}</p><p id="ccRuntime" role="status"></p><button id="ccRefresh" type="button" class="primary-btn">Load agent settings</button></div></section>
     <p id="ccStatus" class="cc-notice" role="status" aria-live="polite">Review requirements and data permissions before enabling controls. No microphone or camera starts automatically.</p>
     <div class="cc-grid">
       <section class="panel"><h2>Minimum Requirements</h2><ul>
@@ -21,7 +22,7 @@
         <li>Voice preview needs a working TTS provider and speaker. Listening needs a microphone and voice service; vision needs a camera or configured visual source.</li>
         <li>Declare whether this agent lives on a workstation to reveal device controls. Each feature also needs its local capability and permission.</li>
       </ul><p class="cc-muted">There is no universal GPU or RAM minimum for Mesh controls. Model memory, quantization, context length and media workloads determine hardware needs.</p></section>
-      <section class="panel"><h2>Permissions &amp; data</h2><p>Profile details and permissions are saved on the agent’s host. Mesh relays requests and responses in memory; it does not store these profiles in the cloud.</p><p>Inventory responses expose model names and role metadata. System and device responses expose host resources and device names. Preview text is sent to the host and played on its speaker. Microphone and vision controls affect the configured host source.</p><p class="cc-muted">Provider credentials stay local. Never enter keys, tokens or passwords in this profile. Browser microphone permission for Mesh chat is separate from workstation listening.</p><p class="cc-muted">Revoking a grant blocks future requests; it does not stop a service already running. Stop voice before revoking microphone access.</p></section>
+      <section class="panel"><h2>Permissions &amp; data</h2><p>Profile details and permissions are saved on the agent’s host. Mesh also saves your profile configuration to your account. Live requests and responses remain ephemeral.</p><p>Inventory responses expose model names and role metadata. System and device responses expose host resources and device names. Preview text is sent to the host and played on its speaker. Microphone and vision controls affect the configured host source.</p><p class="cc-muted">Provider credentials stay local. Never enter keys, tokens or passwords in this profile. Browser microphone permission for Mesh chat is separate from workstation listening.</p><p class="cc-muted">Revoking a grant blocks future requests; it does not stop a service already running. Stop voice before revoking microphone access.</p></section>
     </div>
     <section class="panel"><div class="cc-section-head"><h2>Agent setup</h2><span class="cc-badge">Settings apply to {{ agent.name }}</span></div>
       <form id="ccProfile">

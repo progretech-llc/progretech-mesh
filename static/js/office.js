@@ -45,7 +45,7 @@
     const markup=agents.map(a=>{
       const indicator=a.native?MeshRuntime.indicator(a.native):{state:a.state || 'idle',label:a.state || 'Idle'};
       const working=snapshot.tasks.find(t=>t.assignee===a.id && (t.running || stage(t)==='working'));
-      const state=working?'working':indicator.state;
+      const state=online && working && indicator.state!=='offline'?'working':indicator.state;
       const role=scrum(a)?'Scrum Master':working?working.title:a.role;
       const p=positions[a.id],source=MeshAvatar.source(a);
       return `<button type="button" class="floor-node ${scrum(a)?'scrum-master':''} ${esc(state)} ${selected===a.id?'selected':''}" data-agent="${esc(a.id)}" style="left:${p.x}px;top:${p.y}px" aria-label="${esc(a.name)}, ${esc(role)}, ${esc(indicator.label)}" title="${esc(role)}"><span class="node-orb">${source?`<img src="${esc(source)}" alt="">`:esc(a.name.slice(0,2))}</span><span class="node-state"></span><span class="node-name">${esc(a.name)}</span><span class="node-role">${esc(role)}</span></button>`;
@@ -208,8 +208,22 @@
     catch(error){if(created){say('Task created; execution is waiting: '+error.message);await refresh();}else f.querySelector('.dialog-error').textContent=error.message;}finally{button.disabled=false;}
   };
   async function refresh(){
-    if(pending || !host())return;pending=true;const requestEpoch=epoch;
-    try{const [result,response]=await Promise.all([api('snapshot'),fetch('/api/status')]);if(!response.ok)throw Error('Fleet status unavailable.');const status=await response.json();if(requestEpoch!==epoch)return;fleet=status.agents||[];snapshot=MeshRuntime.unifiedOffice(result.snapshot,fleet,host());online=true;
+    if(pending)return;pending=true;const requestEpoch=epoch;
+    try{
+      const response=await fetch('/api/status');if(!response.ok)throw Error('Fleet status unavailable.');
+      const status=await response.json();if(requestEpoch!==epoch)return;fleet=status.agents||[];
+      const hosts=fleet.filter(a=>!a.control_center_gateway && !a.office_worker && a.trust_state==='verified');
+      const selectedHost=host();
+      const choices=hosts.map(a=>[a.id,`${a.name} · ${a.transport==='connected'?'connected':'offline'}`]);
+      if(JSON.stringify([...$('officeHost').options].map(o=>[o.value,o.text]))!==JSON.stringify(choices)){
+        $('officeHost').replaceChildren(...choices.map(([id,label])=>new Option(label,id)));
+        if(hosts.some(a=>a.id===selectedHost))$('officeHost').value=selectedHost;
+      }
+      if(!host())throw Error('Generate a connection prompt from the agent fleet to connect your gateway.');
+      const gateway=hosts.find(a=>a.id===host());
+      if(gateway?.transport!=='connected')throw Error('Your gateway is offline. Mesh will reconnect when it becomes available.');
+      const result=await api('snapshot');if(requestEpoch!==epoch)return;
+      snapshot=MeshRuntime.unifiedOffice(result.snapshot,fleet,host());online=true;
       $('officeSignal').classList.add('online');for(const id of ['openMission','officePause','saveOfficeSettings'])$(id).disabled=false;$('officePause').textContent=snapshot.paused?'Resume work':'Pause work';
       if(document.activeElement!==$('maxIterations'))$('maxIterations').value=snapshot.maxIterations;
       $('officeRuntimeNotice').textContent=MeshRuntime.officeReadinessNotice(snapshot);
@@ -217,7 +231,7 @@
       renderFloor();renderBoard();say(snapshot.paused?'Work paused · your board remains available':'Connected · tasks and agent state come from your gateway');
       if($('taskDialog').open && $('taskEditForm').dataset.dirty!=='true' && !$('taskDialog').contains(document.activeElement?.closest('input,textarea,select'))) {const current=snapshot.tasks.find(t=>t.id===taskId);if(current)fillTask(current);}
       if($('taskDialog').open && !snapshot.tasks.some(t=>t.id===taskId)){$('taskDialog').close();taskId=null;}
-    }catch(e){if(requestEpoch!==epoch)return;online=false;$('officeSignal').classList.remove('online');for(const id of ['openMission','officePause','saveOfficeSettings'])$(id).disabled=true;renderLinks();say(e.message);}
+    }catch(e){if(requestEpoch!==epoch)return;online=false;$('officeSignal').classList.remove('online');for(const id of ['openMission','officePause','saveOfficeSettings'])$(id).disabled=true;if(snapshot){snapshot.agents=snapshot.agents.map(a=>({...a,native:{...(a.native||{}),transport:'not-connected'}}));renderFloor();}renderLinks();say(e.message);}
     finally{pending=false;}
   }
   async function loadShared(){

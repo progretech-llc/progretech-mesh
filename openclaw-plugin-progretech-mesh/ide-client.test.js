@@ -2,7 +2,7 @@ import test from 'node:test';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {forwardRoleCompletion} from './ide-client.js';
-const config={gateway:{port:18789,auth:{mode:'token',token:'synthetic-test-only'}},agents:{entries:{main:{},custom_role:{}}}};
+const config={gateway:{port:18789,http:{endpoints:{chatCompletions:{enabled:true}}},auth:{mode:'token',token:'synthetic-test-only'}},agents:{entries:{main:{},custom_role:{}}}};
 const response={ok:true,json:async()=>({id:'x',choices:[{message:{role:'assistant',content:null,tool_calls:[{id:'a',type:'function',function:{name:'lookup',arguments:'{}'}}]},finish_reason:'tool_calls'}]})};
 const host={target:{agent_id:'any-host',gateway_id:'any-host',runtime_id:'main'},gatewayId:'any-host',agents:[{id:'any-host',runtime_id:'main'}]};
 test('custom host selects its actual configured intake role without aliases',async()=>{
@@ -82,7 +82,7 @@ test('long custom native IDs keep exact configured identity behind hashed fleet 
 
 test('SecretRef authentication uses supported resolver and never falls back on failure',async()=>{
  const ref={source:'store',provider:'default',id:'SYNTHETIC_KEY'};
- const cfg={...config,gateway:{port:18789,auth:{mode:'token',token:ref}}};
+ const cfg={...config,gateway:{port:18789,http:{endpoints:{chatCompletions:{enabled:true}}},auth:{mode:'token',token:ref}}};
  const body={model:'any-host',messages:[{role:'user',content:'Fixture'}]};
  let resolutions=0;
  const resolveSecretInput=async params=>{
@@ -104,4 +104,9 @@ test('large-model budget permits native attempts but rejects unbounded waits',as
  for (const timeoutMs of [0,-1,590001,Infinity,NaN]) {
   await assert.rejects(forwardRoleCompletion(config,body,async()=>assert.fail('invalid budget dispatched'),{...host,timeoutMs}),/^Error: ide_timeout_invalid$/);
  }
+});
+
+test('disabled gateway API is reported without sending an inference request',async()=>{
+ const disabled={...config,gateway:{...config.gateway,http:{}}};
+ await assert.rejects(forwardRoleCompletion(disabled,{model:'any-host',messages:[{role:'user',content:'Hi'}]},()=>assert.fail('disabled API must not be called'),host),/ide_chat_endpoint_disabled/);
 });

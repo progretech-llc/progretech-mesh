@@ -18,3 +18,5 @@ venv
 vendor/munder-difflin/blog
 vendor/munder-difflin/docs
 vendor/munder-difflin/node_modules
+
+instance/

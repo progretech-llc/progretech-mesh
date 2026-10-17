@@ -103,7 +103,7 @@ class BoundBridgeConversationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             root=Path(home);(root/'.progretech-mesh').mkdir();(root/'.openclaw').mkdir()
             (root/'.progretech-mesh/control-center-bindings.json').write_text(json.dumps({'rend--researcher':'researcher'}))
-            cfg={'agents':{'entries':{'researcher':{'model':'local/heavy'}},'defaults':{'models':{'local/heavy':{},'local/light':{}}}},'gateway':{'auth':{'mode':'token','token':'test-only-token'},'port':18789}}
+            cfg={'agents':{'entries':{'researcher':{'model':'local/heavy'}},'defaults':{'models':{'local/heavy':{},'local/light':{}}}},'gateway':{'auth':{'mode':'token','token':'test-only-token'},'port':18789,'http':{'endpoints':{'chatCompletions':{'enabled':True}}}}}
             (root/'.openclaw/openclaw.json').write_text(json.dumps(cfg))
             provider=install(SimpleNamespace(app=Flask(__name__),token=lambda:'fixture',MUTATION_LOCK=threading.Lock(),dispatch=lambda *a:{}),home)
             models=provider.dispatch('rend--researcher','communication.get',{})['models']

@@ -15,7 +15,7 @@ from control_center.provider import AgentControlProvider, register_provider_rout
 
 def install(host, home=None):
     home = Path(home or Path.home())
-    from control_center.gateway_roster import native_roster
+    from control_center.gateway_roster import native_roster, agent_entries
     host.roster = lambda: native_roster(home)
     state = home / '.progretech-mesh'
     # Explicit local bindings are mandatory, including for Rend. Random enrollment
@@ -26,7 +26,7 @@ def install(host, home=None):
 
     def discover(runtime_id):
         cfg = json.loads((home / '.openclaw/openclaw.json').read_text())
-        agent = cfg['agents']['entries'].get(runtime_id)
+        agent = agent_entries(cfg).get(runtime_id)
         if agent is None:
             raise ValueError('runtime_agent_not_found')
         model = agent.get('model', cfg['agents'].get('defaults', {}).get('model', {}))
@@ -116,7 +116,7 @@ def install(host, home=None):
             cfg = json.loads((home / '.openclaw/openclaw.json').read_text())
             communication = profile['communication']
             role = communication['role']
-            if role != runtime_id or role not in cfg['agents']['entries']:
+            if role != runtime_id or role not in agent_entries(cfg):
                 raise ValueError('communication_role_unavailable')
             model = communication['model']
             if model != 'default' and model not in discover(runtime_id)['communication_models']:
@@ -137,7 +137,7 @@ def install(host, home=None):
             publish(home,**sync_fields,event_key=sync_id+':user',speaker='user',text=args['text'])
             try:
                 token=gateway['auth']['token']
-                if isinstance(token,dict):
+                if isinstance(token,dict) or cfg.get('gateway',{}).get('http',{}).get('endpoints',{}).get('chatCompletions',{}).get('enabled') is not True:
                     reply=gateway_agent_reply(cfg,role,session,args['text'],300,sync_id,model if model!='default' else None)
                 else:
                     if not isinstance(token,str) or not token:raise ValueError('runtime_auth_unavailable')
@@ -175,7 +175,9 @@ def install(host, home=None):
             if mutation:
                 host.MUTATION_LOCK.release()
 
-    provider = AgentControlProvider(state / 'agent-profiles', bindings, discover, execute, capabilities)
+    capabilities = getattr(host, 'capabilities', capabilities)
+    provider = AgentControlProvider(state / 'agent-profiles', bindings, discover, execute, capabilities,
+                                    voice_providers=getattr(host, 'voice_providers', ('kokoro', 'piper')))
     provider.home=home
     from control_center.mesh_runtime import MeshRuntime
     mesh=MeshRuntime(provider,home)

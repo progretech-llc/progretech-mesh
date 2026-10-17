@@ -28,6 +28,7 @@ export async function forwardRoleCompletion(config, body, fetchImpl = fetch, opt
   if (Object.keys(body).some(key => !FIELDS.has(key))) throw new Error('ide_unsupported_parameter');
   if (!Array.isArray(body.messages) || !body.messages.length || JSON.stringify(body).length > 1048576) throw new Error('ide_invalid_messages');
   if (config?.gateway?.auth?.mode !== 'token') throw new Error('ide_gateway_token_auth_required');
+  if (config?.gateway?.http?.endpoints?.chatCompletions?.enabled !== true) throw new Error('ide_chat_endpoint_disabled');
   let token = config?.gateway?.auth?.token;
   if (token && typeof token === 'object') {
     try {

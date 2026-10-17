@@ -8,13 +8,16 @@ import os from "node:os";
 import path from "node:path";
 import { createReleaseWatch, closeForRelease, isAuthenticationClose } from "./release-watch.js";
 import { saveEnrollment, forgetEnrollment, enrollmentReceipts } from "./gateway-enrollments.js";
-import { forwardControlCenter, discoverControlAgents } from "./control-center.js?adapter=0.9.8-chatter-groups.1";
+import { forwardControlCenter, discoverControlAgents as readControlAgents } from "./control-center.js?adapter=0.9.8-chatter-groups.1";
 
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
 
 import { forwardFactoryControl } from "./factory-control.js";
 import { resolveMeshTarget, meshConversationBody } from "./routing.js";
 import { runGatewayConversation } from "./gateway-client.js";
+
+import { ensurePortableHost } from './portable-host.js';
+async function discoverControlAgents(...args) { await ensurePortableHost(); return readControlAgents(...args); }
 
 const PLUGIN_ID = "progretech-mesh";
 const ROUTE = "/plugins/progretech-mesh/message";
@@ -1144,6 +1147,7 @@ async function ensureMeshConnection(api, preferInitialPairing = true) {
           }
           let payload;
           try {
+            await ensurePortableHost();
             payload = await forwardControlCenter(msg.payload, record.agent_id, ensureLocalAccessCredential().token);
           } catch (error) {
             payload = {ok: false, error: error instanceof Error ? error.message : String(error)};

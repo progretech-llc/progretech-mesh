@@ -181,8 +181,8 @@ SAFE_FILE_EXTENSIONS = {
 }
 SENSITIVE_FILE_EXTENSIONS = {".exe", ".msi", ".bat", ".cmd", ".ps1", ".sh", ".dll", ".so", ".dylib"}
 
-OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.4-roster-relay.5"
-OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.4-roster-relay.5.tgz"
+OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.5-portable-host.1"
+OPENCLAW_PLUGIN_PACKAGE_FILENAME = "progretech-mesh-openclaw-0.10.5-portable-host.1.tgz"
 UNIVERSAL_ENROLLMENT_PROTOCOL_FILENAME = "universal-agent-enrollment-v1.json"
 AGENT_ADAPTER_CATALOG_FILENAME = "agent-adapter-catalog-v1.json"
 OPENCLAW_SELF_BOOTSTRAP_PLAN_FILENAME = "openclaw-self-bootstrap-plan-v1.json"
@@ -819,12 +819,14 @@ def public_agent(record: dict[str, Any]) -> dict[str, Any]:
     public = {
         key: value
         for key, value in record.items()
-        if key not in {"codeseal_key", "owner_id"}
+        if key not in {"codeseal_key", "owner_id", "account_profile"}
     }
     from mesh_presence import observed_state
     public['state'] = observed_state(record)
     public["gateway_agent"] = not record.get("control_center_gateway")
     public["control_center_available"] = bool(record.get("owner_id")) and record.get("trust_state") == "verified"
+    if not record.get("control_center_gateway"):
+        public["transport"] = "connected" if record["id"] in GATEWAY_SOCKETS else "not-connected"
     if record.get("control_center_gateway"):
         host = DEV_AGENT_REGISTRY.get(record["control_center_gateway"], {})
         linked = record["control_center_gateway"] in GATEWAY_SOCKETS and host.get("trust_state") == "verified"
@@ -1558,6 +1560,21 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=environment == "production",
     )
 
+    backend = os.environ.get('MESH_ACCOUNT_STORE', 'memory' if environment == 'testing' else ('firestore' if os.environ.get('K_SERVICE') else 'sqlite'))
+    account_store = None
+    if backend != 'memory':
+        from mesh_account_store import AccountStore
+        account_store = AccountStore(backend, os.environ.get('MESH_ACCOUNT_DB', str(Path(app.instance_path) / 'accounts.sqlite3')))
+        account_store.restore(DEV_AGENT_REGISTRY)
+    app.extensions['mesh_account_store'] = account_store
+
+    @app.after_request
+    def save_account_configuration(response):
+        if account_store is not None:
+            with LIVE_LOCK:
+                account_store.save(DEV_AGENT_REGISTRY)
+        return response
+
     register_capability_routes(app)
     register_capability_registry_routes(app)
     register_capability_runtime_routes(app)
@@ -2283,19 +2300,30 @@ def create_app() -> Flask:
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
+    @app.get('/api/distribution/host/bundle')
+    def portable_host_bundle():
+        from mesh_host_distribution import host_bundle
+        data, digest = host_bundle(app.root_path)
+        return Response(data, mimetype='application/zip', headers={'X-Mesh-SHA256': digest})
+
+    @app.get('/api/distribution/host/bootstrap')
+    def portable_host_bootstrap():
+        return send_file(Path(app.root_path) / 'distribution/mesh-host-bootstrap-v1.py', mimetype='text/x-python', conditional=True)
+
     @app.post("/api/agents/<agent_id>/enrollment-message")
     @require_session
     # noinspection DuplicatedCode
-    def create_agent_enrollment_message(agent_id: str):
+    def create_agent_enrollment_message(agent_id: str, enrollment_owner=None):
+        owner = enrollment_owner or current_mesh_user_id()
         record = DEV_AGENT_REGISTRY.get(agent_id)
         if not record:
             return jsonify(ok=False, error="agent_not_found"), 404
-        if str(record.get("owner_id") or "").strip() != current_mesh_user_id():
+        if str(record.get("owner_id") or "").strip() != owner:
             return jsonify(ok=False, error="agent_not_found"), 404
         if record.get("trust_state") != "verified":
             return jsonify(ok=False, error="verified_identity_required"), 403
 
-        activation = issue_activation_code(agent_id, current_mesh_user_id())
+        activation = issue_activation_code(agent_id, owner)
         try:
             mesh_origin = mesh_public_origin()
         except ValueError as exc:
@@ -2379,6 +2407,8 @@ def create_app() -> Flask:
         ptm1 = f"PTM1:{compact}"
         protocol_url = envelope["discovery"]["protocol_url"]
         catalog_url = envelope["discovery"]["adapter_catalog_url"]
+        from mesh_host_distribution import host_setup_prompt
+        host_instructions = host_setup_prompt(app.root_path, mesh_origin, agent_id)
         human_message = "\n".join([
             "PROGRETECH MESH AGENT ENROLLMENT",
             "",
@@ -2387,6 +2417,7 @@ def create_app() -> Flask:
             "",
             "Use only capabilities and authority you already have. No ProgreTech software is assumed to be preinstalled, and the owner should not need workstation access.",
             "",
+            host_instructions,
             "Connection procedure:",
             "1. Locate the single PTM1 payload between the BEGIN/END markers below.",
             "2. Decode the text after 'PTM1:' as unpadded Base64URL JSON. Do not execute the encoded text itself.",
@@ -2860,7 +2891,7 @@ def create_app() -> Flask:
                 "transport": "live-gateway",
             },
             fleet={
-                "connected": sum(1 for a in agents if a["transport"] == "connected" and (not a.get("control_center_gateway") or a.get("gateway_enrollment"))),
+                "connected": sum(1 for a in agents if a["transport"] == "connected" and not a.get("control_center_gateway")),
                 "verified": sum(1 for a in agents if a["trust_state"] == "verified" and (not a.get("control_center_gateway") or a.get("gateway_enrollment"))),
                 "signed_total": sum(1 for a in agents if not a.get("control_center_gateway") or a.get("gateway_enrollment")),
                 "linked": sum(1 for a in agents if a.get("control_center_gateway") and not a.get("gateway_enrollment")),
@@ -2875,7 +2906,7 @@ def create_app() -> Flask:
         agents = [public_agent(a) for a in DEV_AGENT_REGISTRY.values() if ownership_visible(a, current_mesh_user_id())]
         agents = [a for a in agents if not a.get("identity_alias") and not a.get("office_archived")]
         agents.sort(key=lambda a: (a["name"].lower(), a["id"]))
-        return jsonify(ok=True, storage="ephemeral-in-process", agents=agents)
+        return jsonify(ok=True, storage="account-configuration" if account_store else "ephemeral-in-process", agents=agents)
 
     @app.post("/api/agents/enroll")
     @require_session
@@ -3581,28 +3612,33 @@ def create_app() -> Flask:
 
             while True:
                 raw = ws.receive()
-                if raw is None:
+                if raw is None or GATEWAY_SOCKETS.get(agent_id) is not ws:
                     break
                 try:
                     message = json.loads(raw)
                 except json.JSONDecodeError:
                     continue
                 update_from_gateway(agent_id, message)
+                if account_store is not None:
+                    with LIVE_LOCK:
+                        account_store.save(DEV_AGENT_REGISTRY)
         finally:
             with LIVE_LOCK:
-                if GATEWAY_SOCKETS.get(agent_id) is ws:
+                disconnected = GATEWAY_SOCKETS.get(agent_id) is ws
+                if disconnected:
                     GATEWAY_SOCKETS.pop(agent_id, None)
-                record["transport"] = "not-connected"
-                record["state"] = "offline"
-            append_event(agent_id, {
-                "type": "gateway",
-                "message": "Agent gateway disconnected",
-            })
-            broadcast_to_clients(agent_id, {
-                "type": "gateway_disconnected",
-                "agent_id": agent_id,
-                "agent": public_agent(record),
-            })
+                    record["transport"] = "not-connected"
+                    record["state"] = "offline"
+            if disconnected:
+                append_event(agent_id, {
+                    "type": "gateway",
+                    "message": "Agent gateway disconnected",
+                })
+                broadcast_to_clients(agent_id, {
+                    "type": "gateway_disconnected",
+                    "agent_id": agent_id,
+                    "agent": public_agent(record),
+                })
 
     @sock.route("/ws/client/<agent_id>")
     def client_socket(ws, agent_id: str):
@@ -3675,7 +3711,8 @@ def create_app() -> Flask:
     from mesh_onboarding import register_onboarding_routes
     register_onboarding_routes(app, require_session, current_mesh_user_id,
         DEV_AGENT_REGISTRY, mesh_public_origin, verify_runtime_agent_identity,
-        create_agent_enrollment_message, utcnow, fingerprint_for)
+        create_agent_enrollment_message, utcnow, fingerprint_for,
+        automatic_enrollment=lambda aid, owner: create_agent_enrollment_message.__wrapped__(aid, owner))
 
     return app
 

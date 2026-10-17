@@ -49,12 +49,14 @@
     return {label:'SYS',cls:'dir-sys'};
   }
   function factoryAgent(row,fleet,host) {
-    const match=(row.runtime_id==='main'?fleet.find(a=>a.id===host):null) || fleet.find(a=>a.id===host+'--'+row.runtime_id) || fleet.find(a=>a.runtime_id===row.runtime_id && a.control_center_gateway===host) || (row.runtime_id==='main'?fleet.find(a=>a.id===host):null);
+    const match=fleet.find(a=>a.id===host && (a.runtime_id===row.runtime_id || (!a.runtime_id && row.runtime_id==='main'))) || fleet.find(a=>a.id===host+'--'+row.runtime_id) || fleet.find(a=>a.runtime_id===row.runtime_id && a.control_center_gateway===host);
     // Both views use the same authenticated fleet observation; unknown stays unknown.
     return match ? {...row,...match,mesh_runtime:match.mesh_runtime || row} : {...row,state:'unknown',transport:'not-connected'};
   }
   function factoryRoster(rows,fleet,host) {
     const all=[...rows];
+    const gateway=fleet.find(a=>a.id===host && a.runtime_id);
+    if(gateway && !all.some(row=>row.runtime_id===gateway.runtime_id))all.push({id:gateway.runtime_id,runtime_id:gateway.runtime_id});
     for(const agent of fleet.filter(a=>a.control_center_gateway===host && !a.office_worker && !a.office_archived).map(a=>({...a,runtime_id:a.runtime_id || a.id.slice(host.length+2)}))){
       if(!all.some(row=>row.runtime_id===agent.runtime_id))all.push({id:agent.runtime_id,runtime_id:agent.runtime_id,state:'unknown'});
     }

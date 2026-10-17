@@ -20,7 +20,7 @@ class GatewayPortabilityTests(unittest.TestCase):
         self.home=Path(self.tmp.name)
         self.roles=('main','researcher','coder','custom_writer','codex','moxy')
         self.config={'agents':{'entries':{role:{'model':'remote/model'} for role in self.roles}},
-                     'gateway':{'port':18789,'auth':{'token':'fixture'}}}
+                     'gateway':{'port':18789,'auth':{'token':'fixture'},'http':{'endpoints':{'chatCompletions':{'enabled':True}}}}}
         (self.home/'.openclaw').mkdir()
         self.config_path=self.home/'.openclaw/openclaw.json'
         self.config_path.write_text(json.dumps(self.config))

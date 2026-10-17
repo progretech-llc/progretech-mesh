@@ -277,7 +277,8 @@ class MeshRuntime:
         cfg = json.loads((self.home / '.openclaw/openclaw.json').read_text())
         role = self.provider.bindings[agent]
         chosen = self.settings(agent).get('model', 'default')
-        model = cfg['agents']['entries'][role].get('model', cfg['agents'].get('defaults', {}).get('model', {}))
+        from control_center.gateway_roster import agent_entries
+        model = agent_entries(cfg)[role].get('model', cfg['agents'].get('defaults', {}).get('model', {}))
         chosen = chosen if chosen != 'default' else model if isinstance(model, str) else model.get('primary', '')
         return cfg, role, chosen
 
@@ -690,7 +691,7 @@ class MeshRuntime:
             override=chosen if self.settings(agent).get('model','default')!='default' else None
             token=cfg['gateway']['auth']['token']
             self.mark(ident,'processing','Processing your request; waiting for reply text')
-            if isinstance(token,dict):
+            if isinstance(token,dict) or cfg.get('gateway',{}).get('http',{}).get('endpoints',{}).get('chatCompletions',{}).get('enabled') is not True:
                 with self.lock:self.jobs[ident]['native_dispatch_started']=True
                 answer=gateway_agent_reply(cfg,role,session,text,response_timeout,ident,override)
             else:

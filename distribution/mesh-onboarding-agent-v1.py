@@ -77,7 +77,7 @@ def main():
     question_seen = None
     last_answer_at = 0
     deadline = time.monotonic() + 900
-    print(f'Onboarding connected for {claim["name"]}. Waiting for the owner question.', flush=True)
+    print(f'Onboarding connected for {claim["name"]}. Waiting for the identity question.', flush=True)
     while time.monotonic() < deadline:
         response = call(f'/api/onboarding/{sid}/poll')
         question = response.get('question')
@@ -95,7 +95,7 @@ def main():
                     'signature': sign({'question_id': question['id'], 'text': text, 'identity': identity}),
                     'identity_signature': sign(identity)})
                 last_answer_at = time.monotonic()
-                print('Signed reply sent. Waiting for owner confirmation.', flush=True)
+                print('Signed reply sent. Waiting for Mesh to complete the authorized connection.', flush=True)
         if response['state'] == 'complete':
             directory = Path(os.environ.get('PROGRETECH_MESH_IDENTITY_DIR', str(Path.home() / '.config/progretech/mesh/identity'))).expanduser()
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
