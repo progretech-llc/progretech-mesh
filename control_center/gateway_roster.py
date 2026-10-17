@@ -4,15 +4,24 @@ import re
 from pathlib import Path
 
 
+def agent_entries(config):
+    agents = config.get('agents', {})
+    entries = agents.get('entries')
+    if entries is None:
+        rows = agents.get('list')
+        entries = {row['id']: row for row in rows if isinstance(row, dict) and isinstance(row.get('id'), str)} if isinstance(rows, list) else {'main': {}}
+    if not isinstance(entries, dict):
+        raise ValueError('invalid_gateway_roster')
+    return {key: value for key, value in entries.items()
+            if isinstance(key, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', key) and isinstance(value, dict)}
+
+
 def native_roster(home):
     home = Path(home)
     config = json.loads((home / '.openclaw/openclaw.json').read_text())
     agents = config.get('agents', {})
-    entries = agents.get('entries', {})
     defaults = agents.get('defaults', {})
-    valid = {key: value for key, value in entries.items()
-             if isinstance(key, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', key)
-             and isinstance(value, dict)}
+    valid = agent_entries(config)
     output = []
     for runtime, value in valid.items():
         permissions = dict(defaults.get('subagents') or {})

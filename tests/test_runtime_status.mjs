@@ -69,3 +69,12 @@ test('stale work reports expire even while transport remains connected',()=>{
  agent.activity.observed_at=new Date().toISOString();
  assert.equal(api.indicator(agent).state,'busy');
 });
+
+test('gateway intake roles use their reported runtime rather than a hard-coded main alias',()=>{
+ const fleet=[{id:'host',runtime_id:'research_lead',state:'idle',transport:'connected'}];
+ const row=api.factoryAgent({id:'research_lead',runtime_id:'research_lead'},fleet,'host');
+ assert.equal(row.id,'host');assert.equal(row.transport,'connected');
+ const rows=api.factoryRoster([],fleet,'host');
+ assert.equal(rows.length,1);assert.equal(rows[0].runtime_id,'research_lead');
+ assert.equal(api.factoryRoster(rows,fleet,'host').length,1);
+});

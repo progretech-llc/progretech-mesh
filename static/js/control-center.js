@@ -10,7 +10,9 @@
   let saved = null;
   let capabilities = new Set();
   let busy = false;
-  const connected = root.dataset.connected === 'true';
+  let connected = root.dataset.connected === 'true';
+  let statusPending = false;
+  let hostProfileLoaded = false;
   const notify = (message, error = false) => { status.textContent = message; status.classList.toggle('error', error); };
 
   function updateControls() {
@@ -26,7 +28,7 @@
       button.title = button.disabled ? 'Requires a connected provider, advertised capability, and saved permissions.' : '';
     }
     form.querySelector('[type=submit]').disabled = busy || !connected;
-    document.getElementById('ccRefresh').disabled = busy || !connected;
+    document.getElementById('ccRefresh').disabled = busy;
   }
 
   async function requestControl(action, args = {}) {
@@ -76,9 +78,32 @@
   async function load() {
     notify('Loading this agent’s local profile…');
     render(await requestControl('profile.get'));
+    hostProfileLoaded = true;
     notify('Agent settings loaded. Controls require saved grants and a supported local capability.');
   }
-  document.getElementById('ccRefresh').addEventListener('click', () => run(load));
+  async function syncStatus() {
+    if (statusPending) return;
+    statusPending = true;
+    const wasConnected = connected;
+    try {
+      const response = await fetch('/api/status', {signal: AbortSignal.timeout(10000)});
+      if (!response.ok) throw Error('Unable to check gateway status. Sign in again if your session expired.');
+      const data = await response.json();
+      const agent = data.agents?.find(item => item.id === root.dataset.agentId);
+      connected = agent?.transport === 'connected' && agent?.control_center_available === true;
+      document.getElementById('ccConnection').textContent = connected ? 'Gateway connected' : 'Gateway offline or unavailable';
+      document.getElementById('ccRuntime').textContent = agent ? MeshRuntime.indicator(agent).label : 'Agent unavailable';
+      if (connected && !wasConnected && !hostProfileLoaded && !busy) await run(load);
+    } catch (error) {
+      connected = false;
+      document.getElementById('ccConnection').textContent = 'Gateway status unavailable';
+      document.getElementById('ccRuntime').textContent = 'Activity unknown';
+    } finally { statusPending = false; updateControls(); }
+  }
+  document.getElementById('ccRefresh').addEventListener('click', () => run(async () => { await syncStatus(); if (connected) await load(); else notify('Connect this gateway from the agent fleet, then load settings again.', true); }));
+  const statusTimer = setInterval(syncStatus, 4000);
+  window.addEventListener('pagehide', () => clearInterval(statusTimer));
+  syncStatus();
   field('workstation').addEventListener('change', updateControls);
   field('provider').addEventListener('change', () => { field('voice').value = field('provider').value === 'piper' ? 'current' : 'am_onyx'; updateControls(); });
   document.getElementById('ccDefaults').addEventListener('click', () => {
@@ -140,6 +165,9 @@
       notify('Workstation action completed.');
     });
   });
+  if (root.dataset.savedProfile && root.dataset.savedProfile !== 'null') {
+    try { render({profile: JSON.parse(root.dataset.savedProfile), capabilities: []}); } catch { /* Host refresh can replace an older saved profile. */ }
+  }
   updateControls();
   if (!connected) notify('This agent is offline or unverified. Setup guidance is available; connect its verified gateway to save settings.', true);
   else run(load);

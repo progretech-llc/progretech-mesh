@@ -129,7 +129,8 @@ def dispatch_office(home, role, args, agent_id=None):
         result['snapshot']['workdayTasks']=[{k:t.get(k) for k in ('id','role','phase','state','day','slot','started','finished')} for t in payload.get('tasks',[])][:30]
     except (OSError,ValueError): result['snapshot']['factoryAgents']=[]
     try:
-        entries=json.loads((Path(home)/'.openclaw/openclaw.json').read_text())['agents']['entries']
+        from control_center.gateway_roster import agent_entries
+        entries=agent_entries(json.loads((Path(home)/'.openclaw/openclaw.json').read_text()))
         for runtime in entries:
             role_id={'main':'rend','researcher':'lyra','coder':'mak'}.get(runtime,runtime)
             if not any(a.get('runtime_id')==runtime or a['id']==role_id for a in result['snapshot']['factoryAgents']):

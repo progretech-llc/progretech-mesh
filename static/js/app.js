@@ -65,6 +65,7 @@
 
   let installPrompt = null;
   let fleet = [];
+  let fleetPending = false;
   let selectedAgentId = null;
   const roleConversations = new Map();
   let monitorSocket = null;
@@ -1116,24 +1117,35 @@
   window.addEventListener('mesh-enrollment-completed', () => refreshFleet());
 
   async function refreshFleet() {
-    const response = await fetch("/api/status", {headers:{"Accept":"application/json"}});
-    if (response.status === 401) { location.href = "/login"; return; }
-    const data = await response.json();
-    fleet = data.agents || [];
+    if (fleetPending) return;
+    fleetPending = true;
+    try {
+      const response = await fetch("/api/status", {headers:{"Accept":"application/json"}, signal: AbortSignal.timeout(10000)});
+      if (response.status === 401) { location.href = "/login"; return; }
+      if (!response.ok) throw Error("Fleet status unavailable");
+      const data = await response.json();
+      fleet = data.agents || [];
 
-    document.getElementById("connectedCount").textContent = `${data.fleet.connected} gateways`;
-    document.getElementById("signedCount").textContent = `${data.fleet.verified} / ${data.fleet.signed_total ?? data.fleet.total}${data.fleet.linked ? ` · ${data.fleet.linked} linked` : ''}`;
-    document.getElementById("gatewayCount").textContent = String(data.fleet.connected);
-    document.getElementById("workingCount").textContent =
-      String(fleet.filter((a) => a.transport === "connected" && a.state === "working").length);
+      document.getElementById("connectedCount").textContent = `${data.fleet.connected} gateways`;
+      document.getElementById("signedCount").textContent = `${data.fleet.verified} / ${data.fleet.signed_total ?? data.fleet.total}${data.fleet.linked ? ` · ${data.fleet.linked} linked` : ''}`;
+      document.getElementById("gatewayCount").textContent = String(data.fleet.connected);
+      document.getElementById("workingCount").textContent =
+        String(fleet.filter((a) => a.transport === "connected" && a.state === "working").length);
 
-    renderFleet();
-    window.ProgreBuddy?.refreshFleet?.();
+      renderFleet();
+      window.ProgreBuddy?.refreshFleet?.();
 
-    if (selectedAgentId) {
-      const current = fleet.find((a) => a.id === selectedAgentId);
-      if (current) renderTelemetry(current);
-    }
+      if (selectedAgentId) {
+        const current = fleet.find((a) => a.id === selectedAgentId);
+        if (current) renderTelemetry(current);
+      }
+    } catch {
+      fleet = fleet.map(agent => ({...agent, transport: 'not-connected', state: 'unknown', phase: 'Gateway status unavailable; reconnecting…'}));
+      document.getElementById('connectedCount').textContent = 'Status unavailable';
+      document.getElementById('gatewayCount').textContent = '—';
+      document.getElementById('workingCount').textContent = '—';
+      renderFleet();
+    } finally { fleetPending = false; }
   }
 
   function stopEnrollmentTimers() {

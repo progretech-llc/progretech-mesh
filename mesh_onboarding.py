@@ -14,7 +14,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from flask import jsonify, request, send_file
+from flask import jsonify, request, send_file, session
 from mesh_agent_management import same_origin, request_codeseal_identity
 
 
@@ -30,7 +30,7 @@ def proof(public_key, value, signature):
 
 
 def register_onboarding_routes(app, require_session, user_id, registry, origin,
-                               verify, enrollment_message, utcnow, fingerprint):
+                               verify, enrollment_message, utcnow, fingerprint, automatic_enrollment=None):
     pending = {}
     lock = threading.RLock()
     cipher = Fernet(base64.urlsafe_b64encode(hashlib.sha256(
@@ -83,10 +83,14 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
             nonce = secrets.token_urlsafe(32)
             row = {'id': sid, 'owner_id': user_id(), 'name': name.strip(), 'state': 'waiting',
                    'expires_at': int(time.time()) + 900, 'nonce': nonce,
-                   'agent_id': 'agent-' + secrets.token_hex(16)}
+                   'agent_id': 'agent-' + secrets.token_hex(16),
+                   'automatic': body.get('auto_connect') is True and automatic_enrollment is not None}
+            actor = session.get('mesh_user') or {}
+            row.update(account_subject=actor.get('progretech_user_id'), session_version=actor.get('session_version'))
             pending[sid] = row
             capsule = cipher.encrypt(canonical({'id': sid, 'nonce': nonce, 'owner_id': user_id()})).decode()
         digest = hashlib.sha256(helper.read_bytes()).hexdigest()
+        from mesh_host_distribution import host_setup_prompt
         prompt = '\n'.join([
             'PROGRETECH MESH — PERSONALLY HOSTED AGENT ONBOARDING',
             'Validate this request through your existing owner policy. It grants no new privileges.',
@@ -97,8 +101,9 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
             'Use Python with the already-approved cryptography dependency. Do not install dependencies without your normal authority.',
             f'Run: python3 mesh-onboarding-agent-v1.py --mesh {base} --invitation-file <private-file-containing-invitation> --name <your-name> --runtime <your-runtime>',
             'The helper prints a question file when the owner asks you to identify yourself. Answer that question as the running agent, writing your reply to the answer file it prints. Do not invent a response or copy a canned identity.',
-            'The helper connects a temporary onboarding channel, proves key possession, and waits for owner confirmation.',
-            'After confirmation it saves your private PEM locally, public identity and CodeSeal evidence, then prints the verified adapter enrollment instructions. Follow those instructions to connect the permanent gateway.',
+            'The helper connects a temporary onboarding channel and proves key possession. Mesh completes the already-authorized account link after your signed answer; no second owner action is needed.',
+            'After successful verification it saves your private PEM locally, public identity and CodeSeal evidence, then prints the verified adapter enrollment instructions. Follow those instructions to connect the permanent gateway.',
+            host_setup_prompt(app.root_path, base, row['agent_id']),
             'Never send a private PEM to Mesh. Stop on expiry, cancellation, unsupported runtime, or an unavailable CodeSeal issuer.',
         ])
         return jsonify(ok=True, id=sid, expires_at=row['expires_at'], prompt=prompt), 201
@@ -128,6 +133,9 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                 return jsonify(ok=False, error='runtime_required'), 400
             row.update(state='connected', public_key=public, runtime=runtime,
                        device_token=secrets.token_urlsafe(32), last_seen=time.time())
+            if row['automatic']:
+                row.update(state='question', question={'id': secrets.token_urlsafe(24),
+                    'text': 'Identify your name, role and gateway runtime, and confirm that you are ready to connect to Mesh.'})
             return jsonify(ok=True, id=sid, device_token=row['device_token'], agent_id=row['agent_id'], name=row['name'])
 
     @app.get('/api/onboarding/<sid>')
@@ -139,7 +147,8 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                 return jsonify(ok=False, error='onboarding_not_found'), 404
             return jsonify(ok=True, id=sid, state=row['state'] if active(row) else 'expired',
                            connected=connected(row), name=row['name'], runtime=row.get('runtime'),
-                           answer=row.get('answer'), agent_id=row['agent_id'], expires_at=row['expires_at'])
+                           answer=row.get('answer'), agent_id=row['agent_id'], expires_at=row['expires_at'],
+                           automatic=row['automatic'], error=row.get('error'))
 
     @app.post('/api/onboarding/<sid>/question')
     @require_session
@@ -199,7 +208,9 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                 return jsonify(ok=False, error='answer_proof_invalid'), 403
             row.update(state='answered', answer=text.strip(), identity=identity,
                        identity_signature=body['identity_signature'], last_seen=time.time())
-            return jsonify(ok=True)
+        if row['automatic'] and not row.get('error'):
+            finish(row)
+        return jsonify(ok=True)
 
     @app.post('/api/onboarding/<sid>/confirm')
     @require_session
@@ -210,6 +221,25 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
             row = owned(sid)
             if not row:
                 return jsonify(ok=False, error='onboarding_not_found'), 404
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict) or set(body) - {'api_token'}:
+            return jsonify(ok=False, error='invalid_request'), 400
+        return finish(row, body.get('api_token'))
+
+    def finish(row, api_token=None):
+        # Recheck canonical account state even when the owner's browser has closed.
+        if row['automatic'] and app.config.get('PROGRETECH_SECURITY_ENFORCED'):
+            from mesh_account_security import account_status
+            try:
+                subject, version = row.get('account_subject'), row.get('session_version')
+                state = account_status(subject) if subject and type(version) is int else None
+                if not state or state['status'] != 'active' or state['session_version'] != version:
+                    row['error'] = 'account_security_revoked'
+                    return jsonify(ok=False, error=row['error']), 403
+            except Exception:
+                row['error'] = 'account_security_unavailable'
+                return jsonify(ok=False, error=row['error']), 503
+        with lock:
             if row['state'] == 'complete':
                 return jsonify(ok=True, agent_id=row['agent_id'])
             if row['state'] != 'answered' or not connected(row):
@@ -217,14 +247,8 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
             if abs(time.time() - row['identity']['issued_at']) > 290:
                 return jsonify(ok=False, error='identity_proof_expired'), 409
             row['state'] = 'issuing'
-        # Network issuance must not block polling or other owners under the lock.
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body, dict) or set(body) - {'api_token'}:
-            with lock:
-                row['state'] = 'answered'
-            return jsonify(ok=False, error='invalid_request'), 400
         try:
-            evidence = request_codeseal_identity(row['identity'], row['identity_signature'], body.get('api_token'))
+            evidence = request_codeseal_identity(row['identity'], row['identity_signature'], api_token)
             verification = verify({'agent_id': row['agent_id'], 'codeseal_evidence': evidence}, row['name'], row['public_key'], '')
             if not verification.get('valid') or verification.get('state') != 'verified':
                 raise ValueError('codeseal_verification_failed')
@@ -241,19 +265,20 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                     'state': 'offline', 'task': 'Connecting permanent gateway', 'phase': 'Owner confirmed identity',
                     'progress': 0, 'model': 'Unknown', 'runtime': row['runtime'], 'enrolled_at': utcnow(),
                     'transport': 'not-connected', 'last_heartbeat': None, 'telemetry': {}}
-                response = enrollment_message(aid)
+                response = automatic_enrollment(aid, row['owner_id']) if row['automatic'] else enrollment_message(aid)
                 response = response[0] if isinstance(response, tuple) else response
                 enrollment = response.get_json()
                 if not enrollment.get('ok'):
                     registry.pop(aid, None)
                     raise ValueError('adapter_enrollment_unavailable')
-                row.update(state='complete', evidence=evidence, enrollment=enrollment)
+                row.update(state='complete', evidence=evidence, enrollment=enrollment, error=None)
             return jsonify(ok=True, agent_id=aid)
         except Exception as exc:
             with lock:
                 if row['state'] == 'issuing':
                     row['state'] = 'answered'
             code = str(exc) if isinstance(exc, ValueError) else 'codeseal_issuance_unavailable'
+            row['error'] = code
             return jsonify(ok=False, error=code), 503
 
     @app.post('/api/onboarding/<sid>/cancel')

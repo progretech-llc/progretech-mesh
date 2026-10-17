@@ -28,8 +28,8 @@
       },
       "package": {
         "package_id": "progretech-mesh-openclaw",
-        "version": "0.10.4-roster-relay.5",
-        "sha256": "04604c24fab8d5aff6bd1649123b39d65d966c808f1fdb60847d79e8af2c5cdd",
+        "version": "0.10.5-portable-host.1",
+        "sha256": "c5549dc5f98fb37195d86fa06cae70920e48a45301037f07d95471d57da725fc",
         "format": "tgz"
       },
       "installation": {
@@ -49,7 +49,7 @@
       "self_bootstrap": {
         "plan_path": "/api/enrollment/adapters/openclaw/install-plan",
         "helper_path": "/api/enrollment/adapters/openclaw/bootstrap",
-        "helper_sha256": "7a309839f409cc67199536b28c08e7659c777c9b1b584e76f668db45b9b877d6",
+        "helper_sha256": "ed584d1d3fc0f970c2b2375d89cd43ec59595145711b0c53113f305affbd89d4",
         "preinstalled_component_required": false,
         "owner_workstation_access_required": false,
         "optional_accelerator": true,

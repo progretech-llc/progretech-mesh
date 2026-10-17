@@ -3,6 +3,8 @@ import json,os,sys
 from pathlib import Path
 import pytest
 
+os.environ["MESH_ACCOUNT_STORE"] = "memory"
+
 @pytest.fixture(autouse=True)
 def office_memory_transport(tmp_path,monkeypatch):
     helper=tmp_path/'memory-helper'

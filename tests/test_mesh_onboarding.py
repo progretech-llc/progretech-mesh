@@ -23,7 +23,7 @@ class OnboardingTests(unittest.TestCase):
         register_onboarding_routes(self.app, auth, lambda: session.get('uid'), self.registry,
             lambda: 'https://mesh.example', lambda *a: {'state': 'verified', 'valid': True, 'reason': 'test-signature'},
             lambda aid: jsonify(ok=True, enrollment_message='adapter instructions', enrollment_payload='PTM1:test'),
-            lambda: 'now', lambda *a: 'fingerprint')
+            lambda: 'now', lambda *a: 'fingerprint', automatic_enrollment=lambda aid, owner: jsonify(ok=True, enrollment_message='fixture', owner=owner))
         self.client = self.app.test_client()
         self.login()
         self.key = Ed25519PrivateKey.generate()
@@ -38,8 +38,8 @@ class OnboardingTests(unittest.TestCase):
     def sign(self, obj):
         return base64.b64encode(self.key.sign(canonical(obj))).decode()
 
-    def begin(self):
-        response = self.post('/api/onboarding', {'name': 'Ada', 'personally_hosted': True, 'accept_intermediary': True})
+    def begin(self, automatic=False):
+        response = self.post('/api/onboarding', {'name': 'Ada', 'personally_hosted': True, 'accept_intermediary': True, 'auto_connect': automatic})
         self.assertEqual(response.status_code, 201)
         self.sid = response.json['id']
         prompt = response.json['prompt']
@@ -115,3 +115,57 @@ class OnboardingTests(unittest.TestCase):
         self.assertEqual(self.client.get(f'/api/onboarding/{self.sid}/poll').status_code, 401)
         self.answer(); body = dict(self.answer_body); body['signature'] = 'bad'
         self.assertEqual(self.client.post(f'/api/onboarding/{self.sid}/answer', json=body, headers={'Authorization': 'Bearer ' + self.token}).status_code, 403)
+
+    def test_automatic_connection_finishes_without_the_owner_browser_or_session(self):
+        self.begin(automatic=True); self.claim()
+        agent = self.app.test_client()
+        headers = {'Authorization':'Bearer '+self.token}
+        poll = agent.get(f'/api/onboarding/{self.sid}/poll', headers=headers)
+        self.assertEqual(poll.json['state'], 'question')
+        identity = {'agent_id':self.agent_id,'agent_name':'Ada','public_key':self.public,'issued_at':int(time.time())}
+        body = {'text':'I am Ada on the OpenClaw gateway.','identity':identity}
+        body['signature'] = self.sign({'question_id':poll.json['question']['id'],**body})
+        body['identity_signature'] = self.sign(identity)
+        evidence = {'manifest':{'seal_id':'PTCS-TEST'}}
+        with patch('mesh_onboarding.request_codeseal_identity',return_value=evidence):
+            response = agent.post(f'/api/onboarding/{self.sid}/answer',json=body,headers=headers)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(self.registry[self.agent_id]['owner_id'],'owner')
+        final = agent.get(f'/api/onboarding/{self.sid}/poll',headers=headers).json
+        self.assertEqual(final['state'],'complete')
+        self.assertEqual(final['enrollment']['owner'],'owner')
+        self.assertEqual(agent.get(f'/api/onboarding/{self.sid}').status_code,401)
+
+    def test_automatic_issuer_failure_preserves_the_agent_channel_for_owner_recovery(self):
+        self.begin(automatic=True); self.claim()
+        headers = {'Authorization':'Bearer '+self.token}
+        poll = self.client.get(f'/api/onboarding/{self.sid}/poll',headers=headers).json
+        identity = {'agent_id':self.agent_id,'agent_name':'Ada','public_key':self.public,'issued_at':int(time.time())}
+        body = {'text':'I am Ada.','identity':identity}
+        body['signature'] = self.sign({'question_id':poll['question']['id'],**body})
+        body['identity_signature'] = self.sign(identity)
+        with patch('mesh_onboarding.request_codeseal_identity',side_effect=ValueError('codeseal_issuer_not_configured')):
+            response = self.client.post(f'/api/onboarding/{self.sid}/answer',json=body,headers=headers)
+        self.assertEqual(response.status_code,200)
+        status = self.client.get(f'/api/onboarding/{self.sid}').json
+        self.assertTrue(status['connected'])
+        self.assertEqual(status['state'],'answered')
+        self.assertEqual(status['error'],'codeseal_issuer_not_configured')
+        self.assertEqual(self.registry,{})
+
+    def test_automatic_linking_rechecks_locked_or_revoked_owner_after_browser_closes(self):
+        with self.client.session_transaction() as current:
+            current['mesh_user']={'progretech_user_id':'subject','session_version':1}
+        self.begin(automatic=True);self.claim()
+        self.app.config['PROGRETECH_SECURITY_ENFORCED']=True
+        agent=self.app.test_client();headers={'Authorization':'Bearer '+self.token}
+        question=agent.get(f'/api/onboarding/{self.sid}/poll',headers=headers).json['question']
+        identity={'agent_id':self.agent_id,'agent_name':'Ada','public_key':self.public,'issued_at':int(time.time())}
+        body={'text':'I am Ada.','identity':identity}
+        body['signature']=self.sign({'question_id':question['id'],**body});body['identity_signature']=self.sign(identity)
+        for state in ({'status':'locked','session_version':1},{'status':'active','session_version':2}):
+            with patch('mesh_account_security.account_status',return_value=state), patch('mesh_onboarding.request_codeseal_identity') as issuer:
+                result=agent.post(f'/api/onboarding/{self.sid}/answer',json=body,headers=headers)
+                self.assertEqual(result.status_code,200)
+                issuer.assert_not_called()
+                self.assertEqual(self.registry,{})

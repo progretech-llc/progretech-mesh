@@ -29,3 +29,10 @@ class NativeRosterTests(unittest.TestCase):
             rows=native_roster(home)
             self.assertEqual([r['id'] for r in rows],['main','new-role'])
             self.assertTrue(all(r['controller'] for r in rows));self.assertEqual(rows[0]['mail_identity'],'rend')
+
+    def test_list_roster_and_implicit_main_use_the_same_parser(self):
+        from control_center.gateway_roster import agent_entries
+        self.assertEqual(set(agent_entries({'agents': {'list': [{'id':'lead','model':'local/model'}, {'id':'worker'}]}})), {'lead','worker'})
+        self.assertEqual(agent_entries({'agents': {'defaults': {}}}), {'main': {}})
+        self.assertEqual(agent_entries({'agents': {'entries': {}}}), {})
+        self.assertEqual(set(agent_entries({'agents': {'entries': {'current': {}}, 'list': [{'id':'retired'}]}})), {'current'})
