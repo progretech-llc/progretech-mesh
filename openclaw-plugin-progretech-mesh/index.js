@@ -723,8 +723,12 @@ async function handleGatewayCommand(api, msg) {
     const requestId = trimText(msg.request_id || "", 160);
     if (!requestId) return true;
     let payload;
-    try { payload = await forwardFactoryControl(msg.payload, process.env.PROGRETECH_MESH_LOCAL_TOKEN?.trim() || ensureLocalAccessCredential().token); }
-    catch { payload = {ok:false,error:"factory_host_control_failed"}; }
+    const gatewayRequest = (method, params, options) => api.runtime.gateway.request(method, params, options);
+    try {
+      payload = await forwardFactoryControl(msg.payload, gatewayRequest);
+    } catch {
+      payload = {ok:false,error:'gateway_read_failed'};
+    }
     sendMeshGatewayMessage({type:"factory_control_response",request_id:requestId,payload,timestamp:new Date().toISOString()});
     return true;
   }

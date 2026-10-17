@@ -2,10 +2,24 @@
 const $ = (selector) => document.querySelector(selector);
 let generation = 0;
 let liveReady = false;
+let availableActions = new Set();
 let renderedHost = null;
 let taskPending = false;
 let requireSelection = false;
 const notice = (text, error = false) => { $('#status').textContent = text; $('#status').classList.toggle('error', error); };
+function updateActionButtons() {
+  document.querySelectorAll('button[data-action]').forEach(button => {
+    const available = liveReady && availableActions.has(button.dataset.action);
+    button.disabled = !available;
+    button.title = available ? '' : 'This control is not available through the connected gateway.';
+  });
+  document.querySelectorAll('form[data-action]').forEach(form => {
+    const available = liveReady && availableActions.has(form.dataset.action);
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.disabled = !available;
+    form.title = available ? '' : 'This control is not available through the connected gateway.';
+  });
+}
 const hostPath = (host = $('#host').value) => `/api/agents/${encodeURIComponent(host)}`;
 async function jsonFetch(path, options = {}) {
   const response = await fetch(path, {...options, headers: {'Content-Type': 'application/json', ...options.headers}, signal: AbortSignal.timeout(52000)});
@@ -24,12 +38,14 @@ function element(tag, text, className) {
 }
 function clearStatus(message) {
   liveReady = false;
+  availableActions = new Set();
   $('#agents').replaceChildren(element('p', message));
   $('#controller').replaceChildren(new Option('Load agents first', ''));
   $('#mail-agent').replaceChildren(new Option('No available mailboxes', ''));
   $('#providers').replaceChildren(); $('#capabilities').textContent = 'Live status unavailable.';
   $('#updated').textContent = '';
   document.querySelectorAll('.panel button').forEach(button => button.disabled = true);
+  updateActionButtons();
 }
 function renderStatus(data, selectedAgent = '') {
   const agents = Array.isArray(data.agents) ? data.agents : [];
@@ -57,11 +73,12 @@ function renderStatus(data, selectedAgent = '') {
   if (!seen.size) $('#agents').append(element('p','No agents reported by this gateway.'));
   if (!$('#mail-agent').options.length) $('#mail-agent').append(new Option('No available mailboxes',''));
   liveReady = true;
-  document.querySelectorAll('.panel button').forEach(button => button.disabled = button.closest('.panel').dataset.busy === 'true');
+  availableActions = new Set(Array.isArray(data.capabilities) ? data.capabilities : []);
+  updateActionButtons();
   if (seen.has(selectedAgent)) $('#controller').value = selectedAgent;
   else if (selectedAgent) $('#controller').prepend(new Option('Choose a current agent','',true,true));
   $('#task-form button').disabled = taskPending || !$('#controller').value;
-  $('form[data-action="mail.status"] button').disabled = !$('#mail-agent').value;
+  $('form[data-action="mail.status"] button').disabled = !$('#mail-agent').value || !availableActions.has('mail.status');
   $('#providers').replaceChildren();
   for (const [name, value] of Object.entries(data.providers || {})) {
     const details = document.createElement('details');details.append(element('summary',name),element('pre',JSON.stringify(value,null,2)));$('#providers').append(details);
@@ -128,7 +145,7 @@ async function perform(target, args) {
       for(const key of ['enabled','quiet']) if(typeof settings?.[key]==='boolean') panel.querySelector(`[name="${key}"]`).checked=settings[key];
     }
   } catch(error) {output.textContent=error.message;}
-  finally {delete panel.dataset.busy;buttons.forEach(b=>b.disabled=!liveReady || host !== $('#host').value);}
+  finally {delete panel.dataset.busy;updateActionButtons();}
 }
 document.querySelectorAll('button[data-action]').forEach(button=>button.addEventListener('click',()=>perform(button,{})));
 document.querySelectorAll('form[data-action]').forEach(form=>form.addEventListener('submit',event=>{
