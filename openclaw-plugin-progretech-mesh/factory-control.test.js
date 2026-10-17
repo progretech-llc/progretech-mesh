@@ -1,6 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {forwardFactoryControl} from './factory-control.js';
+import {forwardFactoryControl, createGatewayReader} from './factory-control.js';
+
+test('external plugin uses the authenticated SDK client with read-only authority', async () => {
+  const calls = [];
+  const read = createGatewayReader(async (...args) => {
+    calls.push(args);
+    return args[0] === 'agents.list' ? {defaultId:'main', agents:[{id:'main'}]} : {models:[]};
+  });
+  const {result} = await forwardFactoryControl({action:'factory.status'}, read);
+  assert.equal(result.agents[0].id, 'main');
+  assert.deepEqual(calls.map(([method]) => method), ['agents.list','models.list']);
+  for (const [, options, , authority] of calls) {
+    assert.deepEqual(options, {timeout:'15000'});
+    assert.deepEqual(authority, {scopes:['operator.read'], progress:false});
+  }
+  await assert.rejects(forwardFactoryControl({action:'exec'}, read));
+  assert.equal(calls.length, 2);
+});
 
 test('rejects arbitrary commands, malformed args, and missing gateway access', async () => {
   await assert.rejects(forwardFactoryControl({action: 'exec'}, async () => {}));
@@ -8,9 +25,19 @@ test('rejects arbitrary commands, malformed args, and missing gateway access', a
   await assert.rejects(forwardFactoryControl({action: 'factory.status'}, null), {message: 'gateway_unavailable'});
 });
 
+test('successful reads carry the relay acknowledgement and browser result envelope', async () => {
+  for (const action of ['factory.status','models.list','host.system','host.overview','skills.list']) {
+    const response = await forwardFactoryControl({action}, async () => ({
+      defaultId:'main', agents:[], models:[], skills:[],
+    }));
+    assert.equal(response.ok, true, action);
+    assert.equal(typeof response.result, 'object', action);
+  }
+});
+
 test('reads the agent roster and model catalog through the connected gateway', async () => {
   const calls = [];
-  const result = await forwardFactoryControl({action: 'factory.status'}, async (method, params, options) => {
+  const {result} = await forwardFactoryControl({action: 'factory.status'}, async (method, params, options) => {
     calls.push({method, params, options});
     if (method === 'agents.list') return {
       defaultId: 'main',
@@ -31,7 +58,7 @@ test('reads the agent roster and model catalog through the connected gateway', a
 
 test('lists models through the default agent gateway scope', async () => {
   const calls = [];
-  const result = await forwardFactoryControl({action: 'models.list'}, async (method, params) => {
+  const {result} = await forwardFactoryControl({action: 'models.list'}, async (method, params) => {
     calls.push({method, params});
     return method === 'agents.list' ? {defaultId: 'main'} : {models: [{id: 'qwen'}]};
   });
@@ -42,7 +69,7 @@ test('lists models through the default agent gateway scope', async () => {
 
 test('maps read-only host and skill actions to gateway methods', async () => {
   const methods = [];
-  const result = await forwardFactoryControl({action: 'skills.list'}, async (method) => {
+  const {result} = await forwardFactoryControl({action: 'skills.list'}, async (method) => {
     methods.push(method);
     return {agentId: 'main', skills: [{name: 'docs', source: 'bundled', path: '/private/plugin/skills/docs', eligible: true}]};
   });

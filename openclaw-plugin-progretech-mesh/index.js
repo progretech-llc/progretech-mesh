@@ -12,7 +12,8 @@ import { forwardControlCenter, discoverControlAgents as readControlAgents } from
 
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
 
-import { forwardFactoryControl } from "./factory-control.js";
+import { forwardFactoryControl, createGatewayReader } from "./factory-control.js";
+import { callGatewayFromCli } from "openclaw/plugin-sdk/gateway-runtime";
 import { resolveMeshTarget, meshConversationBody } from "./routing.js";
 import { runGatewayConversation } from "./gateway-client.js";
 
@@ -726,10 +727,11 @@ async function handleGatewayCommand(api, msg) {
     const requestId = trimText(msg.request_id || "", 160);
     if (!requestId) return true;
     let payload;
-    const gatewayRequest = (method, params, options) => api.runtime.gateway.request(method, params, options);
+    const gatewayRequest = createGatewayReader(callGatewayFromCli);
     try {
       payload = await forwardFactoryControl(msg.payload, gatewayRequest);
-    } catch {
+    } catch (error) {
+      api.logger?.warn?.(`[mesh] Factory gateway read failed: ${trimText(error?.message || "unknown error", 500)}`);
       payload = {ok:false,error:'gateway_read_failed'};
     }
     sendMeshGatewayMessage({type:"factory_control_response",request_id:requestId,payload,timestamp:new Date().toISOString()});
@@ -1695,7 +1697,6 @@ export default definePluginEntry({
     registerSpecklet(api, () => process.env.PROGRETECH_MESH_LOCAL_TOKEN?.trim() || ensureLocalAccessCredential().token);
     registerObservationHooks(api);
     registerConversationBridge(api);
-    startLocalSignalServer(api);
     writeLifecycleState({
       adapter_version: "0.8.1-cc.1",
       runtime: "openclaw",
@@ -1703,29 +1704,28 @@ export default definePluginEntry({
       conversation_scope: "mesh-independent",
     });
 
-    queueMicrotask(() => {
-      void refreshCapabilityProviderSnapshot().finally(() => {
-        void ensureMeshConnection(api, true);
-      });
-    });
-
-    api.on("gateway_start", () => {
-      startLocalSignalServer(api);
-      void ensureMeshConnection(api, false);
-    });
-
-    api.on("gateway_stop", () => {
-      if (meshReconnectTimer) {
-        clearTimeout(meshReconnectTimer);
-        meshReconnectTimer = null;
-      }
-      clearMeshConnectWatchdog();
-      if (meshSocket) {
-        try { meshSocket.close(); } catch {}
-        meshSocket = null;
-      }
-      for (const peerId of [...directPeers.keys()]) closeDirectPeer(peerId,"gateway_stop");
-      stopLocalSignalServer();
+    api.registerService({
+      id: "progretech-mesh-connection",
+      async start() {
+        meshReconnectDisabled = false;
+        startLocalSignalServer(api);
+        await refreshCapabilityProviderSnapshot();
+        await ensureMeshConnection(api, true);
+      },
+      stop() {
+        meshReconnectDisabled = true;
+        if (meshReconnectTimer) {
+          clearTimeout(meshReconnectTimer);
+          meshReconnectTimer = null;
+        }
+        clearMeshConnectWatchdog();
+        if (meshSocket) {
+          try { meshSocket.close(); } catch {}
+          meshSocket = null;
+        }
+        for (const peerId of [...directPeers.keys()]) closeDirectPeer(peerId,"gateway_stop");
+        stopLocalSignalServer();
+      },
     });
   },
 });

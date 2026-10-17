@@ -29,8 +29,8 @@ class TestLiveProviderBridge(unittest.TestCase):
         self.assertIn("loadLiveProvider", self.cap_js)
 
     def test_adapter_version_bumped(self):
-        self.assertIn('OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.5-portable-host.1"', self.main)
-        self.assertIn('"version": "0.10.5-portable-host.1"', (ROOT / "openclaw-plugin-progretech-mesh" / "package.json").read_text(encoding="utf-8"))
+        self.assertIn('OPENCLAW_PLUGIN_PACKAGE_VERSION = "0.10.5-portable-host.2"', self.main)
+        self.assertIn('"version": "0.10.5-portable-host.2"', (ROOT / "openclaw-plugin-progretech-mesh" / "package.json").read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     unittest.main()

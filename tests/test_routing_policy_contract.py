@@ -35,7 +35,7 @@ class TestRoutingPolicyContract(unittest.TestCase):
         self.assertIn('startsWith("turns:")',self.plugin)
 
     def test_version(self):
-        self.assertEqual(self.pkg["version"],"0.10.5-portable-host.1")
+        self.assertEqual(self.pkg["version"],"0.10.5-portable-host.2")
 
     def test_no_frontend_internal_labels(self):
         joined="\n".join(p.read_text(errors="ignore") for p in list((ROOT/"templates").glob("*.html"))+list((ROOT/"static/js").glob("*.js")))

@@ -5,6 +5,13 @@ const gatewayMethods = {
  'skills.list':'skills.status',
 };
 
+// External plugins use an authenticated client; in-process requests are official-only.
+export function createGatewayReader(callGatewayFromCli) {
+ return (method, params) => callGatewayFromCli(method, {timeout:'15000'}, params, {
+  scopes:['operator.read'], progress:false,
+ });
+}
+
 async function readGatewayFactoryStatus(gatewayRequest) {
  const options = {scopes:['operator.read']};
  const roster = await gatewayRequest('agents.list', {}, options);
@@ -28,7 +35,7 @@ async function readGatewayFactoryStatus(gatewayRequest) {
  };
 }
 
-export async function forwardFactoryControl(payload, gatewayRequest) {
+async function readFactoryControl(payload, gatewayRequest) {
  if (!payload || !factoryActions.has(payload.action)) throw new Error('action_not_allowed');
  const args=payload.args ?? {};
  if (typeof args !== 'object' || Array.isArray(args) || !args) throw new Error('invalid_args');
@@ -46,4 +53,9 @@ export async function forwardFactoryControl(payload, gatewayRequest) {
   agentId:result.agentId,
   skills:(Array.isArray(result.skills)?result.skills:[]).map(({name,description,source,bundled,eligible})=>({name,description,source,bundled,eligible})),
  };
+}
+
+export async function forwardFactoryControl(payload, gatewayRequest) {
+ const result = await readFactoryControl(payload, gatewayRequest);
+ return result?.ok === false ? result : {ok:true, result};
 }
