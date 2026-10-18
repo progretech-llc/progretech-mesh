@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import time
@@ -61,6 +62,7 @@ class PlatformTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'endpoint_required'):
                 platform.api('/models')
 
+    @unittest.skipUnless(shutil.which('node'), 'Factory board requires host Node.js')
     def test_prime_is_initial_scrum_master_and_change_survives_refresh(self):
         connector = Connector(self.config, self.home)
         office = namespace('progre', 'agent-fixture')
@@ -76,6 +78,19 @@ class PlatformTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'enabled_runtime'):
             connector.control('agent-fixture', 'factory.office', {'operation': 'orchestrator.set', 'args': {'id': disabled['id']}})
 
+    @unittest.skipUnless(shutil.which('node'), 'Factory board requires host Node.js')
+    def test_prime_roster_crosses_server_boundary_with_its_model_and_runtime(self):
+        from mesh_control_center import register_gateway_agents
+        connector = Connector(self.config, self.home)
+        registry = {'agent-fixture': {'id': 'agent-fixture', 'owner_id': 'owner', 'trust_state': 'verified'}}
+        self.assertTrue(register_gateway_agents('agent-fixture', connector.roster(), registry))
+        self.assertEqual(registry['agent-fixture']['runtime_id'], 'progre')
+        self.assertEqual(registry['agent-fixture']['model'], 'local-model')
+        self.assertTrue(registry['agent-fixture']['is_orchestrator'])
+        self.assertNotIn('agent-fixture--progre', registry)
+        self.assertIn('agent-fixture--builder', registry)
+
+    @unittest.skipUnless(shutil.which('node'), 'Factory board requires host Node.js')
     def test_ide_relay_and_factory_use_bound_runtime_and_return_real_receipts(self):
         connector = Connector(self.config, self.home)
         completion = {'id': 'test', 'object': 'chat.completion', 'model': 'local-model',

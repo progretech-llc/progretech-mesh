@@ -125,7 +125,7 @@ class Connector:
                     'activity': {'state': state, 'source': 'mesh-owned-jobs'},
                     'mesh_runtime': {'model': row.get('model', ''), 'sleeping': not enabled,
                         'controls_available': False, 'scope': 'Mesh-owned jobs; external sessions unobserved'}})
-            return {'agents': [r for r in rows if r['id'] != self.gateway],
+            return {'agents': rows,
                     'host': next(r for r in rows if r['id'] == self.gateway), 'platform': self.platform.kind}
 
     def control(self, agent, action, args):
