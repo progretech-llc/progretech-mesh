@@ -10,6 +10,7 @@ import threading
 import time
 from types import SimpleNamespace
 from urllib.parse import quote, urlsplit
+from urllib.request import urlopen
 
 import websocket
 
@@ -178,8 +179,11 @@ class Connector:
             try:
                 action = payload.get('action')
                 if action == 'factory.status':
-                    result = {'agents': [{**r, 'id': r['runtime_id'], 'controller': r['enabled'],
-                        'workspace_ready': True, 'hardware_status': 'Selected gateway'} for r in self.platform.rows.values()],
+                    self.roster()
+                    result = {'agents': [{**r, 'id': r['runtime_id'], 'runtime': self.platform.kind,
+                        'controller': r.get('is_orchestrator', False),
+                        'workspace_ready': bool(r.get('enabled')), 'hardware_status': 'Selected gateway'}
+                        for r in self.rows if r.get('runtime_id')],
                         'capabilities': ['host.system', 'host.overview', 'models.list', 'skills.list', 'orchestration.status'],
                         'providers': {self.platform.kind: {'available': True}},
                         'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
@@ -238,8 +242,10 @@ class Connector:
             while True:
                 try:
                     ws = websocket.create_connection(url, timeout=25, enable_multithread=True)
-                    if json.loads(ws.recv()).get('type') != 'paired':
+                    paired = json.loads(ws.recv())
+                    if paired.get('type') != 'paired':
                         raise ValueError('gateway_pairing_failed')
+                    logging.info('Mesh gateway connected to build %s', paired.get('build_id', 'unknown'))
                     ws.settimeout(1)
                     def send(value, socket=ws):
                         with send_lock:
@@ -249,10 +255,16 @@ class Connector:
                         if result:
                             sender(result)
                     next_roster = 0
+                    next_release_check = 0
                     while True:
+                        if time.monotonic() >= next_release_check:
+                            next_release_check = time.monotonic() + 30
+                            if self.release_changed(origin, paired.get('build_id')):
+                                logging.info('Mesh release changed; reconnecting gateway')
+                                break
                         if time.monotonic() >= next_roster:
                             send({'type': 'control_center_roster', 'payload': self.roster()})
-                            send({'type': 'heartbeat', 'payload': {'state': 'online', 'runtime': self.platform.kind,
+                            send({'type': 'heartbeat', 'payload': {'state': 'online', 'runtime': {'hermes': 'Hermes', 'opencode': 'OpenCode', 'openwebui': 'OpenWebUI', 'openai': 'OpenAI-compatible'}[self.platform.kind],
                                 'task': 'Gateway connected', 'phase': 'Native platform ready'}})
                             next_roster = time.monotonic() + 10
                         try:
@@ -269,8 +281,22 @@ class Connector:
                         ws.close()
                 time.sleep(10)
 
+    @staticmethod
+    def release_changed(origin, connected_build):
+        # WebSockets can outlive a Cloud Run rollout; HTTP then reaches a new process.
+        if not connected_build:
+            return False
+        try:
+            with urlopen(origin + '/healthz', timeout=5) as response:
+                health = json.loads(response.read(8192))
+            return bool(health.get('ok') and health.get('service') == 'progretech-mesh'
+                        and health.get('build') and health['build'] != connected_build)
+        except (OSError, ValueError):
+            return False
+
 
 def main():
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--check', action='store_true')

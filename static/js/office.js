@@ -144,7 +144,7 @@
   }
   function openAgent(id){
     selected=id;const a=snapshot.agents.find(a=>a.id===id);if(!a)return;
-    $('agentName').textContent=a.name;$('agentDetail').textContent=scrum(a)?'Scrum Master':a.role;
+    $('agentName').textContent=a.name;$('agentDetail').textContent=[scrum(a)?'Scrum Master':a.role,a.native?.runtime,a.native?.model].filter(Boolean).join(' · ');
     $('makeScrumMaster').disabled=scrum(a)||!online;
     const binding=a.mesh_agent_id || fleet.find(f=>(f.control_center_gateway===host()||f.id===host())&&f.runtime_id===(a.native?.runtime_id||a.runtime_id))?.id;
     $('agentMemory').hidden=!binding;$('agentMemory').onclick=()=>{$('agentDialog').close();MeshMemory.open(binding,a.name);};

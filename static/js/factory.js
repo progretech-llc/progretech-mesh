@@ -64,7 +64,7 @@ function renderStatus(data, selectedAgent = '') {
     role.title = agent.controller_basis || ''; card.append(role);
     card.append(element('span',agent.workspace_ready === true ? 'Workspace ready' : agent.workspace_ready === false ? 'Workspace not ready' : 'Workspace not reported','badge'));
     const model = typeof agent.model === 'string' ? agent.model : agent.model?.primary;
-    card.append(element('p',`Model: ${model || 'Not reported'}`));
+    card.append(element('p',`Runtime: ${agent.runtime || 'Not reported'}`),element('p',`Model: ${model || 'Not reported'}`));
     card.append(element('p',`Hardware: ${agent.hardware_status || 'Not reported'}`,'muted'));
     $('#agents').append(card);
     $('#controller').append(new Option(agent.name || agent.id,agent.id));

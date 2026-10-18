@@ -119,6 +119,11 @@ def register_gateway_agents(gateway_id, payload, registry):
             return False
         accepted[aid] = {**item, 'runtime_id': runtime}
     # A roster is discovery, not enrollment or proof of each role's identity.
+    platform = payload.get('platform') or host.get('platform')
+    runtime = {'hermes': 'Hermes', 'opencode': 'OpenCode', 'openwebui': 'OpenWebUI',
+               'openai': 'OpenAI-compatible', 'openclaw': 'OpenClaw'}.get(platform)
+    if runtime:
+        host.update(platform=platform, runtime=runtime)
     # The gateway and its intake runtime are one agent. Keep signed receipts
     # intact, but exclude its former child alias from discovery and display.
     host_runtime = (host_activity or {}).get('runtime_id')
@@ -154,6 +159,8 @@ def register_gateway_agents(gateway_id, payload, registry):
                            'sleeping':'paused','blocked':'blocked','unknown':'unknown'}.get(observed,'unknown')
         record['activity'] = {k:activity[k] for k in ('state','observed_at','source','task_id','session') if k in activity and isinstance(activity[k],(str,type(None)))}
         record['transport'] = 'connected'
+        if runtime:
+            record.update(platform=platform, runtime=runtime)
         record['runtime_id'] = item['runtime_id']
         record['office_archived'] = item.get('office_archived') is True
         record['office_agent_id'] = item.get('office_agent_id')

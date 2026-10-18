@@ -27,6 +27,53 @@ class PlatformTests(unittest.TestCase):
         self.config = {'platform': 'hermes', 'workspace': str(self.home), 'prime': 'progre',
             'agent_id': 'agent-fixture', 'excluded_agents': ['records'], 'mesh': 'https://mesh.example', 'device_credential': 'test'}
 
+    def test_release_change_reconnects_but_health_failure_does_not(self):
+        from io import BytesIO
+        with patch('gateway.platform_gateway.urlopen', return_value=BytesIO(json.dumps(
+                {'ok': True, 'service': 'progretech-mesh', 'build': 'new'}).encode())):
+            self.assertTrue(Connector.release_changed('https://mesh.example', 'old'))
+        with patch('gateway.platform_gateway.urlopen', side_effect=OSError('offline')):
+            self.assertFalse(Connector.release_changed('https://mesh.example', 'old'))
+
+    @unittest.skipUnless(shutil.which('node'), 'Factory board requires host Node.js')
+    def test_browser_routes_share_roster_and_refresh_model_and_runtime(self):
+        from flask import Flask
+        from mesh_control_center import register_gateway_agents, control_relay
+        from mesh_factory_control import register_factory_routes, factory_relay
+        from mesh_office import register_office_routes
+        c = Connector(self.config, self.home)
+        gid = c.gateway
+        registry = {gid: {'id': gid, 'name': 'Host', 'owner_id': 'owner',
+                         'trust_state': 'verified', 'runtime': 'OpenClaw'}}
+        register_gateway_agents(gid, c.roster(), registry)
+        registry[gid+'--builder']['runtime'] = 'OpenClaw role'
+        (self.home/'.hermes/profiles/builder/config.yaml').write_text('model:\n  default: updated-builder-model\n')
+        register_gateway_agents(gid, c.roster(), registry)
+        self.assertEqual(registry[gid]['runtime'], 'Hermes')
+        self.assertEqual(registry[gid+'--builder']['runtime'], 'Hermes')
+        self.assertEqual(registry[gid+'--builder']['model'], 'updated-builder-model')
+        def send(agent, message):
+            reply = c.message(message)
+            relay = factory_relay if reply['type'] == 'factory_control_response' else control_relay
+            self.assertTrue(relay.resolve(agent, reply))
+            return True, None
+        app = Flask(__name__)
+        register_factory_routes(app, lambda f: f, lambda: 'owner', registry, {gid: True}, send)
+        register_office_routes(app, lambda f: f, lambda: 'owner', registry, {gid: True}, send)
+        client = app.test_client()
+        self.assertEqual(client.get('/api/factory/gateways').json['gateways'][0]['id'], gid)
+        response = client.get('/api/agents/'+gid+'/factory')
+        self.assertEqual(response.status_code, 200)
+        agents = response.json['result']['agents']
+        self.assertEqual(sum(a['controller'] for a in agents), 1)
+        self.assertEqual(next(a for a in agents if a['runtime_id']=='builder')['model'], 'updated-builder-model')
+        response = client.post('/api/agents/'+gid+'/office', json={'operation':'snapshot','args':{}},
+                               headers={'Origin':'http://localhost'})
+        self.assertEqual(response.status_code, 200)
+        snapshot = response.json['result']['snapshot']
+        self.assertTrue(snapshot['runtimeReady'])
+        self.assertEqual({a['runtime_id'] for a in snapshot['agents']}, {a['runtime_id'] for a in agents})
+
     def test_discovers_all_profiles_without_private_context_and_denies_excluded(self):
         platform = Platform(self.config, self.home)
         rows = platform.discover()
