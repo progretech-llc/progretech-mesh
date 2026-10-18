@@ -118,6 +118,11 @@ def register_gateway_agents(gateway_id, payload, registry):
         if existing and existing.get('control_center_gateway') != gateway_id:
             return False
         accepted[aid] = {**item, 'runtime_id': runtime}
+    integration = payload.get('integration')
+    if isinstance(integration, dict) and isinstance(integration.get('fingerprint'), str) and re.fullmatch('[a-f0-9]{64}', integration['fingerprint']):
+        host['gateway_release'] = {'fingerprint': integration['fingerprint']}
+    else:
+        host.pop('gateway_release', None)
     # A roster is discovery, not enrollment or proof of each role's identity.
     platform = payload.get('platform') or host.get('platform')
     runtime = {'hermes': 'Hermes', 'opencode': 'OpenCode', 'openwebui': 'OpenWebUI',

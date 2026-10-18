@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 from functools import wraps
 from typing import Any
 
-from flask import jsonify, redirect, render_template, request, session, url_for
+from flask import jsonify, redirect, request, session, url_for
 
 
 LIFECYCLE = (
@@ -296,14 +296,7 @@ def register_capability_routes(app) -> None:
     @app.get("/capabilities")
     @_require_mesh_session
     def capabilities_page():
-        return render_template(
-            "capabilities.html",
-            build_id=app.config.get("BUILD_ID", ""),
-            version=app.config.get("MESH_VERSION", ""),
-            environment=app.config.get("ENVIRONMENT", ""),
-            user=session["mesh_user"],
-            lifecycle=LIFECYCLE,
-        )
+        return redirect("/sync-update", code=302)
 
     @app.get("/api/capabilities")
     @_require_mesh_session

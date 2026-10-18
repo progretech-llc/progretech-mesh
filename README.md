@@ -1,5 +1,11 @@
 # ProgreTech Mesh
 
+## Keep a connected gateway current
+
+Open **Sync & Update** from the fleet navigation. The page compares the connected platform connector’s reported file fingerprint with the current Mesh host bundle. Copy its release-specific update prompt to an authorized agent on that gateway computer, then use **Check again** after the agent finishes. Legacy connectors that cannot report a fingerprint are shown as unverified rather than current; OpenClaw instructions include the published Mesh extension and portable provider checksums.
+
+The platform update helper first lists changed files without installing them. The agent waits for work to finish and stops the existing Mesh connector before applying. The helper verifies the pinned bundle checksum, stages and validates replacement source, preserves connector configuration and custom files outside the published bundle, and leaves old source in place if preflight fails. The agent restarts the existing supervisor and verifies discovery, models and the Factory board. This updates Mesh integration files and dependencies; native runtimes, unrelated extensions and model settings remain managed by their platforms. Existing `/capabilities` links redirect to this page; the underlying capability APIs remain compatible.
+
 ## Connect an existing agent platform
 
 From the agent fleet choose **Connect a computer**, select the platform, name the host and copy its setup prompt to an authorized agent on that host. The agent must have permission to install Python/Node prerequisites, inspect its own platform configuration and start a supervised connector. Private runtime keys and histories stay on the host. Mesh verifies the gateway identity before enabling execution.

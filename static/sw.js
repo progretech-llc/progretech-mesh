@@ -1,4 +1,4 @@
-const CACHE_NAME = "progretech-mesh-shell-v25-mission-roster";
+const CACHE_NAME = "progretech-mesh-shell-v26-sync-update";
 // Retain the prior cache marker for release-contract and rollback checks.
 const LEGACY_CACHE_NAME = "progretech-mesh-shell-v13-all-avatars";
 const SHELL_ASSETS = [

@@ -1553,7 +1553,7 @@ def create_app() -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
         ENVIRONMENT=environment,
-        MESH_VERSION=os.environ.get("MESH_VERSION", "1.21.0-platform-gateways"),
+        MESH_VERSION=os.environ.get("MESH_VERSION", "1.22.0-sync-update"),
         BUILD_ID=os.environ.get("BUILD_ID", BUILD_ID),
         DEV_AUTH_ENABLED=os.environ.get("DEV_AUTH_ENABLED", dev_auth_default) == "1",
         DEV_SEED_AGENTS=os.environ.get("DEV_SEED_AGENTS", dev_seed_default) == "1",
@@ -1664,6 +1664,8 @@ def create_app() -> Flask:
         return render_template('task_board.html',agent=record,build_id=BUILD_ID)
 
     register_factory_routes(app, require_session, current_mesh_user_id, DEV_AGENT_REGISTRY, GATEWAY_SOCKETS, management_send)
+    from mesh_sync import register_sync_routes
+    register_sync_routes(app, require_session, current_mesh_user_id, DEV_AGENT_REGISTRY, GATEWAY_SOCKETS, mesh_public_origin)
     register_control_center_routes(app, require_session, current_mesh_user_id,
                                    DEV_AGENT_REGISTRY, GATEWAY_SOCKETS, management_send)
 

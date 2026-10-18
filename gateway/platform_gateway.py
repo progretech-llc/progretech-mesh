@@ -15,6 +15,7 @@ from urllib.request import urlopen
 import websocket
 
 from gateway.platforms import Platform, runtime_key
+from gateway.platform_release import installed
 from control_center.office import engine, namespace, validate_office, dispatch_native_mission
 from control_center.office_identity import project, synchronize
 
@@ -127,7 +128,8 @@ class Connector:
                     'mesh_runtime': {'model': row.get('model', ''), 'sleeping': not enabled,
                         'controls_available': False, 'scope': 'Mesh-owned jobs; external sessions unobserved'}})
             return {'agents': rows,
-                    'host': next(r for r in rows if r['id'] == self.gateway), 'platform': self.platform.kind}
+                    'host': next(r for r in rows if r['id'] == self.gateway), 'platform': self.platform.kind,
+                    'integration': {'fingerprint': installed(Path(__file__).resolve().parents[1])}}
 
     def control(self, agent, action, args):
         if agent not in self.provider.bindings:

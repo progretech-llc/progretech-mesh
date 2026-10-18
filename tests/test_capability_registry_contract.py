@@ -37,9 +37,9 @@ class TestCapabilityRegistryContract(unittest.TestCase):
     def test_route_registration_symbol_exists(self):
         self.assertTrue(callable(mesh_capabilities.register_capability_routes))
 
-    def test_index_contains_capabilities_entrypoint(self):
+    def test_index_contains_sync_update_entrypoint(self):
         source = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('href="/capabilities"', source)
+        self.assertIn('href="/sync-update"', source)
 
 
 if __name__ == "__main__":
