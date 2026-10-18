@@ -9,6 +9,7 @@ def host_bundle(root):
     root = Path(root)
     files = sorted((root / 'control_center').glob('*.py'))
     files += [root / 'office/engine.mjs', root / 'offline/__init__.py', root / 'offline/registry.py']
+    files += sorted((root / 'gateway').glob('platform*.py'))
     output = io.BytesIO()
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for path in files:
@@ -17,7 +18,7 @@ def host_bundle(root):
             archive.writestr(info, path.read_bytes())
         info = zipfile.ZipInfo('requirements.txt')
         info.compress_type = zipfile.ZIP_DEFLATED
-        archive.writestr(info, 'Flask>=3.1,<4\npsutil>=6,<8\n')
+        archive.writestr(info, 'Flask>=3.1,<4\npsutil>=6,<8\ncryptography>=43,<47\nwebsocket-client>=1.8,<2\nPyYAML>=6,<7\n')
     data = output.getvalue()
     return data, hashlib.sha256(data).hexdigest()
 

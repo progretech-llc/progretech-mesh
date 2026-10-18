@@ -8,3 +8,4 @@ psutil>=6,<8
 cryptography>=43,<47
 firebase-admin>=7.6,<8
 Pillow>=10,<13
+PyYAML>=6,<7

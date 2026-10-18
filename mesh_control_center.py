@@ -144,7 +144,7 @@ def register_gateway_agents(gateway_id, payload, registry):
                 'owner_id':host['owner_id'], 'control_center_gateway':gateway_id,
                 'trust_state':'verified', 'gateway_linked':True,
                 'office_worker':item.get('office_worker') is True,
-                'runtime':'OpenClaw role', 'phase':'Linked through verified gateway',
+                'runtime': str(host.get('platform') or host.get('runtime') or 'OpenClaw')[:80] + ' role', 'phase':'Linked through verified gateway',
                 'task':'Gateway role', 'model':'Unknown'}
         if not (record.get('gateway_enrollment') or record.get('gateway_linked') or record.get('office_worker')):
             continue

@@ -6,7 +6,7 @@ from pathlib import Path
 import sqlite3
 import threading
 
-FIELDS = frozenset('id owner_id name role public_key codeseal_evidence fingerprint trust_state trust_valid trust_reason enrolled_at control_center_gateway gateway_enrollment gateway_linked gateway_candidate_id runtime_id office_worker office_agent_id office_archived is_orchestrator account_profile identity_device_id identity_proof'.split())
+FIELDS = frozenset('id owner_id name role public_key codeseal_evidence fingerprint trust_state trust_valid trust_reason enrolled_at control_center_gateway gateway_enrollment gateway_linked gateway_candidate_id runtime_id office_worker office_agent_id office_archived is_orchestrator account_profile identity_device_id identity_proof gateway_active gateway_superseded gateway_activation_pending platform'.split())
 
 
 def configuration(registry):

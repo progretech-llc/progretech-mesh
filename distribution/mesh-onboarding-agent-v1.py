@@ -106,6 +106,7 @@ def main():
             private_write(directory / (aid + '_codeseal_evidence.json'), json.dumps(response['evidence']))
             instructions = root / 'adapter-enrollment.txt'
             private_write(instructions, response['enrollment']['enrollment_message'])
+            private_write(root / 'adapter-enrollment.json', json.dumps(response['enrollment']))
             print(f'Identity and CodeSeal evidence saved locally. Read and follow: {instructions}', flush=True)
             return
         time.sleep(2)

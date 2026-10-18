@@ -130,7 +130,7 @@ def register_factory_routes(app, require_session, user_id, registry, gateways, s
     def office_page():
         agents = [{'id': key, 'name': value.get('name', key), 'connected': key in gateways,
                    'verified': value.get('trust_state') == 'verified'} for key, value in registry.items()
-                  if str(value.get('owner_id') or '').strip() == user_id() and not value.get('control_center_gateway')]
+                  if str(value.get('owner_id') or '').strip() == user_id() and not value.get('control_center_gateway') and not value.get('gateway_superseded')]
         return render_template('office.html', hosts=agents)
 
     @app.get('/api/agents/<agent_id>/factory')

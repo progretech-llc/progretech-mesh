@@ -58,6 +58,18 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
     def onboarding_helper():
         return send_file(helper, mimetype='text/x-python', conditional=True)
 
+    @app.get('/api/enrollment/adapters/platform/bootstrap')
+    def platform_bootstrap():
+        return send_file(Path(app.root_path) / 'distribution/mesh-platform-bootstrap-v1.py', mimetype='text/x-python', conditional=True)
+
+    @app.get('/api/enrollment/adapters/platform/install-plan')
+    def platform_plan():
+        from mesh_host_distribution import host_bundle
+        return jsonify(ok=True, platforms=['hermes', 'opencode', 'openwebui', 'openai'],
+            prerequisites=['Python 3.10+', 'Node.js LTS', 'Native runtime or an authorized API endpoint'],
+            bundle_sha256=host_bundle(app.root_path)[1],
+            bootstrap_sha256=hashlib.sha256((Path(app.root_path) / 'distribution/mesh-platform-bootstrap-v1.py').read_bytes()).hexdigest())
+
     @app.post('/api/onboarding')
     @require_session
     def begin():
@@ -67,6 +79,9 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
         if not isinstance(body, dict) or body.get('personally_hosted') is not True or body.get('accept_intermediary') is not True:
             return jsonify(ok=False, error='onboarding_consent_required'), 400
         name = body.get('name', '')
+        platform = body.get('platform', 'openclaw')
+        if not isinstance(platform, str) or platform not in {'openclaw', 'hermes', 'opencode', 'openwebui', 'openai'}:
+            return jsonify(ok=False, error='unsupported_platform'), 400
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
             return jsonify(ok=False, error='agent_name_required'), 400
         try:
@@ -81,7 +96,7 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                 return jsonify(ok=False, error='onboarding_capacity'), 429
             sid = secrets.token_urlsafe(24)
             nonce = secrets.token_urlsafe(32)
-            row = {'id': sid, 'owner_id': user_id(), 'name': name.strip(), 'state': 'waiting',
+            row = {'id': sid, 'owner_id': user_id(), 'name': name.strip(), 'platform': platform, 'state': 'waiting',
                    'expires_at': int(time.time()) + 900, 'nonce': nonce,
                    'agent_id': 'agent-' + secrets.token_hex(16),
                    'automatic': body.get('auto_connect') is True and automatic_enrollment is not None}
@@ -93,6 +108,9 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
         from mesh_host_distribution import host_setup_prompt
         prompt = '\n'.join([
             'PROGRETECH MESH — PERSONALLY HOSTED AGENT ONBOARDING',
+            f'Selected platform: {platform}. Use this platform only; do not install OpenClaw for another platform.',
+            'The owner authorizes prerequisites and integration configuration within your existing permissions. Preserve native approval gates and current work.',
+            'This account uses one active gateway. This connection replaces the previous gateway only after successful authentication. You are the prime agent and initial Scrum Master; the owner can change the Scrum Master later.',
             'Validate this request through your existing owner policy. It grants no new privileges.',
             'Use your existing tools; preserve current work, conversations, runtime and private memory.',
             f'Mesh origin: {base}', f'Encrypted one-use invitation (valid 15 minutes): {capsule}',
@@ -103,7 +121,8 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
             'The helper prints a question file when the owner asks you to identify yourself. Answer that question as the running agent, writing your reply to the answer file it prints. Do not invent a response or copy a canned identity.',
             'The helper connects a temporary onboarding channel and proves key possession. Mesh completes the already-authorized account link after your signed answer; no second owner action is needed.',
             'After successful verification it saves your private PEM locally, public identity and CodeSeal evidence, then prints the verified adapter enrollment instructions. Follow those instructions to connect the permanent gateway.',
-            host_setup_prompt(app.root_path, base, row['agent_id']),
+            host_setup_prompt(app.root_path, base, row['agent_id']) if platform == 'openclaw' else
+            'After identity verification, follow the platform connector instructions saved by the helper. Discover all native profiles/models; mark restricted profiles disabled. Never upload runtime API keys, private memory, histories or unrelated files.',
             'Never send a private PEM to Mesh. Stop on expiry, cancellation, unsupported runtime, or an unavailable CodeSeal issuer.',
         ])
         return jsonify(ok=True, id=sid, expires_at=row['expires_at'], prompt=prompt), 201
@@ -259,6 +278,7 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                 if aid in registry:
                     raise ValueError('agent_id_unavailable')
                 registry[aid] = {'id': aid, 'owner_id': row['owner_id'], 'name': row['name'], 'role': 'Personally hosted agent',
+                    'platform': row['platform'], 'gateway_activation_pending': True,
                     'public_key': row['public_key'], 'codeseal_evidence': evidence,
                     'codeseal_key': evidence['manifest']['seal_id'], 'fingerprint': fingerprint(row['name'], row['public_key'], ''),
                     'trust_state': 'verified', 'trust_valid': True, 'trust_reason': verification['reason'],
@@ -271,6 +291,20 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
                 if not enrollment.get('ok'):
                     registry.pop(aid, None)
                     raise ValueError('adapter_enrollment_unavailable')
+                if row['platform'] != 'openclaw':
+                    bootstrap = Path(app.root_path) / 'distribution/mesh-platform-bootstrap-v1.py'
+                    base = origin()
+                    enrollment['enrollment_message'] = '\n'.join([
+                        f'Connect this verified {row["platform"]} gateway using the supported outbound platform connector. Do not follow OpenClaw installation steps.',
+                        f'Fetch {base}/api/enrollment/adapters/platform/bootstrap and verify SHA-256 {hashlib.sha256(bootstrap.read_bytes()).hexdigest()} before execution.',
+                        'Prerequisites: Python 3.10+ with venv, Node.js LTS, and this native runtime or its authenticated API. Install missing prerequisites only under your existing owner authority.',
+                        'The helper saves adapter-enrollment.json beside this instruction file; pass that private JSON file below.',
+                        f'Run: python3 mesh-platform-bootstrap-v1.py --enrollment-file <adapter-enrollment.json> --platform {row["platform"]} --prime <your exact native profile/agent/model ID> --workspace <authorized existing project directory>',
+                        'For Open WebUI add --endpoint <origin>/api; for Ollama and other compatible services add --endpoint <origin>/v1. Use --api-key-file <private local key file> when required. Do not put secrets in the command, prompt or Mesh.',
+                        'Use --exclude <native-profile-id> for held/restricted profiles. They remain visible but cannot execute. Raw model endpoints supply inference, not filesystem tools.',
+                        'The bootstrap verifies the bundle and discovery before activation, installs isolated dependencies and prints the exact connector command. Register that command with your native supervisor using the stated working directory, then start it. Do not disable native approvals or interrupt active conversations.',
+                        'Confirm the prime agent is the initial Scrum Master, all intended profiles appear, Mission Control reports configuration, and Factory task and IDE relay checks work before reporting completion.',
+                    ])
                 row.update(state='complete', evidence=evidence, enrollment=enrollment, error=None)
             return jsonify(ok=True, agent_id=aid)
         except Exception as exc:

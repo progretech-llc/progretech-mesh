@@ -1,5 +1,19 @@
 # ProgreTech Mesh
 
+## Connect an existing agent platform
+
+From the agent fleet choose **Connect a computer**, select the platform, name the host and copy its setup prompt to an authorized agent on that host. The agent must have permission to install Python/Node prerequisites, inspect its own platform configuration and start a supervised connector. Private runtime keys and histories stay on the host. Mesh verifies the gateway identity before enabling execution.
+
+Supported routes are OpenClaw's existing native adapter, Hermes profile CLI, OpenCode primary-agent CLI, Open WebUI's `/api` endpoint and OpenAI-compatible `/v1` endpoints such as Ollama. Other platforms require a compatible API; the selector does not claim native support for arbitrary runtimes. An inference-only endpoint does not acquire filesystem or execution tools from Mesh.
+
+Only one gateway can be active per account. A newly verified connection replaces the old host; the old reconnect credential cannot take the slot back. Prior identities and task history remain retained. The connector's explicitly selected prime agent becomes the initial Scrum Master. Fleet/Factory controls can change the Scrum Master among enabled native agents without changing the gateway identity.
+
+The platform bootstrap is advertised with a SHA-256 checksum in the signed-in onboarding instructions. It verifies the host bundle, installs an isolated environment and checks discovery before consuming activation. It prints the exact command and working directory for the host's existing supervisor; the authorized setup agent installs and starts that service. No cloud request can choose an executable, endpoint, secret file, workspace or runtime binding. `--exclude` keeps held profiles visible while denying execution.
+
+Mission Control reports the native roster and configuration. Factory uses the existing host-local persistent board, dependency checks and bounded Scrum workflow. Runtime failure or unconfirmed completion does not mark work successful. Monitoring covers Mesh-owned work; unrelated native sessions are not inferred to be idle or finished. Optional hardware controls are unavailable unless the adapter implements them.
+
+**Copy API relay setup** on an agent card supplies an owner-scoped OpenAI Chat Completions URL, expiring key and exact agent model alias. API adapters forward upstream tool calling; Hermes/OpenCode CLI relays accept text conversations and retain their native tools. Disable client-side tool calling in an IDE when using a CLI agent. The relay does not expose a raw model credential.
+
 Manage and orchestrate agents from your OpenClaw gateway. Monitor each agent, create scoped API relay setups, and coordinate tasks through the Factory Scrum board while execution and data remain on the enrolled host.
 
 A project of **[ProgreTech LLC](https://progretech.com)**, owned and maintained by **Ed Rodriguez**. Third-party components and contributions retain their respective ownership and notices.

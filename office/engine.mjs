@@ -1,3 +1,4 @@
+import { fileURLToPath as meshFileURLToPath } from "node:url";
 // engine.ts
 import { readFileSync as readFileSync2, writeFileSync as writeFileSync2, mkdirSync as mkdirSync2, renameSync as renameSync2, unlinkSync as unlinkSync2 } from "node:fs";
 import { join as join3, isAbsolute as isAbsolute3 } from "node:path";
@@ -1817,7 +1818,7 @@ ELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"
     const godRegistry = meta.isAssistant ? this.registry() : null;
     const godNameForPrompt = godRegistry ? resolveGodName(godRegistry.agents[godRegistry.godId ?? "god"]?.name) : "";
     const ctxLine = "LIVE CONTEXT: each agent row in the LIVE ROSTER carries a `ctx NN%` tag \u2014 its live context-window occupancy. Treat it as the real headroom signal when routing: prefer an agent with a LOW `ctx` for a big task; treat a HIGH `ctx` (near 100%) as busy rather than idle, even if the cumulative token count looks modest.";
-    const memoryLine = 'Durable memory is Hindsight, shared across factory tools. Use the runtime-bound memory tools with an explicit canonical project. Unassigned workers use factory-worker; never impersonate a named role. Read /mnt/pt-context/factory-support/hindsight/runtime/MEMORY_POLICY.md. Do not write memory.md or mine transcripts.';
+    const memoryLine = 'Durable memory is Hindsight, shared across factory tools. Use the runtime-bound memory tools with an explicit canonical project. Unassigned workers use factory-worker; never impersonate a named role. Follow the current owner and project memory policy. Do not write memory.md or mine transcripts.';
     const hiveNode = this.nodeCommand();
     const kgCli = kgCliPath || (process.platform === "win32" ? "%KG_CLI%" : "$KG_CLI");
     const knowledgeLine = knowledgeGraph ? `Enterprise knowledge: this organisation has a private Knowledge Graph of its own documents, policies, and business context. When a task needs that context \u2014 company-specific facts, house style, internal processes \u2014 query it instead of guessing: run \`"${hiveNode}" "${kgCli}" search "<query>"\` for ranked passages, \`"${hiveNode}" "${kgCli}" list\` to see what is available, and \`"${hiveNode}" "${kgCli}" get <id>\` for a full document. (That first path is the harness's bundled Node \u2014 use it instead of bare \`node\`, which may not be on your PATH.)` : "";
@@ -2134,7 +2135,7 @@ ELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "$@"
     return true;
   }
   memory(id) {
-    const result = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || "/home/edwin/ptinternal/bin/factory-office-memory", [], {
+    const result = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || process.env.MESH_PYTHON || "python3", process.env.PROGRETECH_OFFICE_MEMORY_HELPER ? [] : [meshFileURLToPath(new URL("../control_center/office_memory.py", import.meta.url))], {
       input: JSON.stringify({action:"get",subject:id,namespace:createHash("sha256").update(this.root()).digest("hex").slice(0,20)}), encoding:"utf8",timeout:15000,
       env:process.env,maxBuffer:1024*1024
     });
@@ -3124,7 +3125,7 @@ human rather than retry. Route work to an agent already on the floor first eithe
 
 ## Durable factory memory
 Hindsight is the sole provider. Use runtime-bound tools and an explicit canonical
-project. Read /mnt/pt-context/factory-support/hindsight/runtime/MEMORY_POLICY.md.
+project. Follow the current owner and project memory policy.
 Never create memory.md, mine conversations, or read another role's private bank.
 Record a reviewed activity and verify exact recall after meaningful work.
 
@@ -4298,7 +4299,7 @@ switch (body.operation) {
   case "memory.save":
     agent(args.id);
     {
-      const saved = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || "/home/edwin/ptinternal/bin/factory-office-memory", [], {
+      const saved = spawnSync(process.env.PROGRETECH_OFFICE_MEMORY_HELPER || process.env.MESH_PYTHON || "python3", process.env.PROGRETECH_OFFICE_MEMORY_HELPER ? [] : [meshFileURLToPath(new URL("../control_center/office_memory.py", import.meta.url))], {
         input:JSON.stringify({action:"save",subject:args.id,namespace:createHash("sha256").update(hive.root()).digest("hex").slice(0,20),text:args.text}),encoding:"utf8",timeout:20000,
         env:process.env,maxBuffer:1024*1024
       });

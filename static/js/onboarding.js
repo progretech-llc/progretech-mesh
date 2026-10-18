@@ -3,9 +3,13 @@
   modal.className = 'onboarding-dialog';
   modal.setAttribute('aria-labelledby', 'onboardingTitle');
   modal.innerHTML = `<div class="modal-head"><h2 id="onboardingTitle">Connect a gateway</h2><button type="button" data-close aria-label="Close onboarding">×</button></div>
-    <form data-consent><ol><li><label><input type="checkbox" name="hosted" required> This is a personally hosted agent that I own or am authorized to connect.</label></li>
-    <li><label><input type="checkbox" name="terms" required> I agree that Mesh is an intermediary. I am responsible for my agent’s instructions, actions, results and use through Mesh; ProgreTech does not operate my agent or guarantee its results.</label></li>
-    <li><label>Gateway name<input name="name" maxlength="80" required autocomplete="off"></label><p>Generate a prompt and give it to an agent on your gateway. Mesh will verify its identity, link the gateway to your account, and discover its agents.</p></li></ol><button class="primary-btn">Generate connection prompt</button></form>
+    <form data-consent><label>Platform<select name="platform" required><option value="hermes">Hermes profiles</option><option value="opencode">OpenCode agents</option><option value="openwebui">Open WebUI models / workspaces</option><option value="openai">Ollama or another OpenAI-compatible API</option><option value="openclaw">OpenClaw gateway</option></select></label>
+    <label>Computer / gateway name<input name="name" maxlength="80" required autocomplete="off" placeholder="e.g. Office workstation"></label>
+    <p>Give the prompt to your authorized agent on that computer. It installs the connector using Python and Node.js, discovers its team and becomes the initial Scrum Master.</p>
+    <p><strong>One active gateway per account.</strong> Connecting replaces the previous gateway. Change Scrum Master later from the fleet or Factory. Tools and execution depend on your platform; a model API alone provides inference.</p>
+    <label><input type="checkbox" name="hosted" required> I own this hosted agent or am authorized to connect it and configure the integration.</label>
+    <label><input type="checkbox" name="terms" required> Mesh is an intermediary. I remain responsible for my agent’s instructions and actions; ProgreTech does not operate it or guarantee its results.</label>
+    <button class="primary-btn">Generate setup prompt</button></form>
     <section data-connect hidden><textarea data-prompt readonly rows="9" aria-label="Agent connection prompt"></textarea><button type="button" data-copy class="primary-btn">Copy prompt</button>
     <p><span class="onboarding-pulse" data-pulse aria-hidden="true"></span> <span data-connection>Waiting for agent connection</span></p>
     <form data-question hidden><label>Ask your agent to identify itself<textarea name="text" maxlength="1000" required>Identify yourself: what is your name, role and runtime, and are you awake and ready to work?</textarea></label><button class="ghost-btn" disabled>Send question</button></form>
@@ -46,7 +50,7 @@
         if (!response.ok) throw Error('Unable to check gateway status. Sign in again if your session expired.');
         const fleet = await response.json();
         if (fleet.agents?.some(agent => agent.id === data.agent_id && agent.transport === 'connected')) {
-          completed = true; stop(); q('[data-connection]').textContent = 'Gateway connected'; status('Gateway connected. Its agents are available in Mesh and the Factory.');
+          completed = true; stop(); q('[data-connection]').textContent = 'Gateway connected'; status('Your agents are ready. Open Mission Control to inspect configuration, add a task in Factory, or copy API relay setup from an agent card for your IDE.');
           window.dispatchEvent(new Event('mesh-enrollment-completed'));
         } else status('Identity saved to your account. Your agent is finishing the gateway connection…');
       }
@@ -58,7 +62,7 @@
   modal.addEventListener('close', () => { if (completed) stop(); opener?.focus(); });
   q('[data-consent]').onsubmit = async event => {
     event.preventDefault(); const form = event.target; form.querySelector('button').disabled = true;
-    try { const data = await api('', {auto_connect: true, name: form.elements.name.value, personally_hosted: form.elements.hosted.checked, accept_intermediary: form.elements.terms.checked}); id = data.id; form.hidden = true; q('[data-connect]').hidden = false; q('[data-prompt]').value = data.prompt; status('Invitation expires in 15 minutes. Share it only with your agent.'); stop(); timer = setInterval(poll, 2000); }
+    try { const data = await api('', {auto_connect: true, platform: form.elements.platform.value, name: form.elements.name.value, personally_hosted: form.elements.hosted.checked, accept_intermediary: form.elements.terms.checked}); id = data.id; form.hidden = true; q('[data-connect]').hidden = false; q('[data-prompt]').value = data.prompt; status('Paste this into your authorized agent’s existing chat on the selected computer. Keep this window open to see progress. Invitation expires in 15 minutes.'); stop(); timer = setInterval(poll, 2000); }
     catch(e) { status(e.message); } finally { form.querySelector('button').disabled = false; }
   };
   q('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(q('[data-prompt]').value); status('Prompt copied. Paste it into your agent’s existing chat.'); } catch { q('[data-prompt]').select(); status('Press Ctrl+C to copy the selected prompt.'); } };

@@ -466,6 +466,8 @@ def update_from_gateway(agent_id: str, message: dict[str, Any]) -> None:
         payload = message.get("payload")
         if not register_gateway_agents(agent_id, payload, DEV_AGENT_REGISTRY):
             return
+        if payload.get('platform') in {'hermes', 'opencode', 'openwebui', 'openai'}:
+            record['platform'] = payload['platform']
         record['gateway_enrollment_restore_version'] = 1 if payload.get('enrollment_restore_version') == 1 else 0
         receipts = payload.get('enrollment_receipts', [])
         if isinstance(receipts, list) and len(receipts) <= 256:
@@ -1551,7 +1553,7 @@ def create_app() -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
         ENVIRONMENT=environment,
-        MESH_VERSION=os.environ.get("MESH_VERSION", "1.20.3-gateway-control"),
+        MESH_VERSION=os.environ.get("MESH_VERSION", "1.21.0-platform-gateways"),
         BUILD_ID=os.environ.get("BUILD_ID", BUILD_ID),
         DEV_AUTH_ENABLED=os.environ.get("DEV_AUTH_ENABLED", dev_auth_default) == "1",
         DEV_SEED_AGENTS=os.environ.get("DEV_SEED_AGENTS", dev_seed_default) == "1",
@@ -2049,7 +2051,7 @@ def create_app() -> Flask:
             token_ttl_seconds=IDE_TOKEN_TTL_SECONDS,
             request_timeout_seconds=IDE_REQUEST_TIMEOUT_SECONDS,
             streaming="single-completion SSE compatibility",
-            transport="HTTPS -> owner-scoped Mesh gateway -> OpenClaw role agent",
+            transport="HTTPS -> owner-scoped Mesh gateway -> selected native agent",
         )
 
     @app.post("/api/agents/<agent_id>/ide/token")
@@ -2082,6 +2084,7 @@ def create_app() -> Flask:
             expires_at=issued["expires_at"],
             models=models,
             recommended_model=agent_id if agent_id in models else models[0],
+            tool_calling=DEV_AGENT_REGISTRY.get(record.get('control_center_gateway') or agent_id, {}).get('platform') not in {'hermes', 'opencode'},
         ), 201
 
     @app.get("/v1/models")
@@ -2229,6 +2232,11 @@ def create_app() -> Flask:
         except (OSError, json.JSONDecodeError, ValueError):
             return jsonify(ok=False, error="adapter_catalog_unavailable"), 503
         for adapter in catalog.get("adapters", []):
+            if adapter.get('id') in {'hermes', 'opencode', 'openwebui', 'openai'}:
+                adapter['self_bootstrap'] = {
+                    'plan_url': f'{origin}/api/enrollment/adapters/platform/install-plan',
+                    'helper_url': f'{origin}/api/enrollment/adapters/platform/bootstrap',
+                    'helper_sha256': sha256_file(distribution_file('mesh-platform-bootstrap-v1.py'))}
             if adapter.get("id") != "openclaw":
                 continue
             adapter.setdefault("package", {})["version"] = OPENCLAW_PLUGIN_PACKAGE_VERSION
@@ -2881,7 +2889,8 @@ def create_app() -> Flask:
     @app.get("/api/status")
     @require_session
     def api_status():
-        agents = [public_agent(a) for a in DEV_AGENT_REGISTRY.values() if ownership_visible(a, current_mesh_user_id())]
+        from mesh_gateways import visible
+        agents = [public_agent(a) for a in DEV_AGENT_REGISTRY.values() if ownership_visible(a, current_mesh_user_id()) and visible(a, DEV_AGENT_REGISTRY)]
         agents = [a for a in agents if not a.get("identity_alias") and not a.get("office_archived")]
         return jsonify(
             server_time=unix_now(),
@@ -2903,7 +2912,8 @@ def create_app() -> Flask:
     @app.get("/api/agents")
     @require_session
     def list_agents():
-        agents = [public_agent(a) for a in DEV_AGENT_REGISTRY.values() if ownership_visible(a, current_mesh_user_id())]
+        from mesh_gateways import visible
+        agents = [public_agent(a) for a in DEV_AGENT_REGISTRY.values() if ownership_visible(a, current_mesh_user_id()) and visible(a, DEV_AGENT_REGISTRY)]
         agents = [a for a in agents if not a.get("identity_alias") and not a.get("office_archived")]
         agents.sort(key=lambda a: (a["name"].lower(), a["id"]))
         return jsonify(ok=True, storage="account-configuration" if account_store else "ephemeral-in-process", agents=agents)
@@ -3583,7 +3593,16 @@ def create_app() -> Flask:
                 token_record["used"] = True
                 auth_mode = "pairing_token"
 
+            from mesh_gateways import activate
+            try:
+                activate(DEV_AGENT_REGISTRY, GATEWAY_SOCKETS, agent_id)
+            except ValueError as exc:
+                ws.close(reason=str(exc))
+                return
+            previous = GATEWAY_SOCKETS.get(agent_id)
             GATEWAY_SOCKETS[agent_id] = ws
+            if previous and previous is not ws:
+                previous.close(reason='gateway_reconnected')
             record["transport"] = "connected"
             record["state"] = "online"
             record["last_heartbeat"] = utcnow()

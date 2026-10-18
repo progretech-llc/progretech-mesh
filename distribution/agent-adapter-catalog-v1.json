@@ -1,6 +1,6 @@
 {
   "catalog": "progretech-mesh-agent-adapters",
-  "version": 2,
+  "version": 3,
   "adapters": [
     {
       "id": "openclaw",
@@ -101,6 +101,111 @@
       "capabilities": {
         "passive_observation": "adapter-dependent",
         "independent_mesh_conversation": "adapter-dependent"
+      }
+    },
+    {
+      "id": "hermes",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "Hermes",
+          "hermes"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    },
+    {
+      "id": "opencode",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "OpenCode",
+          "opencode"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    },
+    {
+      "id": "openwebui",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "Open WebUI",
+          "openwebui"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    },
+    {
+      "id": "openai",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "Ollama",
+          "OpenAI-compatible",
+          "llama.cpp"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
       }
     }
   ],

@@ -1083,6 +1083,7 @@
       `API key: ${data.api_key}`,
       `Recommended model: ${data.recommended_model}`,
       `Models: ${(data.models || []).join(", ")}`,
+      data.tool_calling === false ? 'Client-side tool calling: disable it for this CLI agent. The agent retains its native tools and permissions.' : 'Tool calling: forwarded to the selected upstream runtime.',
       `Expires: ${new Date(Number(data.expires_at || 0) * 1000).toLocaleString()}`,
     ].join("\n");
     const copied = await copyTextCompatible(setup);

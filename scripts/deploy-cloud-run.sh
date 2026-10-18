@@ -49,7 +49,7 @@ gcloud config set project "${PROJECT_ID}" >/dev/null
 
 ENV_VARS="APP_ENV=production"
 ENV_VARS+=",MESH_DEPLOYMENT_TIER=${DEPLOYMENT_TIER}"
-ENV_VARS+=",MESH_VERSION=1.20.3-gateway-control"
+ENV_VARS+=",MESH_VERSION=1.21.0-platform-gateways"
 ENV_VARS+=",BUILD_ID=v1-rc2-private-lan-acceptance-20260913"
 ENV_VARS+=",FLASK_DEBUG=0"
 ENV_VARS+=",TRUST_PROXY_HEADERS=1"
