@@ -27,6 +27,7 @@ class PlatformTests(unittest.TestCase):
         self.config = {'platform': 'hermes', 'workspace': str(self.home), 'prime': 'progre',
             'agent_id': 'agent-fixture', 'excluded_agents': ['records'], 'mesh': 'https://mesh.example', 'device_credential': 'test'}
 
+    @unittest.skipUnless(shutil.which('node'), 'Native Factory board requires host Node.js')
     def test_mixed_roster_routes_exact_native_bindings_and_preserves_labels(self):
         from mesh_control_center import register_gateway_agents
         root=self.home/'.codex';root.mkdir()
