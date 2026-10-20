@@ -126,7 +126,8 @@ def register_gateway_agents(gateway_id, payload, registry):
     # A roster is discovery, not enrollment or proof of each role's identity.
     platform = payload.get('platform') or host.get('platform')
     runtime = {'hermes': 'Hermes', 'opencode': 'OpenCode', 'openwebui': 'OpenWebUI',
-               'openai': 'OpenAI-compatible', 'openclaw': 'OpenClaw'}.get(platform)
+               'openai': 'OpenAI-compatible', 'openclaw': 'OpenClaw', 'codex': 'Codex',
+               'harness': 'Harness', 'mixed': 'Mixed tools'}.get(platform)
     if runtime:
         host.update(platform=platform, runtime=runtime)
     # The gateway and its intake runtime are one agent. Keep signed receipts
@@ -164,8 +165,12 @@ def register_gateway_agents(gateway_id, payload, registry):
                            'sleeping':'paused','blocked':'blocked','unknown':'unknown'}.get(observed,'unknown')
         record['activity'] = {k:activity[k] for k in ('state','observed_at','source','task_id','session') if k in activity and isinstance(activity[k],(str,type(None)))}
         record['transport'] = 'connected'
-        if runtime:
-            record.update(platform=platform, runtime=runtime)
+        item_platform = item.get('platform', platform)
+        item_runtime = {'hermes': 'Hermes', 'opencode': 'OpenCode', 'codex': 'Codex',
+                        'openclaw': 'OpenClaw', 'harness': 'Harness', 'openwebui': 'OpenWebUI',
+                        'openai': 'OpenAI-compatible'}.get(item_platform, runtime)
+        if item_runtime:
+            record.update(platform=item_platform, runtime=item_runtime)
         record['runtime_id'] = item['runtime_id']
         record['office_archived'] = item.get('office_archived') is True
         record['office_agent_id'] = item.get('office_agent_id')
@@ -174,6 +179,10 @@ def register_gateway_agents(gateway_id, payload, registry):
         record['mesh_runtime'].update(availability_status(item))
         if record['mesh_runtime'].get('model'): record['model'] = record['mesh_runtime']['model']
     if host_activity is not None:
+        prime_platform = host_activity.get('platform', platform)
+        prime_runtime = {'hermes': 'Hermes', 'opencode': 'OpenCode', 'codex': 'Codex', 'openclaw': 'OpenClaw', 'harness': 'Harness'}.get(prime_platform)
+        if prime_runtime:
+            host.update(platform=prime_platform, runtime=prime_runtime, roster_mode=platform)
         host['office_agent_id'] = host_activity.get('office_agent_id')
         host['is_orchestrator'] = host_activity.get('is_orchestrator') is True
         host['mesh_runtime'] = availability_status(host_activity)

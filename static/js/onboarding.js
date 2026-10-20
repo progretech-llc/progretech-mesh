@@ -3,10 +3,11 @@
   modal.className = 'onboarding-dialog';
   modal.setAttribute('aria-labelledby', 'onboardingTitle');
   modal.innerHTML = `<div class="modal-head"><h2 id="onboardingTitle">Connect a gateway</h2><button type="button" data-close aria-label="Close onboarding">×</button></div>
-    <form data-consent><label>Platform<select name="platform" required><option value="hermes">Hermes profiles</option><option value="opencode">OpenCode agents</option><option value="openwebui">Open WebUI models / workspaces</option><option value="openai">Ollama or another OpenAI-compatible API</option><option value="openclaw">OpenClaw gateway</option></select></label>
-    <label>Computer / gateway name<input name="name" maxlength="80" required autocomplete="off" placeholder="e.g. Office workstation"></label>
-    <p>Give the prompt to your authorized agent on that computer. It installs the connector using Python and Node.js, discovers its team and becomes the initial Scrum Master.</p>
-    <p><strong>One active gateway per account.</strong> Connecting replaces the previous gateway. Change Scrum Master later from the fleet or Factory. Tools and execution depend on your platform; a model API alone provides inference.</p>
+    <form data-consent><label>Connection<select name="connection"><option value="gateway">Connect a workstation</option><option value="runtime">Add a tool</option></select></label><label data-host hidden>Connected workstation<select name="gateway"></select></label><label>Platform<select name="platform" required><option value="hermes">Hermes profiles</option><option value="opencode">OpenCode agents</option><option value="codex">Codex profile</option><option value="harness">OpenHarness session</option><option value="openwebui">Open WebUI models / workspaces</option><option value="openai">Ollama or another OpenAI-compatible API</option><option value="openclaw">OpenClaw gateway</option></select></label>
+    <label><span data-name-label>Computer / gateway name</span><input name="name" maxlength="80" required autocomplete="off" placeholder="e.g. Office workstation"></label>
+    <p data-gateway-copy>Give the prompt to your authorized agent on that computer. It installs the connector using Python and Node.js, discovers its team and becomes the initial Scrum Master.</p>
+    <p data-gateway-copy><strong>One active gateway per account.</strong> Connecting replaces the previous gateway. Change Scrum Master later from the fleet or Factory. Tools and execution depend on your platform; a model API alone provides inference.</p>
+    <p data-runtime-copy hidden>Add one existing agent, profile or session. Other tools stay connected, and your Scrum Master selection stays in place.</p>
     <label><input type="checkbox" name="hosted" required> I own this hosted agent or am authorized to connect it and configure the integration.</label>
     <label><input type="checkbox" name="terms" required> Mesh is an intermediary. I remain responsible for my agent’s instructions and actions; ProgreTech does not operate it or guarantee its results.</label>
     <button class="primary-btn">Generate setup prompt</button></form>
@@ -18,10 +19,10 @@
     <button type="button" data-cancel class="ghost-btn">Cancel invitation</button></section><p data-status role="status" aria-live="polite"></p>`;
   document.body.append(modal);
   const q = s => modal.querySelector(s);
-  let id = null, timer = null, busy = false, opener = null, completed = false;
+  let id = null, timer = null, busy = false, opener = null, completed = false, runtimeMode = false;
   const status = text => { q('[data-status]').textContent = text; };
   async function api(path, body) {
-    const response = await fetch('/api/onboarding' + path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const response = await fetch((runtimeMode ? '/api/runtime-enrollment' : '/api/onboarding') + path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
     const data = await response.json();
     if (!response.ok || !data.ok) throw Error(data.error || 'Connection unavailable');
     return data;
@@ -32,6 +33,16 @@
     busy = true;
     try {
       const data = await api('/' + id);
+      if (runtimeMode) {
+        if(data.state==='authorized') { q('[data-connection]').textContent='Configuring native tool'; status('Authorization verified. Waiting for the workstation to save and acknowledge its configuration.'); }
+        if (data.state === 'complete') {
+          completed = true; stop(); q('[data-cancel]').hidden = true;
+          q('[data-connection]').textContent = 'Native tool registered';
+          status('Your workstation will refresh its roster shortly. Select the Scrum Master in Factory.');
+          window.dispatchEvent(new Event('mesh-enrollment-completed'));
+        } else if (['expired', 'cancelled'].includes(data.state)) { completed = true; stop(); status('Invitation ' + data.state + '. Close and start again.'); }
+        return;
+      }
       q('[data-pulse]').classList.toggle('connected', data.connected);
       q('[data-connection]').textContent = data.connected ? 'Agent connected to onboarding' : 'Waiting for agent connection';
       q('[data-question] button').disabled = !data.connected || data.state !== 'connected';
@@ -57,12 +68,36 @@
     } catch (e) { if(e.message === 'onboarding_not_found') completed = true; q('[data-pulse]').classList.remove('connected'); q('[data-question] button').disabled = true; if ((e.message.startsWith('codeseal_') || e.message.startsWith('account_security_'))) { q('[data-confirm-area]').hidden = false; stop(); } status(e.message); }
     finally { busy = false; }
   }
-  window.MeshOnboarding = {open() { if (completed) { id = null; completed = false; q('[data-consent]').hidden = false; q('[data-consent]').reset(); q('[data-connect]').hidden = true; q('[data-answer]').hidden = true; q('[data-confirm-area]').hidden = true; q('[data-cancel]').hidden = false; q('[data-prompt]').value = ''; q('[data-pulse]').classList.remove('connected'); status(''); } opener = document.activeElement; modal.showModal(); if (id) { stop(); timer = setInterval(poll, 2000); poll(); } (id ? q('[data-copy]') : q('[data-consent] input')).focus(); }};
+  window.MeshOnboarding = {async open() { if (completed) { id = null; completed = false; q('[data-consent]').hidden = false; q('[data-consent]').reset(); q('[data-connect]').hidden = true; q('[data-answer]').hidden = true; q('[data-confirm-area]').hidden = true; q('[data-cancel]').hidden = false; q('[data-prompt]').value = ''; q('[data-pulse]').classList.remove('connected'); status(''); } opener = document.activeElement; modal.showModal();
+    if (!id) {
+      try {
+        const response = await fetch('/api/runtime-enrollment/hosts');
+        if (!response.ok) throw Error('Unable to load connected workstations. Sign in and retry.');
+        const data = await response.json(); const field = q('[name=gateway]'); field.replaceChildren();
+        for (const host of data.hosts || []) { const option = document.createElement('option'); option.value = host.id; option.textContent = host.name; field.append(option); }
+        q('[name=connection] option[value=runtime]').disabled = !field.options.length;
+        q('[name=connection]').value = field.options.length ? 'runtime' : 'gateway';
+        updateMode();
+      } catch(e) { status(e.message); }
+    }
+ if (id) { stop(); timer = setInterval(poll, 2000); poll(); } (id ? q('[data-copy]') : q('[data-consent] input')).focus(); }};
+  function updateMode() {
+    const adding = q('[name=connection]').value === 'runtime';
+    q('[data-host]').hidden = !adding; q('[name=gateway]').required = adding;
+    q('[data-runtime-copy]').hidden = !adding;
+    modal.querySelectorAll('[data-gateway-copy]').forEach(el => { el.hidden = adding; });
+    q('[data-name-label]').textContent = adding ? 'Agent / tool name' : 'Computer / gateway name';
+    q('#onboardingTitle').textContent = adding ? 'Connect a tool' : 'Connect a gateway';
+    q('[name=name]').placeholder = adding ? 'e.g. Imagen' : 'e.g. Office workstation';
+    for (const option of q('[name=platform]').options) option.disabled = adding && ['openai', 'openwebui'].includes(option.value);
+    if (q('[name=platform] option:checked').disabled) q('[name=platform]').value = 'hermes';
+  }
+  q('[name=connection]').onchange = updateMode;
   q('[data-close]').onclick = () => modal.close();
   modal.addEventListener('close', () => { if (completed) stop(); opener?.focus(); });
   q('[data-consent]').onsubmit = async event => {
     event.preventDefault(); const form = event.target; form.querySelector('button').disabled = true;
-    try { const data = await api('', {auto_connect: true, platform: form.elements.platform.value, name: form.elements.name.value, personally_hosted: form.elements.hosted.checked, accept_intermediary: form.elements.terms.checked}); id = data.id; form.hidden = true; q('[data-connect]').hidden = false; q('[data-prompt]').value = data.prompt; status('Paste this into your authorized agent’s existing chat on the selected computer. Keep this window open to see progress. Invitation expires in 15 minutes.'); stop(); timer = setInterval(poll, 2000); }
+    try { runtimeMode = form.elements.connection.value === 'runtime'; const data = await api('', {auto_connect: true, gateway: form.elements.gateway.value, platform: form.elements.platform.value, name: form.elements.name.value, personally_hosted: form.elements.hosted.checked, accept_intermediary: form.elements.terms.checked}); id = data.id; form.hidden = true; q('[data-connect]').hidden = false; q('[data-prompt]').value = data.prompt; status('Paste this into your authorized agent’s existing chat on the selected computer. Keep this window open to see progress. Invitation expires in 15 minutes.'); stop(); timer = setInterval(poll, 2000); }
     catch(e) { status(e.message); } finally { form.querySelector('button').disabled = false; }
   };
   q('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(q('[data-prompt]').value); status('Prompt copied. Paste it into your agent’s existing chat.'); } catch { q('[data-prompt]').select(); status('Press Ctrl+C to copy the selected prompt.'); } };

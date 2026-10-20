@@ -3729,6 +3729,9 @@ def create_app() -> Flask:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
 
+    from mesh_runtime_enrollment import register_runtime_enrollment
+    register_runtime_enrollment(app, require_session, current_mesh_user_id, DEV_AGENT_REGISTRY, mesh_public_origin, validate_device_credential)
+
     from mesh_onboarding import register_onboarding_routes
     register_onboarding_routes(app, require_session, current_mesh_user_id,
         DEV_AGENT_REGISTRY, mesh_public_origin, verify_runtime_agent_identity,

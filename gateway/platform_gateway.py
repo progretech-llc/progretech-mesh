@@ -87,7 +87,8 @@ class Runtime:
 
 
 class Connector:
-    def __init__(self, config, home=None):
+    def __init__(self, config, home=None, config_file=None):
+        self.config_file = Path(config_file) if config_file else None
         self.config = config
         self.home = Path(home or Path.home())
         self.gateway = config['agent_id']
@@ -101,6 +102,14 @@ class Connector:
         self.refresh()
 
     def refresh(self):
+        if self.config_file:
+            latest = json.loads(self.config_file.read_text())
+            if any(latest.get(k) != self.config.get(k) for k in ('agent_id', 'mesh', 'device_credential', 'prime')):
+                raise ValueError('native_gateway_identity_change_requires_restart')
+            if latest != self.config:
+                self.config = latest
+                self.platform = Platform(latest, self.home)
+                self.runtime.platform = self.platform
         rows = self.platform.discover()
         if self.prime not in self.platform.rows or not self.platform.rows[self.prime]['enabled']:
             raise ValueError('enabled_prime_agent_required')
@@ -122,7 +131,8 @@ class Connector:
             rows = []
             for row in self.rows:
                 enabled = row.get('enabled', False)
-                state = 'working' if self.runtime.participant_busy(row['id']) else 'unknown' if enabled else 'paused'
+                native = row.get('native_state')
+                state = 'working' if self.runtime.participant_busy(row['id']) else native if enabled and native in {'working','idle','needs-input','starting','installing'} else 'unknown' if enabled else 'paused'
                 rows.append({**row, 'state': state,
                     'activity': {'state': state, 'source': 'mesh-owned-jobs'},
                     'mesh_runtime': {'model': row.get('model', ''), 'sleeping': not enabled,
@@ -140,11 +150,11 @@ class Connector:
                 'workstation': 'yes', 'stack': 'custom', 'voice': {'provider': 'piper', 'voice': 'current', 'pitch': 0}},
                 'discovered': row, 'capabilities': ['models.list', 'host.system', 'runtime.status', 'factory.office']}
         if action == 'models.list':
-            return {'models': [{'name': r['model']} for r in self.platform.rows.values()]}
+            return {'models': [{'name': row['model']}]}
         if action in {'host.system', 'host.overview', 'orchestration.status'}:
-            return {'platform': self.platform.kind, 'agents': list(self.platform.rows.values()), 'gateway': self.gateway}
+            return {'platform': row.get('platform', self.platform.kind), 'roster_mode': self.platform.kind, 'agents': list(self.platform.rows.values()), 'gateway': self.gateway}
         if action == 'skills.list':
-            return {'external_dirs': row.get('skills', []), 'managed_by': self.platform.kind}
+            return {'external_dirs': row.get('skills', []), 'managed_by': row.get('platform', self.platform.kind)}
         if action == 'runtime.status':
             return {'sleeping': not row['enabled'], 'model': row['model'], 'controls_available': False,
                     'busy': self.runtime.participant_busy(agent)}
@@ -182,7 +192,7 @@ class Connector:
                 action = payload.get('action')
                 if action == 'factory.status':
                     self.roster()
-                    result = {'agents': [{**r, 'id': r['runtime_id'], 'runtime': self.platform.kind,
+                    result = {'agents': [{**r, 'id': r['runtime_id'], 'runtime': r.get('platform', self.platform.kind),
                         'controller': r.get('is_orchestrator', False),
                         'workspace_ready': bool(r.get('enabled')), 'hardware_status': 'Selected gateway'}
                         for r in self.rows if r.get('runtime_id')],
@@ -266,7 +276,7 @@ class Connector:
                                 break
                         if time.monotonic() >= next_roster:
                             send({'type': 'control_center_roster', 'payload': self.roster()})
-                            send({'type': 'heartbeat', 'payload': {'state': 'online', 'runtime': {'hermes': 'Hermes', 'opencode': 'OpenCode', 'openwebui': 'OpenWebUI', 'openai': 'OpenAI-compatible'}[self.platform.kind],
+                            send({'type': 'heartbeat', 'payload': {'state': 'online', 'runtime': {'hermes': 'Hermes', 'opencode': 'OpenCode', 'openwebui': 'OpenWebUI', 'openai': 'OpenAI-compatible', 'codex': 'Codex', 'openclaw': 'OpenClaw', 'harness': 'Harness', 'mixed': 'Mixed native tools'}[self.platform.kind],
                                 'task': 'Gateway connected', 'phase': 'Native platform ready'}})
                             next_roster = time.monotonic() + 10
                         try:
@@ -303,7 +313,7 @@ def main():
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    connector = Connector(json.loads(args.config.read_text()))
+    connector = Connector(json.loads(args.config.read_text()), config_file=args.config)
     if args.check:
         print(json.dumps(connector.roster()))
     else:

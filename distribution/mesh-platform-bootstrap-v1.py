@@ -34,7 +34,7 @@ def main():
     identity = parser.add_mutually_exclusive_group(required=True)
     identity.add_argument('--enrollment-file', type=Path)
     identity.add_argument('--reconnect-file', type=Path, help='Existing owner-bound Mesh device credential; preserve the signed host identity during migration')
-    parser.add_argument('--platform', choices=['hermes', 'opencode', 'openwebui', 'openai'], required=True)
+    parser.add_argument('--platform', choices=['hermes', 'opencode', 'codex', 'harness', 'openclaw', 'openwebui', 'openai'], required=True)
     parser.add_argument('--prime', required=True, help='Exact profile/agent/model ID, not a guessed display name')
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--endpoint', help='API base including /api for Open WebUI or /v1 for compatible servers')
@@ -95,7 +95,9 @@ def main():
     subprocess.run([str(python), '-m', 'pip', 'install', '--disable-pip-version-check', '-r', str(source / 'requirements.txt')], check=True)
     sys.path.insert(0, str(source))
     # Use the installed environment to validate native discovery before consuming activation.
-    config = {'platform': args.platform, 'prime': args.prime, 'workspace': str(workspace),
+    if args.platform=='harness':
+        subprocess.run([str(python),'-c','from gateway.platform_register import harness_control; import sys; harness_control(sys.argv[1],grant=True)',args.prime],cwd=source,check=True)
+    config = {'platform': args.platform, 'native_id': args.prime, 'prime': args.prime, 'workspace': str(workspace),
         'endpoint': args.endpoint, 'api_key_file': str(args.api_key_file.expanduser().resolve()) if args.api_key_file else None,
         'excluded_agents': args.exclude, 'mesh': base, 'agent_id': envelope['agent_id'], 'device_credential': reconnect.get('device_credential', '')}
     config_file = state / 'connector.json'

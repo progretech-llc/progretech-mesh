@@ -65,8 +65,8 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
     @app.get('/api/enrollment/adapters/platform/install-plan')
     def platform_plan():
         from mesh_host_distribution import host_bundle
-        return jsonify(ok=True, platforms=['hermes', 'opencode', 'openwebui', 'openai'],
-            prerequisites=['Python 3.10+', 'Node.js LTS', 'Native runtime or an authorized API endpoint'],
+        return jsonify(ok=True, platforms=['hermes', 'opencode', 'codex', 'harness', 'openclaw', 'openwebui', 'openai'],
+            prerequisites=['Python 3.10+', 'Node.js LTS', 'Native runtime or an authorized API endpoint', 'Harness sessions require native followup/delegate-followup support (factory CLI 0.4.19+progretech.factory.8 or compatible)'],
             bundle_sha256=host_bundle(app.root_path)[1],
             bootstrap_sha256=hashlib.sha256((Path(app.root_path) / 'distribution/mesh-platform-bootstrap-v1.py').read_bytes()).hexdigest())
 
@@ -80,7 +80,7 @@ def register_onboarding_routes(app, require_session, user_id, registry, origin,
             return jsonify(ok=False, error='onboarding_consent_required'), 400
         name = body.get('name', '')
         platform = body.get('platform', 'openclaw')
-        if not isinstance(platform, str) or platform not in {'openclaw', 'hermes', 'opencode', 'openwebui', 'openai'}:
+        if not isinstance(platform, str) or platform not in {'openclaw', 'hermes', 'opencode', 'codex', 'harness', 'openwebui', 'openai'}:
             return jsonify(ok=False, error='unsupported_platform'), 400
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
             return jsonify(ok=False, error='agent_name_required'), 400

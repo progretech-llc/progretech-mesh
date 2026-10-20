@@ -27,6 +27,40 @@ class PlatformTests(unittest.TestCase):
         self.config = {'platform': 'hermes', 'workspace': str(self.home), 'prime': 'progre',
             'agent_id': 'agent-fixture', 'excluded_agents': ['records'], 'mesh': 'https://mesh.example', 'device_credential': 'test'}
 
+    def test_mixed_roster_routes_exact_native_bindings_and_preserves_labels(self):
+        from mesh_control_center import register_gateway_agents
+        root=self.home/'.codex';root.mkdir()
+        (root/'local.config.toml').write_text('model="local-coder"\n')
+        cfg={**self.config,'platform':'mixed','runtimes':[
+            {'id':'progre','platform':'hermes','native_id':'progre'},
+            {'id':'codex-local','platform':'codex','native_id':'local'},
+            {'id':'missing','platform':'hermes','native_id':'absent'}]}
+        c=Connector(cfg,self.home)
+        self.assertFalse(c.platform.rows['missing']['enabled'])
+        self.assertEqual(c.platform.rows['codex-local']['model'],'local-coder')
+        registry={c.gateway:{'id':c.gateway,'owner_id':'owner','trust_state':'verified'}}
+        register_gateway_agents(c.gateway,c.roster(),registry)
+        self.assertEqual(registry[c.gateway+'--codex-local']['runtime'],'Codex')
+        status=c.message({'type':'factory_control_request','request_id':'status','payload':{'action':'factory.status'}})
+        entry=next(r for r in status['payload']['result']['agents'] if r['id']=='codex-local')
+        self.assertEqual(entry['runtime'],'codex')
+        with patch.object(c.platform.members['codex-local'][0],'complete',return_value={'native':'local'}) as complete:
+            self.assertEqual(c.platform.complete('codex-local',{'messages':[]}),{'native':'local'})
+            complete.assert_called_once_with('local',{'messages':[]})
+        with self.assertRaisesRegex(ValueError,'disabled'):c.platform.complete('missing',{'messages':[]})
+
+    def test_harness_binding_never_bypasses_native_ownership_refusal(self):
+        import subprocess
+        cfg={**self.config,'platform':'harness'}
+        native={'harnesses':[{'id':'session-1','name':'Worker','state':'idle','folder':str(self.home),'agent':'OpenCode'}]}
+        with patch('gateway.platforms.subprocess.run',return_value=subprocess.CompletedProcess([],0,json.dumps(native),'')):
+            platform=Platform(cfg,self.home);platform.discover()
+        with patch('gateway.platforms.shutil.which',return_value='/bin/harness'), patch('gateway.platforms.subprocess.run',return_value=subprocess.CompletedProcess([],5,'','refused')) as run:
+            with self.assertRaisesRegex(ValueError,'refused'):platform.complete('session-1',{'messages':[{'role':'user','content':'task'}]})
+            self.assertEqual(run.call_count,1)
+            self.assertEqual(run.call_args.args[0][1],'followup')
+            self.assertEqual(run.call_args.kwargs['env']['HARNESS_AGENT_SESSION'],'mesh-native-gateway')
+
     def test_release_change_reconnects_but_health_failure_does_not(self):
         from io import BytesIO
         with patch('gateway.platform_gateway.urlopen', return_value=BytesIO(json.dumps(
