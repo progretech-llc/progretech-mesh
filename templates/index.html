@@ -14,7 +14,7 @@
   <link rel="manifest" href="{{ url_for('manifest') }}" />
   <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=build_id) }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v='mesh-fleet-v27') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/buddy.css', v=build_id) }}" />
 <link rel="stylesheet" href="/static/css/onboarding.css"><script src="/static/js/onboarding.js" defer></script>
 <link rel="stylesheet" href="/static/analytics/analytics-consent.css"><script defer src="/static/analytics/analytics-consent.js"></script></head>
@@ -148,6 +148,15 @@
       </div>
 
       <section class="gateway-guide" aria-labelledby="gatewayGuideTitle"><div><h2 id="gatewayGuideTitle">Connect your computer to Mesh</h2><p>Use Hermes, OpenCode, OpenClaw, Open WebUI or an OpenAI-compatible API. Your agents and models stay on their host. One gateway is active per account.</p></div><ol><li><strong>1. Choose your platform</strong><span>Generate a setup prompt for the computer you want to connect.</span></li><li><strong>2. Give it to your authorized agent</strong><span>Your agent installs and configures the connector, discovers its team and becomes the initial Scrum Master.</span></li><li><strong>3. Work from Mesh</strong><span>Inspect Mission Control, run tasks in Factory, or copy an agent’s API relay setup for PyCharm and other IDEs. Change Scrum Master whenever needed.</span></li></ol><button class="primary-btn" id="connectGatewayGuide">Connect a computer</button></section>
+      <form class="fleet-discovery" id="fleetFilters" role="search" aria-label="Find agents">
+        <label class="fleet-search">Search agents<input id="fleet-search" type="search" placeholder="Name, role, model or runtime" autocomplete="off" aria-describedby="fleetFilterHelp" /></label>
+        <label>Connection<select id="fleetConnection"><option value="all">All connections</option><option value="connected">Gateway live</option><option value="not-connected">Not connected</option></select></label>
+        <button class="ghost-btn" id="clearFleetFilters" type="button" disabled>Clear filters</button>
+        <p id="fleetFilterHelp">Connection state does not establish whether native work has stopped.</p>
+      </form>
+      <p class="fleet-results" id="fleetResultCount" role="status">Loading agents…</p>
+      <p class="fleet-selection-notice" id="fleetSelectedHidden" hidden>Selected agent is outside these filters. Its current monitor remains open. <button class="ghost-btn compact" id="revealSelectedAgent" type="button">Clear filters</button></p>
+      <div class="empty-stream fleet-empty" id="fleetEmpty" hidden></div>
       <section class="agent-grid" id="agentGrid" aria-live="polite"></section>
 
       <div class="mobile-monitor-bar" id="mobileMonitorBar">
@@ -393,7 +402,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="{{ url_for('static', filename='js/availability.js', v=build_id) }}" defer></script>
   <script src="{{ url_for('static', filename='js/runtime-client.js', v=build_id) }}" defer></script>
-<script src="/static/js/avatars.js?v=moxy-teal-20261007" defer></script>  <script src="{{ url_for('static', filename='js/app.js', v=build_id) }}" defer></script>
+<script src="/static/js/avatars.js?v=moxy-teal-20261007" defer></script>  <script src="{{ url_for('static', filename='js/app.js', v='mesh-fleet-v27') }}" defer></script>
   <script type="module" src="{{ url_for('static', filename='js/signed-import.mjs', v=build_id) }}"></script>
   <script src="{{ url_for('static', filename='js/buddy.js', v=build_id) }}" defer></script>
 

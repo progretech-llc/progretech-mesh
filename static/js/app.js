@@ -66,6 +66,8 @@
   let installPrompt = null;
   let fleet = [];
   let fleetPending = false;
+  let fleetLoaded = false;
+  let fleetStatusUnavailable = false;
   let selectedAgentId = null;
   const roleConversations = new Map();
   let monitorSocket = null;
@@ -1002,9 +1004,44 @@
     if(agent)detail.textContent=MeshRuntime.indicator(agent,{monitoring:!agent.control_center_gateway && agent.transport==='connected'}).detail+' '+MeshRuntime.memoryLabel(agent.mesh_runtime?.memory);
   }
   document.getElementById('connectGatewayGuide')?.addEventListener('click',()=>window.MeshOnboarding.open());
+  function matchesFleetFilters(agent, query, connection) {
+    const search = String(query ?? "").trim().toLowerCase();
+    const fields = [agent.name, agent.is_orchestrator ? "Scrum Master" : agent.role,
+      agent.model || "Unknown", agent.runtime || "OpenClaw"];
+    return (connection === "all" || (connection === "connected" ? agent.transport === "connected" : agent.transport !== "connected")) &&
+      (!search || fields.some((value) => String(value ?? "").toLowerCase().includes(search)));
+  }
+
+  function clearFleetFilters() {
+    document.getElementById("fleet-search").value = "";
+    document.getElementById("fleetConnection").value = "all";
+    renderFleet();
+    document.getElementById("fleet-search").focus();
+  }
+  document.getElementById("fleetFilters")?.addEventListener("submit", (event) => event.preventDefault());
+  document.getElementById("fleet-search")?.addEventListener("input", () => renderFleet());
+  document.getElementById("fleetConnection")?.addEventListener("change", () => renderFleet());
+  document.getElementById("clearFleetFilters")?.addEventListener("click", clearFleetFilters);
+  document.getElementById("revealSelectedAgent")?.addEventListener("click", clearFleetFilters);
+
   function renderFleet() {
     renderAgentStatus();
-    agentGrid.innerHTML = fleet.filter(a=>!a.identity_alias && !a.office_archived).map(agent => `
+    const query = document.getElementById("fleet-search").value;
+    const connection = document.getElementById("fleetConnection").value;
+    const eligible = fleet.filter((agent) => !agent.identity_alias && !agent.office_archived);
+    const visible = eligible.filter((agent) => matchesFleetFilters(agent, query, connection));
+    document.getElementById("clearFleetFilters").disabled = !query && connection === "all";
+    document.getElementById("fleetResultCount").textContent = fleetStatusUnavailable
+      ? `Status unavailable · showing ${visible.length} of ${eligible.length} last reported agents. Reconnecting…`
+      : fleetLoaded ? `Showing ${visible.length} of ${eligible.length} agents` : "Loading agents…";
+    document.getElementById("fleetSelectedHidden").hidden = !eligible.some((agent) => agent.id === selectedAgentId) || visible.some((agent) => agent.id === selectedAgentId);
+    const empty = document.getElementById("fleetEmpty");
+    empty.hidden = visible.length > 0 || (!fleetLoaded && !fleetStatusUnavailable);
+    empty.textContent = fleetStatusUnavailable
+      ? "Fleet status is unavailable. Filters remain in place while Mesh reconnects."
+      : eligible.length ? "No agents match these filters. Clear filters to see the full fleet."
+      : "No agents to show yet. Connect your computer or import agents using the controls above.";
+    agentGrid.innerHTML = visible.map(agent => `
       <article tabindex="0" data-agent-card="${escapeHtml(agent.id)}" class="agent-card ${agent.is_orchestrator?'scrum-master':''} ${selectedAgentId===agent.id?'active':''}">
         <div class="agent-top"><div class="agent-id">${MeshAvatar.source(agent)?`<img class="avatar" src="${MeshAvatar.source(agent)}" alt="">`:`<div class="avatar rend"></div>`}<div class="agent-name"><strong>${escapeHtml(agent.name)}</strong><span>${escapeHtml(agent.is_orchestrator?'Scrum Master':agent.role)}</span></div></div><span class="agent-state ${MeshRuntime.indicator(agent).state}" title="${escapeHtml(MeshRuntime.indicator(agent).detail)}" aria-label="${escapeHtml(MeshRuntime.indicator(agent).label)}"></span></div>
         <div class="task"><label>Live activity</label><strong>${escapeHtml(MeshRuntime.indicator(agent).label)}</strong><span class="agent-current-work">${escapeHtml(MeshRuntime.workLabel(agent))}</span></div>
@@ -1126,6 +1163,8 @@
       if (!response.ok) throw Error("Fleet status unavailable");
       const data = await response.json();
       fleet = data.agents || [];
+      fleetLoaded = true;
+      fleetStatusUnavailable = false;
 
       document.getElementById("connectedCount").textContent = `${data.fleet.connected} gateways`;
       document.getElementById("signedCount").textContent = `${data.fleet.verified} / ${data.fleet.signed_total ?? data.fleet.total}${data.fleet.linked ? ` · ${data.fleet.linked} linked` : ''}`;
@@ -1141,6 +1180,7 @@
         if (current) renderTelemetry(current);
       }
     } catch {
+      fleetStatusUnavailable = true;
       fleet = fleet.map(agent => ({...agent, transport: 'not-connected', state: 'unknown', phase: 'Gateway status unavailable; reconnecting…'}));
       document.getElementById('connectedCount').textContent = 'Status unavailable';
       document.getElementById('gatewayCount').textContent = '—';
