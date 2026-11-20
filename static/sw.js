@@ -1,13 +1,11 @@
-const CACHE_NAME = "progretech-mesh-shell-v26-sync-update";
+const CACHE_NAME = "progretech-mesh-shell-v27-fleet-discovery";
 // Retain the prior cache marker for release-contract and rollback checks.
 const LEGACY_CACHE_NAME = "progretech-mesh-shell-v13-all-avatars";
 const SHELL_ASSETS = [
-  "/",
-  "/how-it-works",
-  "/static/css/app.css",
+  "/static/css/app.css?v=mesh-fleet-v27",
   "/static/analytics/analytics-consent.js",
   "/static/analytics/analytics-consent.css",
-  "/static/js/app.js",
+  "/static/js/app.js?v=mesh-fleet-v27",
   "/static/js/avatars.js?v=moxy-teal-20261007",
   "/static/js/agent-management.js",
   "/static/js/onboarding.js",
@@ -16,15 +14,13 @@ const SHELL_ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)));
-  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS.map((url) => new Request(url, {cache: "reload"})))));
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith("progretech-mesh-shell-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -32,7 +28,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
 
   // Operational data is never stored in the service-worker cache.
-  if (request.method !== "GET" ||
+  if (url.origin !== self.location.origin || request.method !== "GET" ||
       url.pathname.startsWith("/api/") ||
       url.pathname.startsWith("/ws/") ||
       url.pathname.startsWith("/agents/") ||
@@ -41,10 +37,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(request).then((r) => r || caches.match("/"))));
-    return;
-  }
+  // Navigations and all other non-public requests stay on the network.
+  if (request.mode === "navigate" || !SHELL_ASSETS.includes(url.pathname + url.search)) return;
 
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(request)).then((cached) => cached || fetch(request)));
 });

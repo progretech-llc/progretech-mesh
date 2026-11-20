@@ -1,5 +1,11 @@
 # ProgreTech Mesh
 
+## Find an agent
+
+Above the agent cards, search a displayed name, role, model or runtime and combine it with **Gateway live** or **Not connected**. The count covers visible, non-archived identities and excludes aliases. **Clear filters** restores the full list. Filtering keeps the current monitor, message draft and attachments in place; it does not send a command or change an agent’s state. If status cannot refresh, Mesh labels the last reported roster as unavailable while it reconnects. A disconnected gateway does not establish that native work has stopped.
+
+The PWA caches only its listed public assets. Sign-in, dashboard navigation and operational responses require a network connection; they have no cached HTML fallback. An updated worker waits for existing Mesh windows to close before taking over, preserving ongoing browser sessions.
+
 ## Keep a connected gateway current
 
 Open **Sync & Update** from the fleet navigation. The page compares the connected platform connector’s reported file fingerprint with the current Mesh host bundle. Copy its release-specific update prompt to an authorized agent on that gateway computer, then use **Check again** after the agent finishes. Legacy connectors that cannot report a fingerprint are shown as unverified rather than current; OpenClaw instructions include the published Mesh extension and portable provider checksums.
