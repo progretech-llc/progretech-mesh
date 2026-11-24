@@ -48,21 +48,10 @@ def register_progretech_auth(app):
             with urlopen(Request(ISSUER+'/auth/sso/userinfo',headers={'Authorization':'Bearer '+token['access_token']}),timeout=15) as r:user=json.load(r)
             if user.get('iss')!=ISSUER or user.get('aud')!='mesh' or user.get('email_verified') is not True or not user.get('sub') or not user.get('email'):abort(401)
         except Exception:abort(401)
-        # Keep established Firebase ownership IDs for verified legacy emails. The account
-        # subject comes from the central CodeSeal record, never a second user database.
-        owner_id=user['sub']
-        if os.getenv('MESH_FIREBASE_PROJECT_ID'):
-            try:
-                import firebase_admin
-                from firebase_admin import auth
-                if not firebase_admin._apps:firebase_admin.initialize_app(options={'projectId':os.environ['MESH_FIREBASE_PROJECT_ID']})
-                legacy=auth.get_user_by_email(user['email'])
-                if legacy.email_verified and not legacy.disabled:owner_id=legacy.uid
-            except Exception as error:
-                if type(error).__name__=='UserNotFoundError':
-                    pass
-                else:
-                    abort(503)
+        # Existing workspace IDs remain attached to the immutable central subject.
+        from mesh_legacy_ownership import legacy_owner
+        try: owner_id=legacy_owner(user['sub'])
+        except Exception: abort(503)
         if app.config.get('PROGRETECH_SECURITY_ENFORCED') and type(user.get('session_version')) is not int:abort(401)
         session.clear();session['mesh_user']={'id':owner_id,'progretech_user_id':user['sub'],'email':user['email'],'display_name':user['email'].split('@')[0],'auth_source':'progretech-shared','auth_strength':user['auth_strength']}
         if type(user.get('session_version')) is int:session['mesh_user']['session_version']=user['session_version']

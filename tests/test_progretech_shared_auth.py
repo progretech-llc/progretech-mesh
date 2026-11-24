@@ -27,3 +27,21 @@ def test_shared_callback_requires_state_and_correct_audience(client,monkeypatch)
     with client.session_transaction() as s:state=s['progretech_login']['state']
     user['aud']='atlas'
     assert client.get('/auth/progretech/callback?state='+state+'&code=synthetic').status_code==401
+
+def test_legacy_workspace_stays_with_subject_after_email_transfer(tmp_path,monkeypatch):
+    from mesh_legacy_ownership import legacy_owner
+    path=tmp_path/'private-identities.json'
+    path.write_text(json.dumps({'schema_version':1,'users':{'old@example.test':{'uid':'legacy-workspace','email_verified':True,'disabled':False,'canonical_subject':'original-subject'}}}))
+    monkeypatch.setenv('PT_LEGACY_IDENTITY_MAP',str(path))
+    assert legacy_owner('original-subject')=='legacy-workspace'
+    assert legacy_owner('replacement-subject')=='replacement-subject'
+    data=json.loads(path.read_text());del data['users']['old@example.test']['canonical_subject'];path.write_text(json.dumps(data))
+    with pytest.raises(RuntimeError,match='incomplete'):legacy_owner('original-subject')
+
+
+def test_legacy_workspace_refuses_conflicting_subject_bindings(tmp_path,monkeypatch):
+    from mesh_legacy_ownership import legacy_owner
+    path=tmp_path/'private-identities.json'
+    path.write_text(json.dumps({'schema_version':1,'users':{email:{'uid':owner,'email_verified':True,'disabled':False,'canonical_subject':'original-subject'} for email,owner in [('one@example.test','workspace-one'),('two@example.test','workspace-two')]}}))
+    monkeypatch.setenv('PT_LEGACY_IDENTITY_MAP',str(path))
+    with pytest.raises(RuntimeError,match='Conflicting'):legacy_owner('original-subject')
