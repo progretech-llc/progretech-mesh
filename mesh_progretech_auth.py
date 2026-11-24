@@ -3,7 +3,7 @@ import base64,hashlib,json,secrets,time,os
 from urllib.parse import urlencode
 from urllib.request import Request,urlopen
 from flask import abort,redirect,request,session,url_for,jsonify
-ISSUER='https://codeseal.progretech.com'
+ISSUER='https://secureauth.progretech.com'
 CALLBACK='https://mesh.progretech.com/auth/progretech/callback'
 
 def register_progretech_auth(app):

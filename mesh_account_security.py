@@ -3,7 +3,7 @@ import json
 from urllib.request import Request, urlopen
 from flask import current_app, g
 
-ISSUER = 'https://codeseal.progretech.com'
+ISSUER = 'https://secureauth.progretech.com'
 
 
 def account_status(subject):
