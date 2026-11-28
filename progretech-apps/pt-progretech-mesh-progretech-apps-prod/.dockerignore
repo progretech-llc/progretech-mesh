@@ -1,0 +1,22 @@
+.git
+.gitignore
+.gcloudignore
+__pycache__
+*.py[cod]
+.pytest_cache
+.venv
+venv
+.env
+.env.*
+*.log
+*.zip
+.DS_Store
+
+.mesh-staging
+
+# Full upstream source remains versioned; runtime imports are in office/engine.mjs.
+vendor/munder-difflin/blog
+vendor/munder-difflin/docs
+vendor/munder-difflin/node_modules
+
+instance/

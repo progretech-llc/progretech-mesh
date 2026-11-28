@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>The ProgreTech Project Charter v5.23</title>
+<style>
+:root{
+  --ink:#182230;--muted:#667085;--line:#d0d5dd;--paper:#fff;--wash:#f5f7fa;
+  --navy:#102a43;--blue:#175cd3;--green:#067647;--amber:#b54708;--purple:#6941c6;
+  --red:#b42318
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--wash);color:var(--ink);font:15px/1.58 system-ui,-apple-system,"Segoe UI",sans-serif}
+.page{max-width:1180px;margin:auto;background:var(--paper);min-height:100vh;box-shadow:0 0 0 1px #0000000a}
+header{padding:46px 6%;background:linear-gradient(135deg,#0b1728,#123b63 65%,#155e75);color:white}
+.eyebrow,.tag{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.eyebrow{color:#9fe7f5}
+h1{font-size:clamp(38px,6vw,68px);line-height:1;margin:10px 0 14px}
+.lede{font-size:18px;color:#dceaf6;max-width:930px}
+.review{margin-top:18px;background:#fff3;border:1px solid #ffffff4a;padding:12px 14px;border-radius:12px}
+nav{position:sticky;top:0;z-index:4;padding:10px 5%;background:#fffffff5;border-bottom:1px solid var(--line);overflow:auto;white-space:nowrap}
+nav a{display:inline-block;margin-right:16px;text-decoration:none;color:var(--navy);font-size:12px;font-weight:750}
+main{padding:18px 6% 60px}
+section{padding:32px 0;border-bottom:1px solid var(--line)}
+h2{font-size:29px;line-height:1.15;color:var(--navy);margin:0 0 10px}
+h3{font-size:18px;color:var(--navy);margin:20px 0 8px}
+p{margin:7px 0 12px}
+.small{font-size:13px;color:var(--muted)}
+.tag{display:inline-block;padding:4px 8px;border-radius:99px;background:#eaf2ff;color:#185db7;margin-bottom:8px}
+.tag.green{background:#e8f7ef;color:var(--green)}
+.tag.purple{background:#f0eaff;color:var(--purple)}
+.tag.amber{background:#fff1df;color:var(--amber)}
+.tag.red{background:#fff0ee;color:var(--red)}
+.callout{border-left:4px solid var(--blue);background:#eff6ff;padding:14px 16px;border-radius:0 10px 10px 0;margin:14px 0}
+.callout.green{border-color:var(--green);background:#ecfdf3}
+.callout.amber{border-color:#f79009;background:#fffaeb}
+.callout.purple{border-color:var(--purple);background:#f5f0ff}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:14px;padding:16px;background:#fff}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#eef3f8;color:var(--navy);font-size:11px;text-transform:uppercase}
+.flow{display:flex;align-items:center;gap:8px;overflow:auto;padding:12px 0}
+.node{min-width:155px;border:1px solid var(--line);border-radius:11px;padding:12px;background:#fff;text-align:center}
+.arrow{font-weight:900;color:var(--blue)}
+.phase{display:grid;grid-template-columns:54px 1fr;gap:14px;margin:16px 0}
+.n{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--blue);color:white;font-weight:850}
+.done{color:var(--green);font-weight:800}
+.now{color:var(--amber);font-weight:800}
+.future{color:var(--purple);font-weight:800}
+code,pre{font-family:ui-monospace,Consolas,monospace;background:#0b1728;color:#dceaf6;padding:2px 5px;border-radius:5px}
+pre{padding:14px;overflow:auto;white-space:pre-wrap}
+footer{padding:24px 6%;background:#0b1728;color:#c7d7e5}
+ul{padding-left:22px}
+li{margin:5px 0}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.phase{grid-template-columns:42px 1fr}header,main{padding-left:5%;padding-right:5%}}
+@media print{body{background:white}.page{max-width:none;box-shadow:none}nav{display:none}}
+</style>
+</head>
+<body><div class="page">
+<header>
+<div class="eyebrow">ProgreTech · Project Charter · v5.23 · September 22, 2026</div>
+<h1>One factory. One learning loop. One path forward.</h1>
+<p class="lede">A concise operating charter for Rend, Mak and Lyra: local-first autonomous delivery, explicit authority, durable learning, evidence-based promotion, and a single progression from the qualified Rend foundation to a proven three-agent software factory.</p>
+</header>
+
+<nav>
+<a href="#northstar">North star</a>
+<a href="#agents">Agents</a>
+<a href="#learning">Learning</a>
+<a href="#models">Local intelligence</a>
+<a href="#assets">Asset generation</a>
+<a href="#memory">Memory</a>
+<a href="#catalog">Service catalog</a>
+<a href="#skills">Skills</a>
+<a href="#journal">Journal + self-learning</a>
+<a href="#presence">Presence</a>
+<a href="#authority">Authority</a>
+<a href="#status">Current state</a>
+<a href="#roadmap">Roadmap</a>
+<a href="#deferred">Deferred</a>
+<a href="#changes">Draft changes</a>
+</nav>
+
+<main>
+<section id="northstar">
+<span class="tag green">Authoritative direction</span>
+<h2>North star: autonomous delivery that becomes less dependent on outside AI over time</h2>
+<p>ProgreTech is building an AI-operated software, PWA and automation factory. Edwin supplies intent, business authority, protected-environment bridging and consequential approvals. Rend, Mak and Lyra progressively convert that intent into specifications, code, tests, deployable artifacts, operating evidence, training material and follow-on improvements.</p>
+<div class="callout green"><strong>Primary maturity rule:</strong> outside intelligence is a teacher, not the workforce. The factory attempts work locally, recalls validated knowledge, escalates only when needed, validates the lesson, retains what was learned and retries locally when practical.</div>
+<p>Hardware, models, plugins, memory systems and orchestration frameworks are supporting infrastructure. They are justified only when they measurably improve safe autonomous task success, learning, recovery, throughput or delivery quality.</p>
+</section>
+
+<section id="agents">
+<span class="tag purple">Agent identities live above the model layer</span>
+<h2>Rend, Mak and Lyra are stable roles, not permanent model assignments</h2>
+<table>
+<thead><tr><th>Agent</th><th>Primary role</th><th>Authority / boundaries</th></tr></thead>
+<tbody>
+<tr><td><strong>Rend</strong></td><td>Lead factory operator, orchestration/SRE, recovery, routing, owner interface and shared-node coordinator.</td><td>Operates within approved local/user-level capabilities; protected, elevated, consequential release and spending actions remain separately governed.</td></tr>
+<tr><td><strong>Mak</strong></td><td>Implementation/engineering specialist.</td><td>Receives bounded tasks, tools and memory appropriate to engineering work; does not inherit Rend's authority simply by joining the team.</td></tr>
+<tr><td><strong>Lyra</strong></td><td>Product/front-office specialist, documentation/content/experience work and product-facing coordination.</td><td>Uses shared infrastructure through explicit contracts and retains separate identity, memory, permissions and provenance.</td></tr>
+</tbody>
+</table>
+<div class="callout"><strong>Shared-node rule:</strong> the MS-S1 MAX is ProgreTech local-intelligence infrastructure for all three agents. Large/specialized models are shared capabilities and should not be duplicated merely because another agent needs them.</div>
+</section>
+
+<section id="learning">
+<span class="tag purple">Core operating loop</span>
+<h2>Hybrid learning and escalation ladder</h2>
+<div class="flow">
+<div class="node"><strong>1 · Local worker</strong><br/><span class="small">attempt with assigned model + tools</span></div><div class="arrow">→</div>
+<div class="node"><strong>2 · Local knowledge</strong><br/><span class="small">MemPalace + catalog + current Git/evidence</span></div><div class="arrow">→</div>
+<div class="node"><strong>3 · Local senior</strong><br/><span class="small">larger/specialized local capability</span></div><div class="arrow">→</div>
+<div class="node"><strong>4 · External teacher</strong><br/><span class="small">bounded explanation/critique only</span></div><div class="arrow">→</div>
+<div class="node"><strong>5 · Validate + learn</strong><br/><span class="small">prove, retain, retry locally</span></div>
+</div>
+<div class="callout amber"><strong>Cognitive-overflow rule:</strong> PT-2026-017 remains an exceptional continuity path after eligible bounded local recovery is exhausted. External guidance cannot execute directly, broaden authority or claim completion; it must return through local planning, validation and the existing transaction/retest/resume path.</div>
+<p><strong>Knowledge freshness:</strong> remembered knowledge is advisory until revalidated against current authoritative implementation and evidence. Current Git, tests and configuration outrank old chat or memory.</p>
+</section>
+
+<section id="models">
+<span class="tag purple">Local intelligence strategy</span>
+<h2>Role-driven model routing; cache, qualification and activation remain separate</h2>
+<p>Model selection is evidence-driven, not parameter-count driven. The smallest qualified model that reliably completes the task is preferred; stronger local models are used when their role materially improves completion, review or recovery.</p>
+<table>
+<thead><tr><th>Capability</th><th>Current state / intended role</th><th>Governance</th></tr></thead>
+<tbody>
+<tr><td><strong>qwen3.8:27b</strong></td><td>Qualified Rend primary / Senior S1.</td><td>Known-good active role.</td></tr>
+<tr><td><strong>qwen3-coder:30b</strong></td><td>Qualified coding worker.</td><td>Known-good active role.</td></tr>
+<tr><td><strong>qwen3:1.7b</strong></td><td>Utility tier.</td><td>Known-good lightweight role.</td></tr>
+<tr><td><strong>qwen3-coder-next:q4_K_M</strong></td><td>Heavy coding candidate already cached.</td><td>Evidence-gated; not automatically promoted because it is larger.</td></tr>
+<tr><td><strong>Llama 3.3 70B Instruct Q4_K_M</strong></td><td>Cached candidate: senior generalist / cross-family reviewer.</td><td>Must pass cold role qualification before routing promotion.</td></tr>
+<tr><td><strong>Qwen2.5 72B Instruct Q4_K_M</strong></td><td>Downloading candidate: architecture/repository planning specialist; intended to produce file trees, boundaries, contracts and implementation sequencing for handoff to <code>qwen3-coder:30b</code>.</td><td>Planner role only if tests show material value beyond current Qwen3 models.</td></tr>
+<tr><td><strong>Mistral Large 2 123B Q4_K_M</strong></td><td>Downloading candidate: heavyweight research/analysis specialist.</td><td><strong>Research-only / not product-authorized</strong> unless a separately reviewed license basis permits broader use.</td></tr>
+</tbody>
+</table>
+<div class="callout green"><strong>MS-S1 MAX memory qualification:</strong> PT-2026-049 increased live/persistent Linux TTM/GTT to <strong>100 GiB</strong> while retaining the firmware UMA carveout at <strong>2 GiB</strong>. ROCm/Radeon 8060S, OpenClaw, Rend IDE Gateway, Ollama and Mesh remained healthy after reboot. This is infrastructure qualification, not model promotion.</div>
+<p><strong>Lifecycle:</strong> <code>DOWNLOADED/CACHED → CANDIDATE → QUALIFYING → QUALIFIED → ACTIVE</code>. “Upgrade, don't downgrade” means preserve known-good fallbacks and replace a role only when a newer candidate is demonstrably more useful without material regression.</p>
+
+<h3>Local intelligence hierarchy</h3>
+<div class="flow">
+<div class="node"><strong>Agent-local / utility</strong><br/><span class="small">cheap status, simple transforms and bounded specialist work</span></div><div class="arrow">→</div>
+<div class="node"><strong>Shared local worker</strong><br/><span class="small">routine autonomous coding, tools, correction loops and delivery</span></div><div class="arrow">→</div>
+<div class="node"><strong>Shared local senior</strong><br/><span class="small">cross-system reasoning, review, architecture and recovery</span></div><div class="arrow">→</div>
+<div class="node"><strong>Heavy local senior</strong><br/><span class="small">selective large-model engineering, long-horizon and difficult review work</span></div><div class="arrow">→</div>
+<div class="node"><strong>External / frontier teacher</strong><br/><span class="small">bounded escalation when qualified local tiers are genuinely blocked</span></div>
+</div>
+
+<h3>Qualification is evidence-driven, not parameter-count driven</h3>
+<table>
+<thead><tr><th>Measure</th><th>What matters</th></tr></thead>
+<tbody>
+<tr><td>Autonomous completion</td><td>Can the model finish representative ProgreTech work with the required evidence and without excessive retries?</td></tr>
+<tr><td>Tool-use reliability</td><td>Does it invoke tools correctly, preserve task state, respect boundaries and complete agentic loops?</td></tr>
+<tr><td>Recovery quality</td><td>Can it use durable state, classify failures and resume without replaying completed actions?</td></tr>
+<tr><td>Latency / throughput</td><td>Is iteration fast enough for practical autonomous work, including concurrent agents?</td></tr>
+<tr><td>Context / memory behavior</td><td>Can it use the context actually required without destabilizing the worker loop or exhausting local memory?</td></tr>
+<tr><td>Resource efficiency</td><td>RAM use, concurrency headroom and power per useful deliverable remain within the always-on operating goal.</td></tr>
+<tr><td>Teacher escalation</td><td>Does the model reduce repeated external-teacher calls on known problem classes?</td></tr>
+</tbody>
+</table>
+<p>Do not prematurely hard-code a permanent “best” model. Candidate families and quantizations are qualified against the same factory workload. A smaller high-quality model may beat a larger quantized model when tool reliability, latency and concurrency are considered; a larger local senior is justified only where it improves difficult-task completion enough to offset its resource cost.</p>
+
+<h3>Migration doctrine retained</h3>
+<p>The MS-S1 MAX migration established a whole-system migration rule, not a MemPalace-only copy. The durable ProgreTech identity to preserve across any future host move includes Git repositories/history, MemPalace, executable catalog and knowledge ledgers, task/recovery evidence, policies, configuration, validated skills, OpenClaw/Telegram integration configuration and support-storage structure. Secrets remain handled separately under existing policy.</p>
+<div class="callout"><strong>Clean-host rule:</strong> future migrations should not blindly clone a prior home directory or operating-system debris. Build a clean host, restore the durable ProgreTech identity, re-run representative acceptance, and retain the prior host as rollback/reference until the new host is formally accepted.</div>
+
+</section>
+
+<section id="assets">
+<span class="tag purple">Factory asset + content generation</span>
+<h2>Local generative media should be role-based factory capability, not a separate creative stack</h2>
+<p>ProgreTech should maintain a small, qualified local media toolkit for assets that software/product work actually needs: illustrations, UI/marketing graphics, short video, demonstrations, product explainers and music/audio. These models are shared MS-S1 MAX capabilities that Rend may invoke directly and later expose to Lyra/Mak through explicit task contracts.</p>
+
+<table>
+<thead><tr><th>Lane</th><th>Primary candidate</th><th>Factory role</th><th>Governance</th></tr></thead>
+<tbody>
+<tr>
+<td><strong>Anime / illustration image generation</strong></td>
+<td><strong>Animagine XL 3.1</strong></td>
+<td>Primary local anime/illustration asset generator for Progre/mascot art, tutorial illustrations, stylized UI graphics, social/product visuals and other non-photorealistic assets.</td>
+<td>Preferred first candidate because it is SDXL-compatible and its current model card uses Open RAIL++ terms that permit commercial use subject to the license restrictions. Character consistency and project-specific style should be tested with prompt/tag discipline and LoRA only after the base model is qualified.</td>
+</tr>
+<tr>
+<td><strong>Video generation</strong></td>
+<td><strong>Wan 2.2 14B</strong></td>
+<td>Primary high-quality local text/image-to-video candidate for product demos, animated explainers, motion assets and later Lyra creative-production work.</td>
+<td>Preferred first product-facing video candidate because the official Wan2.2 14B family is Apache-2.0. Use ComfyUI/quantized-compatible packaging where practical; qualify render time, memory pressure and output quality on the 100 GiB GTT MS-S1 MAX before promotion.</td>
+</tr>
+<tr>
+<td><strong>Fast video iteration / talking-head experimentation</strong></td>
+<td><strong>LTX-2.3</strong> <span class="small">(secondary candidate)</span></td>
+<td>Fast local iteration, short clips, image-to-video and synchronized audio/video experimentation where turnaround matters more than maximum fidelity.</td>
+<td>Keep behind an explicit license review because LTX-2.3 uses the LTX-2 Community License rather than Apache/MIT. It may be technically useful even if the final product boundary is narrower than Wan.</td>
+</tr>
+<tr>
+<td><strong>Music / song generation</strong></td>
+<td><strong>ACE-Step 1.5</strong></td>
+<td>Primary local music-generation candidate for demo music, jingles, tutorial/background tracks, prototype songs and later Lyra content work.</td>
+<td>Preferred over YuE2 for the factory because ACE-Step 1.5 is MIT-licensed, explicitly positioned for local consumer hardware, supports low-memory operation, and has LoRA/personalization paths. Qualification must still cover lyric/music quality, repeatability and provenance.</td>
+</tr>
+</tbody>
+</table>
+
+<h3>Alternates kept as references, not immediate downloads</h3>
+<table>
+<thead><tr><th>Candidate</th><th>Disposition</th></tr></thead>
+<tbody>
+<tr><td><strong>Anima 2B</strong></td><td>Technically attractive/lightweight anime candidate, but the current model card is non-commercial. Keep research-only unless licensing changes or a separate commercial grant is obtained.</td></tr>
+<tr><td><strong>Pony Diffusion V6 XL</strong></td><td>Useful style/pose ecosystem and a valid comparison candidate, but the licensing ecosystem is less straightforward than Animagine's current Open RAIL++ positioning. Evaluate later only if Animagine leaves a measured gap.</td></tr>
+<tr><td><strong>Illustrious XL / NoobAI</strong></td><td>Retain as anime-image comparison references. Do not multiply image checkpoints until the primary illustration role is benchmarked and a concrete capability gap exists.</td></tr>
+<tr><td><strong>HunyuanVideo 1.5</strong></td><td>High-fidelity video research candidate, but much larger/heavier and under a custom community license. Not the first MS-S1 factory video target.</td></tr>
+<tr><td><strong>YuE2</strong></td><td>Research-only music alternative because the current ComfyUI/model packaging is CC BY-NC 4.0. Useful for experimentation, not the default ProgreTech product pipeline.</td></tr>
+<tr><td><strong>DiffRhythm</strong></td><td>Keep as a rapid-generation reference rather than a first-line download; ACE-Step 1.5 is the preferred initial music candidate for structure, efficiency and licensing.</td></tr>
+</tbody>
+</table>
+
+<div class="callout green"><strong>Recommended first media set:</strong> Animagine XL 3.1 + Wan 2.2 14B + ACE-Step 1.5. This gives the factory one qualified candidate in each core creative lane — image, video and music — without turning the MS-S1 MAX into an indiscriminate checkpoint archive.</div>
+
+<h3>Media-model lifecycle and usage</h3>
+<p><code>REFERENCE → CACHED → CANDIDATE → QUALIFYING → QUALIFIED TOOL → ROUTABLE CAPABILITY</code>. Media models do not become autonomous agents and do not replace Rend/Lyra/Mak. The agent owns intent, prompt construction, input provenance, output review and task evidence; the media model is a bounded tool.</p>
+<ul>
+<li><strong>Rend:</strong> may use qualified media tools for software assets, prototypes, technical demonstrations and build/test content.</li>
+<li><strong>Lyra:</strong> becomes the primary creative/product-facing consumer once commissioned, especially for explainers, marketing/demo content and training material.</li>
+<li><strong>Mak:</strong> may invoke them for implementation assets, test fixtures and developer-facing examples when needed.</li>
+<li><strong>Licensing:</strong> every promoted model must carry an explicit license/product-use classification in the registry; research-only models cannot silently enter commercial/customer deliverables.</li>
+<li><strong>Provenance:</strong> generated media must retain model/workflow metadata sufficient to reproduce or audit the asset when it is part of a deliverable.</li>
+</ul>
+
+
+<section id="memory">
+<span class="tag green">Durable learning substrate</span>
+<h2>MemPalace is the durable learning layer — not a side roadmap</h2>
+<p>PT-2026-009 proved the agent-neutral MemPalace foundation: SQLite/FTS5, explicit recall/learn, private/shared/project/procedure scopes, provenance, duplicate protection, correction/supersession, admission controls and migration-safe backup. It is part of the factory substrate rather than a separate future project.</p>
+<p>Teacher-derived lessons, validated fixes, reusable implementation patterns and failure signatures should be admitted deliberately into the appropriate project/procedure/shared scope. Current Git, tests and configuration remain higher authority than remembered history.</p>
+<div class="grid">
+<div class="card"><h3>MemPalace stores</h3><p>Decisions, rationale, reusable troubleshooting knowledge, validated procedures, project context, handoffs, learned patterns, provenance, confidence and supersession history.</p></div>
+<div class="card"><h3>It does not replace</h3><p>Git for code, the task ledger for task state, artifacts for evidence, or human approval for authority. Raw chat transcripts, secrets and transient execution state do not become memory by default.</p></div>
+</div>
+<h3>Team model</h3>
+<p>Rend keeps orchestration/SRE memory; Mak receives implementation/engineering memory; Lyra receives product/front-office memory. Shared memory contains curated project facts, conventions, reusable factory knowledge and attributable handoffs. Lyra and Mak inherit the same schema rather than spawning new memory architectures.</p>
+</section>
+
+
+
+<section id="catalog">
+<span class="tag">Factory product boundary</span>
+<h2>The service catalog defines what the autonomous factory is learning to deliver</h2>
+<p>The service catalog is not a parallel business roadmap. It is the acceptance envelope for the same factory roadmap. A capability enters the catalog only after ProgreTech has a known implementation pattern, security boundary, test strategy and maintainable delivery path.</p>
+<table>
+<thead><tr><th>Service lane</th><th>Factory expectation</th></tr></thead>
+<tbody>
+<tr><td><strong>Full-stack product / PWA</strong></td><td>Compose proven UI, backend, persistence, integration, automation, visualization, configuration/authentication and deployment patterns into a customer-specific product.</td></tr>
+<tr><td><strong>Focused single-source tool</strong></td><td>Use the smallest proven architecture that solves the problem; deliberately minimize dependencies and maintenance.</td></tr>
+<tr><td><strong>Microservice / SaaS enhancement</strong></td><td>Add a bounded capability behind a clean interface and documented configuration boundary.</td></tr>
+<tr><td><strong>AI agent integration</strong></td><td>Use vetted patterns with explicit tools, permissions, memory, approvals, observability and failure behavior.</td></tr>
+<tr><td><strong>Configurable customer solution</strong></td><td>Turn proven functionality into safe configuration/adapters/templates instead of hard-coded customer assumptions.</td></tr>
+<tr><td><strong>Training &amp; guided adoption</strong></td><td>Every software delivery includes a Guided Tutorial experience by default unless the customer declines it.</td></tr>
+</tbody>
+</table>
+<p>The development operating model remains: <strong>requirement + baseline → inspect → phased HTML development map → safe autonomous implementation → evidence/test → review/release gate</strong>. The catalog tells the agents which proven patterns they may confidently reuse; MemPalace tells them what the factory has learned; Git remains authoritative for implementation.</p>
+</section>
+
+<section id="skills">
+<span class="tag purple">Additive capability library</span>
+<h2>External skills and references extend the factory — they do not replace its architecture</h2>
+<p>ProgreTech may study, validate and selectively enable external agent skills, utilities and reference implementations when they improve an established factory role. These additions sit beneath the Charter, task/recovery contracts, executable catalog, MemPalace, Git authority, artifact provenance and protected-access rules. They do not restructure the learning ladder, redefine Rend/Mak/Lyra or replace native ProgreTech governance.</p>
+<table>
+<thead><tr><th>External project</th><th>Classification</th><th>Intended use</th></tr></thead>
+<tbody>
+<tr><td><strong>Munder Difflin</strong></td><td>Reference architecture / UI pattern source</td><td>Study multi-agent floor, activity, approvals, inbox/outbox and supervisor interaction patterns. Useful ideas may be adapted into Mesh/ProgreTech control contracts. Installing/using it as a virtual office remains deferred until after the three-agent soak and Russian learning app factory proof.</td></tr>
+<tr><td><strong>Archify</strong></td><td>Agent-skill candidate</td><td>Architecture, workflow, sequence, data-flow and lifecycle communication artifacts for Rend and Mak, with simplified product/process visuals available to Lyra. Adoption remains evidence-gated.</td></tr>
+<tr><td><strong>Firecrawl anydoc</strong></td><td>Local document utility + agent-skill candidate</td><td>Normalize accepted office/document artifacts into Markdown after safe artifact intake. Local conversion is preferred; hosted OCR or external document transmission requires explicit policy/authorization.</td></tr>
+<tr><td><strong>mattpocock/skills</strong></td><td>Curated skill-library source</td><td>Select reusable engineering/productivity disciplines such as TDD, diagnosis, review, domain modeling, specifications, handoff and research. Curate individual skills rather than allowing the library to replace factory governance or recovery behavior.</td></tr>
+<tr><td><strong>OpenMontage</strong></td><td>Specialist creative-production capability</td><td>Primarily a future Lyra capability for explainers, demonstrations and content production, with Rend orchestration and Mak integration support when needed. Keep provider/network and licensing implications explicit and isolate the capability from core factory contracts.</td></tr>
+</tbody>
+</table>
+<div class="callout"><strong>Skill-adoption rule:</strong> external skills provide techniques and specialist capabilities; ProgreTech remains the operating model. A candidate moves from reference to approved capability only after its source, license, dependencies, network behavior, security boundary, supported agents, validation strategy and failure behavior are recorded and tested where appropriate.</div>
+<p>Knowledge of an external repository is not permission to execute it, install it globally, transmit protected artifacts to it or promote its behavior into MemPalace without validation.</p>
+</section>
+
+<section id="journal">
+<span class="tag green">Can start now · Rend-only</span>
+<h2>The Rend Journal + weekly self-learning review do not need to wait for Lyra or Mak</h2>
+<p>The journal is a living engineering record of how the autonomous-agent system develops: what Rend was asked to do, how he approached it, what worked, what failed, what changed, what he learned, and what still remains outside his capabilities. It begins with Rend now and naturally expands into a unified Rend/Lyra/Mak chronicle after the specialist agents are commissioned.</p>
+
+<div class="grid">
+<div class="card">
+<h3>Rend Journal v1</h3>
+<p>Create the first self-contained HTML journal from the original autonomous-intern concept through Rend's current commissioned state. Preserve the real evolution of the architecture, hardware, operating model, interfaces, safety boundaries, milestones, failed approaches and design changes.</p>
+<p><strong>Journal principle:</strong> it is an engineering narrative, not promotional copy. It should be useful to someone trying to understand or build a comparable autonomous-agent environment without exposing ProgreTech-sensitive implementation detail.</p>
+</div>
+<div class="card">
+<h3>Weekly living entry</h3>
+<p>Once per week, Rend prepares a sanitized candidate update from real work and capability changes. Early public publishing remains owner-approved; drafting and local archival can begin immediately.</p>
+<p><strong>Historical integrity:</strong> prior entries are append-only in spirit. When later evidence changes an earlier conclusion, add a dated correction rather than silently rewriting history.</p>
+</div>
+</div>
+
+<h3>Minimum weekly journal template</h3>
+<table>
+<thead><tr><th>Section</th><th>Expected content</th></tr></thead>
+<tbody>
+<tr><td>Week / date</td><td>Clear dated entry preserving chronology.</td></tr>
+<tr><td>Assignment</td><td>What Rend was asked to accomplish and the expected output.</td></tr>
+<tr><td>Approach</td><td>High-level method, tools and reasoning approach without exposing secrets.</td></tr>
+<tr><td>Results</td><td>What completed, partially completed or did not complete.</td></tr>
+<tr><td>Problems</td><td>Failures, blockers, false assumptions and environment limitations.</td></tr>
+<tr><td>Learning</td><td>New patterns, operating lessons and behavior changes.</td></tr>
+<tr><td>Capability change</td><td>What Rend can now do more reliably than before.</td></tr>
+<tr><td>Current limits</td><td>Explicit remaining boundaries or missing capability.</td></tr>
+<tr><td>Build-your-own notes</td><td>Safe reusable guidance for readers building a similar system.</td></tr>
+</tbody>
+</table>
+
+<h3>Weekly self-learning / maintenance review</h3>
+<p>This is separate from the public journal and separate from the already-qualified bounded idle-study scheduler. Rend may begin it now, before Lyra/Mak arrive.</p>
+<div class="flow">
+<div class="node"><strong>Recall the week</strong><br/><span class="small">tasks, failures, teacher calls, recoveries</span></div><div class="arrow">→</div>
+<div class="node"><strong>Revalidate</strong><br/><span class="small">Git/tests/config outrank old memory</span></div><div class="arrow">→</div>
+<div class="node"><strong>Distill lessons</strong><br/><span class="small">only validated reusable knowledge</span></div><div class="arrow">→</div>
+<div class="node"><strong>Identify gaps</strong><br/><span class="small">models, tools, workflow, stale knowledge</span></div><div class="arrow">→</div>
+<div class="node"><strong>Plan next learning</strong><br/><span class="small">bounded study / qualification targets</span></div>
+</div>
+<p>The weekly review should summarize repeated problem classes, lesson reuse, stale findings, teacher escalations, recovery outcomes, current limitations and one or more bounded learning targets for the next week. It must not fabricate work merely to create an entry and must yield to active owner work.</p>
+<div class="callout"><strong>Cadence distinction:</strong> the existing idle-study mechanism remains short, bounded background maintenance. The weekly self-learning review is the higher-level reflection cycle that asks whether Rend actually became more capable and what evidence supports that conclusion.</div>
+
+<h3>Public-safety publishing rule</h3>
+<div class="callout amber"><strong>Never publish</strong> passwords, API keys, tokens, cookies, credentials, private keys, private repository contents, proprietary source code, internal-only infrastructure details, personal information or other confidential material. Describe sensitive implementation conceptually, redact exact values, or omit the detail and flag it for Edwin's review.</div>
+</section>
+
+
+<section id="presence">
+<span class="tag purple">Preserved Autonomous OS roadmap</span>
+<h2>Autonomous Presence: voice + bounded visual perception + living heartbeat</h2>
+<p>The presence roadmap remains one coherent layer rather than a collection of disconnected UI experiments. The accepted voice path, camera as bounded local visual perception, runtime state and Ubuntu desktop should converge into a lightweight Autonomous Presence surface for Rend and later Lyra/Mak.</p>
+
+<div class="grid">
+<div class="card"><h3>Idle / available</h3><p>Calm, low-motion presence with a subtle heartbeat/glow and minimal resource use.</p></div>
+<div class="card"><h3>Listening</h3><p>Clearly visible listening state when human-input capture is explicitly active.</p></div>
+<div class="card"><h3>Speaking</h3><p>Visual pulse, halo or waveform may follow synthesized-audio amplitude so the desktop visibly responds to Rend's speech.</p></div>
+<div class="card"><h3>Processing / working</h3><p>State must come from actual runtime events rather than decorative timers.</p></div>
+<div class="card"><h3>Recovery / attention</h3><p>Distinct state when intervention, recovery or a blocked workflow needs attention.</p></div>
+<div class="card"><h3>Multi-agent / multi-model</h3><p>Show when Rend is assisting Lyra/Mak, coordinating work or using multiple local capabilities without requiring a terminal.</p></div>
+</div>
+
+<h3>Bounded visual perception</h3>
+<p>The camera is treated as a local, explicit capability — effectively Rend's eyes — rather than a permanent surveillance feed. A later presence layer may combine listening and perception, follow ordinary movement around the active workstation area, and support natural interaction with whoever is in front of the computer.</p>
+<div class="callout amber"><strong>Privacy boundary:</strong> perception must be explicit, locally bounded and observable. It must not imply unrestricted recording, silent background surveillance, biometric identification or automatic persistent retention. Persistent capture/retention requires a separately approved purpose and policy, and the presence surface must make microphone/camera activation obvious.</div>
+
+<h3>Hardware mutability</h3>
+<p>Microphones, speakers and cameras are capabilities, not hard-coded device identities. Rend should discover active PipeWire/Pulse routes and camera capabilities at runtime, allow bounded explicit overrides, and survive hardware replacement without application-code edits.</p>
+
+<h3>Office Chatter</h3>
+<p>Office Chatter remains an optional, bounded social-presence layer. During configured office hours, Rend may occasionally make a short contextual remark related to work he is actually doing, a locally observed non-sensitive event, or conversational context heard while listening is explicitly active. When Lyra/Mak join, the same mechanism may support occasional lightweight agent-to-agent conversation about current work, handoffs or discoveries.</p>
+<div class="callout"><strong>Chatter discipline:</strong> opt-in, schedule-aware, immediately yields to active work or STOP, stays quiet outside configured mode, does not manufacture activity just to appear alive, and does not automatically turn ephemeral camera/audio context into durable memory.</div>
+
+<h3>Engineering constraints</h3>
+<ul>
+<li>Local, lightweight and non-blocking; agent workloads win resource contention.</li>
+<li>Fail safely to a static/quiet presence if the animation service stops.</li>
+<li>Presence states should mirror factual runtime events, not simulated activity.</li>
+<li>The same framework should later support Lyra and Mak with distinct visual identities while preserving their separate authority and task state.</li>
+</ul>
+
+<div class="callout green"><strong>Roadmap position:</strong> presence is preserved and may receive bounded maintenance, but major new presentation work should not displace the active model/capability/commissioning/factory-proof gates. The already-qualified voice and Office Chatter foundations remain usable now; richer wallpaper/camera integration can continue when it does not threaten the primary factory sequence.</div>
+</section>
+
+<section id="authority">
+<span class="tag">Non-negotiable operating rules</span>
+<h2>Authority, safety and evidence remain stable while capability grows</h2>
+<div class="grid">
+<div class="card"><h3>Edwin remains owner</h3><p>Consequential commitments, production/release authority, spending and protected-environment actions remain governed by explicit approval/runbooks.</p></div>
+<div class="card"><h3>STOP / CANCEL wins</h3><p>Cancellation outranks queued actions, retries, recovery, heartbeat work, teacher guidance and prior authorization. Resumed execution must re-read durable cancellation state before consequential action.</p></div>
+<div class="card"><h3>External systems boundary</h3><p>Agents may work from artifacts deliberately provided for the task. Access to employer or client systems, credentials, organization repositories, and authentication requires explicit task authorization.</p></div>
+<div class="card"><h3>Git is implementation truth</h3><p>Unrelated dirty state is preserved or work stops. Local closure and remote publication are distinct states with explicit provenance.</p></div>
+<div class="card"><h3>Evidence before promotion</h3><p>A model, plugin, skill or factory capability becomes “working” only after demonstrated behavior and acceptance evidence. Installation/configuration alone is not proof.</p></div>
+<div class="card"><h3>External AI stays advisory</h3><p>External providers may teach, critique or clarify bounded gaps. They do not become default workers, expand authority or bypass local validation and durable state.</p></div>
+</div>
+</section>
+
+<section id="status">
+<span class="tag green">Current operational state · September 22, 2026</span>
+<h2>Rend foundation is qualified; PT-2026-049 model expansion is in progress</h2>
+<table>
+<thead><tr><th>Area</th><th>Current state</th></tr></thead>
+<tbody>
+<tr><td><strong>PT-2026-043</strong></td><td>Rend Runtime &amp; Factory Integration Hardening — CLOSED / QUALIFIED.</td></tr>
+<tr><td><strong>PT-2026-044</strong></td><td>Rend Autonomous Office Foundation — CLOSED / QUALIFIED.</td></tr>
+<tr><td><strong>PT-2026-045</strong></td><td>Local Learning Engine — CLOSED / QUALIFIED.</td></tr>
+<tr><td><strong>PT-2026-046</strong></td><td>Multimodal Presence Foundation — CLOSED / QUALIFIED.</td></tr>
+<tr><td><strong>PT-2026-047</strong></td><td>Autonomous Presence Behavior &amp; Integration — CLOSED / QUALIFIED.</td></tr>
+<tr><td><strong>PT-2026-048</strong></td><td>Mesh Remote Agent Access &amp; IDE Relay — CLOSED / QUALIFIED. Remote web and work-computer PyCharm acceptance passed through <code>mesh.progretech.com</code>; local runtime/model ports remain private.</td></tr>
+<tr><td><strong>PT-2026-049</strong></td><td>Local Intelligence Expansion — ACTIVE. 100 GiB TTM/GTT memory tuning is CLOSED / QUALIFIED. Llama 3.3 70B is cached; Qwen2.5 72B and Mistral Large 2 123B are downloading as role-defined candidates. Cold qualification/routing comes next.</td></tr>
+<tr><td><strong>Rend Journal</strong></td><td>READY TO START NOW. Journal v1 and weekly draft cadence can begin with Rend before Lyra/Mak arrive; later agents contribute to the same chronology.</td></tr>
+<tr><td><strong>Weekly self-learning review</strong></td><td>READY TO START NOW as a higher-level weekly reflection layer above the existing bounded idle-study scheduler.</td></tr>
+<tr><td><strong>Autonomous Presence</strong></td><td>PRESERVED. Voice/Office Chatter foundations remain accepted; richer interactive wallpaper, explicit camera perception and multi-agent visual states remain on the roadmap without becoming the current blocking gate.</td></tr>
+</tbody>
+</table>
+<div class="callout"><strong>Operational baseline:</strong> OpenClaw Gateway, Mesh owner-bound connection, Rend IDE Gateway, Ollama, MemPalace, Factory/Autonomous Office state and the 100 GiB GTT configuration are preserved as the current known-good foundation.</div>
+</section>
+
+<section id="roadmap">
+<span class="tag purple">Single current roadmap</span>
+<h2>Next gates: qualify intelligence, finish pre-arrival follow-ons, commission the team, then prove the factory</h2>
+
+<div class="phase"><div class="n">1</div><div>
+<h3>Finish PT-2026-049 <span class="now">NOW</span></h3>
+<p>Complete the large-model cache, run cold role-specific qualification, benchmark resource/latency behavior, and expose only the models that earn a useful role through Rend. Preserve existing defaults until evidence supports promotion.</p>
+</div></div>
+
+<div class="phase"><div class="n">2</div><div>
+<h3>Post-PT-048 capability qualifications <span class="future">NEXT</span></h3>
+<p>Evaluate selected OpenClaw/plugin capabilities only where they fill a measured factory gap. Current candidates include Policy, LLM Task, Workboard, Webhooks, Memory Wiki / Active Memory evaluation, secret brokering and IMAP. A2A is held for Lyra/Mak commissioning.</p>
+<table>
+<thead><tr><th>Candidate</th><th>Qualification intent</th></tr></thead>
+<tbody>
+<tr><td>Policy</td><td>Self-diagnosis/conformance without silently broadening authority.</td></tr>
+<tr><td>LLM Task</td><td>Schema-validated deterministic subtasks; no duplicate model authority.</td></tr>
+<tr><td>Workboard</td><td>Agent-owned issues/sessions mapped to Factory state, not a competing task truth.</td></tr>
+<tr><td>Webhooks</td><td>Only named authenticated use cases with replay/rate/inbound-surface controls.</td></tr>
+<tr><td>Memory Wiki / Active Memory</td><td>Adopt only if a measured gap exists beyond MemPalace + memory-core.</td></tr>
+<tr><td>1Password / Vault</td><td>Future audited secret broker; secrets never become ordinary model context.</td></tr>
+<tr><td>IMAP</td><td>Only for an explicitly assigned email-watcher role with privacy/notification controls.</td></tr>
+<tr><td><strong>Local media generation</strong></td><td>Qualify one primary image, video and music tool for factory assets: Animagine XL 3.1, Wan 2.2 14B and ACE-Step 1.5 are the preferred first candidates. Preserve licensing/provenance and keep research-only alternatives out of product routing.</td></tr>
+<tr><td>A2A</td><td>Deferred until Lyra/Mak exist; then qualify identity, routing, authority, isolation and handoff semantics.</td></tr>
+</tbody>
+</table>
+</div></div>
+
+<div class="phase"><div class="n">2A</div><div>
+<h3>Rend Journal + weekly self-learning <span class="now">START NOW / PARALLEL</span></h3>
+<p>Begin Journal v1 and establish the weekly draft/reflection cadence while the remaining model and capability work continues. This is intentionally non-blocking and does not depend on Lyra/Mak hardware. Public publication remains owner-approved; local drafting, append-only chronology and weekly learning review may proceed immediately.</p>
+</div></div>
+
+<div class="phase"><div class="n">2B</div><div>
+<h3>Autonomous Presence continuity <span class="future">PRESERVE / BOUNDED CONTINUATION</span></h3>
+<p>Keep accepted voice and Office Chatter behavior healthy, preserve the factual runtime-state contract, and retain the interactive wallpaper/camera roadmap. Richer presence work may progress when bounded and non-disruptive, but it does not outrank the active model qualification, plugin qualification, commissioning or factory-proof gates.</p>
+</div></div>
+
+<div class="phase"><div class="n">3</div><div>
+<h3>Lyra + Mak arrival and commissioning <span class="future">HARDWARE / OWNER START GATED</span></h3>
+<p>Commission each specialist independently, preserve separate identity/memory/permissions/provenance, then connect them to Rend's shared-node capabilities through explicit contracts. Arrival does not authorize shortcuts around security, model or handoff qualification.</p>
+</div></div>
+
+<div class="phase"><div class="n">4</div><div>
+<h3>Three-agent acceptance + soak <span class="future">AFTER COMMISSIONING</span></h3>
+<p>Prove team handoff behavior on representative work, then run the combined soak. Observe task isolation, retries, authority, resource contention, model routing, delivery state, memory handoffs and quiet/report-by-exception behavior.</p>
+<p><strong>Target sequence:</strong> specialist commissioning → team handoff acceptance → representative three-agent workload → <strong>24-hour combined soak</strong>.</p>
+</div></div>
+
+<div class="phase"><div class="n">5</div><div>
+<h3>Russian learning app flagship challenge <span class="future">FACTORY PROOF</span></h3>
+<p>Use the Russian learning application as the flagship end-to-end proof that the autonomous factory works as a team. The exercise must demand planning, product/front-office work, implementation, tests, artifact/evidence delivery, model/tool routing, inter-agent handoffs and recovery without turning Edwin into the execution relay.</p>
+<div class="callout green"><strong>Factory proof standard:</strong> the output is not merely “code generated.” The team must deliver a coherent review package with implementation, tests/evidence, provenance, limitations and a clear release gate while respecting all authority boundaries.</div>
+</div></div>
+
+<div class="phase"><div class="n">6</div><div>
+<h3>Post-proof experiments and presentation layers <span class="future">ONLY AFTER FACTORY PROOF</span></h3>
+<p>Once the team passes commissioning, combined soak and the Russian learning app challenge, optional external visualization/orchestration experiments such as Munder Difflin may begin. This does <strong>not</strong> defer the native Autonomous Presence roadmap: Rend Journal, weekly self-learning, accepted voice/Office Chatter behavior and bounded native presence continuity may proceed earlier under the priorities above.</p>
+</div></div>
+</section>
+
+<section id="deferred">
+<span class="tag amber">Explicitly deferred</span>
+<h2>Munder Difflin / Progre virtual office stays in the bag until after factory proof</h2>
+<p>Installing Munder Difflin and using Progre as a sprite in a shared virtual office is retained as a future bounded experiment, not as an active factory dependency.</p>
+<div class="callout purple"><strong>Deferred experiment:</strong> after Lyra/Mak commissioning, team acceptance, the 24-hour combined soak and the Russian learning app challenge, evaluate Munder Difflin locally as a <em>visual office / alternate interaction surface</em>. Rend/OpenClaw/MemPalace/Factory state remain authoritative; the virtual office must not become a second memory, task or authority system.</div>
+<p>When opened, the experiment should start local-only, use Progre custom sprites, mirror factual agent states where practical, and explicitly record what is worth adopting versus merely enjoying as a visualization layer.</p>
+</section>
+
+<section id="changes">
+<span class="tag green">v5.23 revision summary</span>
+<h2>What v5.23 consolidates</h2>
+<ul>
+<li>Removes stale “current priority” language for PT-2026-036 through PT-2026-040, which no longer represents the live roadmap.</li>
+<li>Collapses long historical implementation narratives into milestone status and keeps detailed evidence in Git/MemPalace instead of repeating it in the charter.</li>
+<li>Marks PT-2026-048 as fully closed and makes PT-2026-049 the active gate.</li>
+<li>Adds the qualified 100 GiB MS-S1 MAX TTM/GTT state and current large-model candidate roles.</li>
+<li>Preserves the post-PT-048 plugin qualification queue but moves A2A to the Lyra/Mak commissioning stage.</li>
+<li>Makes the sequence explicit: PT-049 → capability qualifications → Lyra/Mak commissioning → team workload → 24-hour soak → Russian learning app → optional visual-office experiments.</li>
+<li>Records Munder Difflin / Progre virtual office as intentionally deferred until after the factory proves itself.</li>
+<li>Restores the Rend Journal as a current Rend-only activity: Journal v1, weekly candidate entries, append-only historical integrity, sanitization/owner-publishing gate and the original weekly entry structure.</li>
+<li>Adds a distinct weekly self-learning review that can start now and complements — rather than replaces — the already-qualified bounded idle-study scheduler.</li>
+<li>Restores the Autonomous Presence roadmap: living heartbeat states, explicit camera perception, movement-following intent, hardware mutability, privacy boundaries, Office Chatter discipline and eventual Lyra/Mak visual identities.</li>
+<li>Separates native Autonomous Presence from the later Munder Difflin experiment; the external virtual office stays post-factory-proof, while native presence continuity is preserved now.</li>
+<li>Restores the full local-intelligence hierarchy and the evidence-driven model qualification measures.</li>
+<li>Restores the whole-system migration doctrine and clean-host rule as a reusable future-host principle.</li>
+<li>Restores the service catalog, including Training &amp; Guided Adoption as a default delivery lane.</li>
+<li>Restores the additive capability library and adoption rules for Munder Difflin, Archify, Firecrawl anydoc, mattpocock/skills and OpenMontage.</li>
+<li>Adds a bounded local media-generation lane with recommended first candidates: Animagine XL 3.1 for anime/illustration, Wan 2.2 14B for product-facing video, and ACE-Step 1.5 for music; LTX-2.3 remains a fast-video secondary candidate pending license review.</li>
+<li>Classifies Anima and YuE2 as research-only under their current non-commercial terms and prevents media-model cache status from implying product authorization.</li>
+<li>Keeps authority, STOP/CANCEL, protected-access, Git/evidence and external-teacher rules visible instead of burying them under historical detail.</li>
+</ul>
+</section>
+</main>
+
+<footer>
+<strong>ProgreTech Project Charter v5.23</strong><br/>
+This is the authoritative ProgreTech operating charter as of September 22, 2026. Historical implementation detail remains preserved in Git, milestone evidence and MemPalace; this charter defines the current operating model, authority boundaries and forward roadmap.
+</footer>
+</div></body>
+</html>

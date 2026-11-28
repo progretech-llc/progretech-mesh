@@ -1,0 +1,122 @@
+{
+  "protocol": "progretech-mesh-agent-enrollment",
+  "version": 5,
+  "purpose": "Allow an independently created autonomous agent to connect itself to ProgreTech Mesh from one owner-supplied website message, with enrollment authorization remaining active until the user cancels it or the agent successfully redeems it, while reusing existing compatible installation/reconnect identity whenever available.",
+  "entrypoint": {
+    "required_input": "one website-generated enrollment message containing exactly one PTM1 envelope",
+    "ptm1_encoding": "The characters after PTM1: are unpadded RFC 4648 Base64URL. Restore '=' padding to a multiple of four, Base64URL-decode, then parse UTF-8 JSON.",
+    "prior_mesh_knowledge_required": false,
+    "preinstalled_progretech_component_required": false,
+    "owner_workstation_access_required": false
+  },
+  "principles": {
+    "workstation_access_required": false,
+    "preinstalled_progretech_component_required": false,
+    "agent_self_bootstrap_preferred": true,
+    "privilege_bypass_allowed": false,
+    "existing_work_must_not_be_interrupted": true,
+    "observation_mode": "read-only",
+    "conversation_scope": "mesh-independent",
+    "shell_exposed_to_mesh_user": false,
+    "bounded_runtime_identification": true,
+    "recursive_self_inspection_allowed": false,
+    "multi_adapter_trial_allowed": false,
+    "public_web_search_for_adapter_allowed": false
+  },
+  "required_envelope_fields": [
+    "type",
+    "version",
+    "mesh",
+    "discovery",
+    "agent_id",
+    "activation_code",
+    "activation_signature",
+    "mode",
+    "observation",
+    "conversation_scope",
+    "transport_policy",
+    "issued_at",
+    "activation_lifecycle"
+  ],
+  "validation": {
+    "expected_type": "PROGRETECH_MESH_CONNECT_OR_ENROLL",
+    "supported_envelope_versions": [
+      5
+    ],
+    "owner_authorization": "Use the agent's existing sender/owner policy. The enrollment prompt does not create authority.",
+    "origin_rule": "Fetch discovery and package resources only from URLs declared by the decoded envelope/catalog. Do not substitute search results or guessed mirrors.",
+    "integrity_rule": "Fail closed when a declared SHA-256 or supported signature does not verify.",
+    "activation_lifecycle": "No normal time expiry. Reject cancelled, replayed/used, signature-invalid, or agent-mismatched activations immediately. After an authoritative activation failure, stop without discovery, install, or diagnostics."
+  },
+  "agent_steps": [
+    "Validate that the current sender is authorized under existing local policy.",
+    "Extract and decode the PTM1 envelope.",
+    "Check first for an existing Mesh adapter, record its installed version, compare it with the PTM1 plugin_package.version, and check for a valid local reconnect credential using only declared Mesh local state.",
+    "Fast path applies only when runtime matches and the installed adapter version is current/explicitly compatible. If a valid reconnect credential exists with that adapter, connect immediately; do not fetch discovery/catalog, reinstall, or redeem the active authorization.",
+    "If the current compatible adapter exists but its reconnect credential is unavailable/expired/revoked, use the active authorization only to re-authorize it. If an older adapter is installed for the same known runtime, perform one bounded verified in-place upgrade to the PTM1 plugin_package.version without runtime rediscovery, then continue re-authorization.",
+    "Only for first enrollment, fetch discovery.protocol_url and discovery.adapter_catalog_url.",
+    "For first enrollment, identify runtime from readily available self-identification metadata and select exactly one compatible adapter.",
+    "Fetch only the selected adapter plan/package/helper and verify declared integrity metadata.",
+    "Follow the install plan exactly with existing authority and never interrupt active work.",
+    "Redeem the active user-controlled authorization only when needed and establish the outbound Mesh connection.",
+    "Persist the local reconnect credential and reconnect automatically on future sessions.",
+    "Stop immediately on authoritative activation validation failure. Cancellation/use/replay/signature/agent mismatch are terminal for that request.",
+    "Retry a failed step at most once only when a declared recovery action exists.",
+    "Stop by the 10-minute hard limit and report the minimum specific blocker."
+  ],
+  "failure_policy": {
+    "on_insufficient_permissions": "Do not bypass policy. Report the exact missing capability or approval through the existing channel.",
+    "on_unknown_runtime": "Stop after the bounded catalog identification probes. Do not recursively inspect the framework, scan the filesystem, enumerate unrelated tools, or search for substitute adapters.",
+    "on_package_verification_failure": "Stop enrollment, do not install the artifact, and report the verification failure.",
+    "on_active_work": "Verified staging and an explicitly declared hot-safe managed install may proceed during the enrollment turn; never force a runtime restart. If reload/restart is explicitly required, report activation_reload_required.",
+    "on_unreachable_discovery": "Stop and report the unreachable URL; do not search the public web for substitute packages.",
+    "on_step_failure": "Retry at most once only when the protocol/install plan explicitly defines a recovery action; otherwise stop and report the smallest blocker.",
+    "on_time_budget_exceeded": "Stop the current diagnostic attempt at 10 minutes of active work and report the smallest blocker. The authorization remains active for a later retry until user cancellation or successful redemption.",
+    "on_adapter_installed_but_not_connected": "Follow only the selected adapter plan status/handoff check for at most 60 seconds. Do not reinstall, scan runtime internals, or substitute a local gateway. Report the exact handoff/status blocker.",
+    "on_cancelled_or_used_request": "Stop immediately. Do not fetch protocol/catalog, install, diagnose, or retry that PTM1."
+  },
+  "selection_policy": {
+    "primary_match": "Use runtime/framework identity already known to the agent and compare it to adapter runtime_match.names.",
+    "secondary_match": "Only if identity is unknown, use catalog-declared read-only identification_probes.",
+    "probe_limit": "At most one identification probe per available adapter and at most three probes total.",
+    "adapter_limit": "Select exactly one status=available adapter. Do not try another adapter in the same enrollment request.",
+    "no_match": "Stop with runtime_unknown or unsupported_runtime. Do not inspect framework internals, scan the filesystem, enumerate unrelated tools/plugins, or search the public web.",
+    "installed_version_rule": "Existing-install fast path requires a runtime match and current/explicitly compatible adapter version. Presence of an older adapter alone is not compatibility."
+  },
+  "time_budget": {
+    "target_total_seconds": 300,
+    "hard_stop_seconds": 600,
+    "discovery_and_selection_target_seconds": 60,
+    "install_verify_target_seconds": 180,
+    "connect_target_seconds": 120,
+    "on_hard_stop": "Stop the current diagnostic attempt and report the smallest blocker. Do not continue exploring in the same attempt; authorization remains active unless cancelled or redeemed."
+  },
+  "retry_policy": {
+    "per_step_max_retries": 1,
+    "retry_requires_declared_recovery_action": true,
+    "exploratory_command_loops_allowed": false
+  },
+  "connection_policy": {
+    "authoritative_target": "decoded PTM1 mesh field",
+    "local_runtime_gateway_is_not_mesh": true,
+    "endpoint_substitution_allowed": false,
+    "post_install_rule": "Use only the selected adapter plan handoff/status mechanism. Do not discover alternate ports or manually construct a transport.",
+    "post_install_status_wait_max_seconds": 60,
+    "existing_installation_fast_path": {
+      "valid_reconnect_credential_on_current_compatible_adapter": "connect immediately; no discovery, runtime validation, install, or activation redemption",
+      "current_compatible_adapter_without_usable_credential": "redeem the active authorization directly to replace the reconnect credential; no runtime discovery or reinstall",
+      "older_adapter_same_known_runtime": "not fast-path compatible; fetch only the declared plan/package, verify, perform one bounded in-place upgrade to PTM1 plugin_package.version, then continue re-authorization without runtime rediscovery",
+      "no_compatible_adapter": "perform bounded first enrollment"
+    }
+  },
+  "credential_model": {
+    "activation": "single-use user-controlled authorization for first enrollment or re-authorization; remains active until cancelled or successfully redeemed; no normal time-based expiry",
+    "reconnect_credential": "durable agent-local credential for automatic reconnect; revocable and pairing-scoped",
+    "pwa_pairing_metadata": "browser-local non-secret remembered pairing metadata may be retained to present Reconnect UX"
+  },
+  "safety": {
+    "hot_safe_declared_install_allowed_during_enrollment": true,
+    "generic_idle_wait_for_enrollment_turn_forbidden": true,
+    "automatic_runtime_restart_allowed": false
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "progretech-mesh",
+  "name": "ProgreTech Mesh",
+  "description": "Passive activity observation and isolated Mesh conversation bridge.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "contracts": {
+    "tools": [
+      "mesh_specklet"
+    ]
+  },
+  "toolMetadata": {
+    "mesh_specklet": {
+      "displayName": "Agent Task Board"
+    }
+  }
+}

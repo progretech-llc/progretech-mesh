@@ -1,0 +1,9 @@
+.agent-memory-dialog{width:min(720px,calc(100vw - 48px));max-height:85vh;overflow:auto;padding:24px;color:#d9e9f6;background:#101820;border:1px solid #344b5b;border-radius:16px}
+.agent-memory-dialog::backdrop{background:#030810b8}
+.agent-memory-dialog label{display:block;margin:12px 0;color:#9bb3c7}
+.agent-memory-dialog input:not([type=checkbox]),.agent-memory-dialog select{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:10px;color:inherit;background:#0b131a;border:1px solid #344b5b;border-radius:8px}
+.agent-memory-dialog button{padding:8px 14px;color:inherit;background:#182c3b;border:1px solid #344b5b;border-radius:8px;cursor:pointer}
+.agent-memory-dialog button:disabled{opacity:.5;cursor:default}
+.agent-memory-dialog details{margin-top:14px;border-top:1px solid #344b5b;padding-top:12px}
+.agent-memory-dialog details p{font-size:12px;overflow-wrap:anywhere;color:#9bb3c7}
+.agent-memory-dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.55}

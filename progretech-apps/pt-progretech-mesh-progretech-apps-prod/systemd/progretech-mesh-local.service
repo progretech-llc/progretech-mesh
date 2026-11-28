@@ -1,0 +1,21 @@
+[Unit]
+Description=ProgreTech Mesh Local Command Center
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/PycharmProjects/progretech-mesh
+Environment=APP_ENV=development
+Environment=MESH_ENVIRONMENT=development
+Environment=MESH_PUBLIC_ORIGIN=http://127.0.0.1:8080
+Environment=DEV_AUTH_ENABLED=1
+Environment=DEV_SEED_AGENTS=1
+Environment=FLASK_DEBUG=0
+Environment=PORT=8080
+ExecStart=%h/PycharmProjects/progretech-mesh/.venv/bin/python %h/PycharmProjects/progretech-mesh/main.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

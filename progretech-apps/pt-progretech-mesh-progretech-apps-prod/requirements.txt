@@ -1,0 +1,13 @@
+Flask>=3.1,<4
+gunicorn>=23,<24
+Werkzeug>=3.1,<4
+flask-sock>=0.7,<1
+simple-websocket>=1.1,<2
+websocket-client>=1.8,<2
+psutil>=6,<8
+cryptography>=43,<47
+firebase-admin>=7.6,<8
+Pillow>=10,<13
+PyYAML>=6,<7
+
+tomli>=2.0; python_version < "3.11"

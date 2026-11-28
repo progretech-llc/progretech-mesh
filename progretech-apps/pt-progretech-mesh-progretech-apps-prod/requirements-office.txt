@@ -1,0 +1,3 @@
+# Install in the selected host's separate Python 3.10–3.13 factory environment.
+# Mesh's web environment does not need these runtime dependencies.
+crewai[litellm]==1.15.23

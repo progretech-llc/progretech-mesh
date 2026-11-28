@@ -1,0 +1,7 @@
+No ZIP transfer, preinstalled Mesh bootstrap, workstation login, or manual install is required for the universal enrollment acceptance test.
+
+Start Mesh, choose Connect for Rend, and copy the complete website-generated enrollment message. Send that message once through Rend's existing Telegram conversation.
+
+The enrollment message itself is the bootstrap instruction. Rend must decode PTM1, read the advertised Mesh protocol/catalog endpoints, match his known runtime identity against the bounded catalog, select exactly one compatible available adapter, verify the declared artifacts, self-install/stage using authority he already has, defer any required restart until idle, redeem the active user-controlled authorization, and connect outbound.
+
+If Rend cannot perform a step under his existing policy/capabilities, he should stop and report only the smallest specific blocker. Any requirement for Edwin to log into the workstation, copy a package, or run a terminal command is a failed universal-enrollment acceptance test.

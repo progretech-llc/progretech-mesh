@@ -1,0 +1,75 @@
+name: Mesh Offline installers
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/mesh-offline-*', 'feature/mesh-gateway-agent-picker-*']
+    tags: ['mesh-offline-v*']
+permissions:
+  contents: write
+concurrency:
+  group: mesh-offline-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CREWAI_TELEMETRY_DISABLED: 'true'
+      OTEL_SDK_DISABLED: 'true'
+      CMAKE_ARGS: '-DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF'
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Select dependency cache
+        shell: bash
+        run: echo "PIP_CACHE_DIR=$RUNNER_TEMP/mesh-offline-pip-cache" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: mesh-offline-deps-${{ runner.os }}-${{ hashFiles('requirements-offline.txt') }}
+      - name: Build dependencies
+        run: python -m pip install -r requirements-offline.txt
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: mesh-offline-deps-${{ runner.os }}-${{ hashFiles('requirements-offline.txt') }}
+      - name: Ubuntu desktop libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-shape0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 libxcb-util1 libxau6 libxdmcp6 libegl1 libxkbcommon-x11-0 libnss3 libasound2 xvfb
+      - name: Local security and migration tests
+        run: python -m unittest discover -s tests -p test_mesh_offline.py
+      - name: Gateway agent selection tests
+        run: python -m unittest discover -s tests -p test_gateway_agents.py
+      - name: Build installers and exercise bundled engine
+        run: python packaging/build.py
+      - name: Native desktop smoke (Ubuntu)
+        if: runner.os == 'Linux'
+        env:
+          QT_DEBUG_PLUGINS: '1'
+        run: xvfb-run -a dist/MeshOffline/MeshOffline --desktop-smoke
+      - name: Native desktop smoke (Windows)
+        if: runner.os == 'Windows'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: dist/MeshOffline/MeshOffline.exe --desktop-smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesh-offline-${{ matrix.os }}
+          path: dist/releases/*
+      - name: Add installers to requested release
+        if: startsWith(github.ref, 'refs/tags/mesh-offline-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          platform="${{ runner.os }}"
+          if [ "$platform" = Linux ]; then platform=Ubuntu; fi
+          mv dist/releases/SHA256SUMS.txt "dist/releases/SHA256SUMS-$platform.txt"
+          gh release upload "$GITHUB_REF_NAME" dist/releases/* --clobber

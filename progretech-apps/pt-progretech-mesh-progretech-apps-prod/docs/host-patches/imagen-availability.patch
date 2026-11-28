@@ -1,0 +1,51 @@
+diff --git a/factory/workday/controller.py b/factory/workday/controller.py
+index 694ce69..9a37c0c 100644
+--- a/factory/workday/controller.py
++++ b/factory/workday/controller.py
+@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
+ HOME = Path('/home/edwin')
+ ROOT = Path(os.environ.get('FACTORY_WORKDAY_ROOT', HOME / '.local/state/progretech-workday'))
+ SOURCE = Path(__file__).resolve().parent
+-ROLE = {'rend':'main','lyra':'researcher','mak':'coder','fast':'fast','reviewer':'reviewer','architect':'architect','designer':'designer','progre':'progre'}
++ROLE = {'rend':'main','lyra':'researcher','mak':'coder','fast':'fast','reviewer':'reviewer','architect':'architect','designer':'designer','progre':'progre','imagen':'imagen'}
+ SLOTS = [
+  ('08:00','rend','coordination'), ('08:30','lyra','intake'),
+  ('09:00','mak','engineering'), ('09:30','lyra','articles'),
+diff --git a/factory/workday/test_workday.py b/factory/workday/test_workday.py
+index fff06c7..b62109c 100644
+--- a/factory/workday/test_workday.py
++++ b/factory/workday/test_workday.py
+@@ -20,6 +20,19 @@ class WorkdayTests(unittest.TestCase):
+         self.home_patch=patch.object(c,'HOME',self.root); self.home_patch.start()
+     def tearDown(self):
+         self.home_patch.stop(); self.manager_patch.stop(); c.ROOT=self.old; self.tmp.cleanup()
++    def test_imagen_has_persistent_independent_availability(self):
++        with patch.object(c,'abort_role',return_value=(True,0)):
++            c.controls('pause','imagen')
++        c.reconcile_start()
++        with c.db() as db:
++            row=db.execute("SELECT * FROM controls WHERE role='imagen'").fetchone()
++            self.assertFalse(c.allowed(row,0))
++        c.controls('resume','imagen')
++        with c.db() as db:
++            row=db.execute("SELECT * FROM controls WHERE role='imagen'").fetchone()
++            self.assertTrue(c.allowed(row,0))
++        self.assertFalse(any(role=='imagen' for _,role,_ in c.SLOTS))
++
+     def test_stop_persists_and_resume_is_explicit(self):
+         with patch.object(c,'abort_role',return_value=(True,0)):
+             c.controls('stop','lyra')
+@@ -33,11 +46,11 @@ class WorkdayTests(unittest.TestCase):
+     def test_all_role_hold_survives_restart(self):
+         with patch.object(c,'abort_role',return_value=(True,0)) as abort:
+             c.controls('pause','all')
+-            self.assertEqual(abort.call_count,8)
++            self.assertEqual(abort.call_count,len(c.ROLE))
+         c.reconcile_start()
+         with c.db() as db:
+             rows=db.execute('SELECT * FROM controls').fetchall()
+-            self.assertEqual(len(rows),8)
++            self.assertEqual(len(rows),len(c.ROLE))
+             self.assertTrue(all(not c.allowed(row,10**20) for row in rows))
+         c.controls('resume','designer')
+         with c.db() as db:

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <title>ProgreTech Mesh</title>
+
+  <link rel="manifest" href="{{ url_for('manifest') }}" />
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v='mesh-fleet-v27') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/buddy.css', v=build_id) }}" />
+<link rel="stylesheet" href="/static/css/onboarding.css"><script src="/static/js/onboarding.js" defer></script>
+<link rel="stylesheet" href="/static/analytics/analytics-consent.css"><script defer src="/static/analytics/analytics-consent.js"></script></head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="ProgreTech Mesh home">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div class="brand-copy">
+          <strong>ProgreTech Mesh</strong>
+          <span>Signed local agent operations console</span>
+        </div>
+      </a>
+
+      <div class="top-actions">{% if local_updates_enabled %}<button id="localUpdateCheck" class="ghost-btn" type="button">Check for updates</button><script src="/static/js/local-updates.js?v={{ build_id }}" defer></script>{% endif %}
+        <button id="installButton" class="ghost-btn" hidden>Install PWA</button>
+        <button id="guidedTrainingButton" class="ghost-btn">Guided Training</button>
+        <a href="/mission-control" class="ghost-btn factory-nav">Mission Control</a>
+        <a href="/factory" class="ghost-btn factory-nav">Factory</a>
+        <a href="/sync-update" class="ghost-btn how-link">Sync &amp; Update</a>
+        <a href="/how-it-works" class="ghost-btn how-link">How it works</a>
+        <button class="icon-btn" aria-label="Notifications">◌</button>
+        <div class="user-chip" title="Authenticated local session">
+          <span class="user-dot"></span>
+          <span>{{ user.display_name }}</span>
+        </div>
+        <form action="{{ url_for('logout') }}" method="post" class="logout-form">
+          <button class="icon-btn profile-btn" type="submit" aria-label="Sign out">↪</button>
+        </form>
+      </div>
+    </header>
+
+    <main>
+      <div class="route-policy-wrap">
+        <label for="routePolicy">Connection route</label>
+        <select id="routePolicy" aria-label="Connection route">
+          <option value="direct_preferred" selected>Direct preferred</option>
+          <option value="direct_only">Direct only</option>
+          <option value="relay_allowed">Relay allowed</option>
+        </select>
+        <span id="routeStatus" class="route-status">Direct preferred</span>
+      </div>
+
+      <section class="hero">
+        <div class="hero-main">
+          <div class="eyebrow" id="meshState">
+            <span class="dot"></span>
+            Mesh session active
+          </div>
+
+          <h1>Your agents. One workspace.</h1>
+
+          <p class="hero-sub">
+            Connect your OpenClaw gateway to manage and orchestrate its agents.
+            Monitor work, coordinate tasks in the Factory, and connect your tools
+            through API relays. Execution and memory stay on your host.
+          </p>
+
+          <div class="hero-actions">
+            <button class="primary-btn" id="openFleetButton">Open fleet</button>
+            <button class="ghost-btn" id="groupRoomButton">Start group room</button>
+            <button class="ghost-btn" id="heartbeatButton">Request heartbeat</button>
+          </div>
+
+          <div class="buddy-slot buddy-hero-dock" id="buddySlot" aria-live="polite">
+            <button class="buddy-anchor-home" id="buddyAnchorHome" type="button" hidden aria-label="Return buddy to banner">
+              <img id="buddyAnchorSprite" src="{{ url_for('static', filename='buddy/default-progre/eyes-closed.png') }}" alt="" />
+              <span>↙</span>
+            </button>
+
+            <div class="buddy-tile" id="buddyTile">
+              <div class="buddy-tile-head" id="buddyDragHandle">
+                <div class="buddy-title-block">
+                  <strong>Buddy mode</strong>
+                  <span id="buddyAgentLabel">Progre · not assigned</span>
+                </div>
+                <div class="buddy-head-actions">
+                  <button class="icon-btn buddy-icon-btn" id="buddySettingsButton" type="button" aria-label="Buddy settings" title="Buddy settings">⚙</button>
+                  <button class="icon-btn buddy-icon-btn" id="buddyPopButton" type="button" aria-label="Pop out buddy" title="Pop out buddy">↗</button>
+                </div>
+              </div>
+
+              <div class="buddy-stage-wrap">
+                <div class="buddy-stage" id="buddyStage" style="--buddy-bg:#ffffff">
+                  <img id="buddySprite" src="{{ url_for('static', filename='buddy/default-progre/idle.png') }}" alt="Buddy sprite" width="126" height="126" />
+                  <span class="buddy-speaking-indicator" id="buddySpeakingIndicator" aria-hidden="true"></span>
+                </div>
+              </div>
+
+              <div class="buddy-status-row">
+                <label class="buddy-power">
+                  <input id="buddyEnabledToggle" type="checkbox" />
+                  <span>Buddy on</span>
+                </label>
+                <span id="buddyStateLabel">Idle</span>
+              </div>
+
+              <form class="buddy-composer" id="buddyComposer">
+                <input id="buddyMessageInput" type="text" autocomplete="off" placeholder="Type to your buddy…" />
+                <button type="submit">Send</button>
+              </form>
+
+              <button class="buddy-return-placeholder" id="buddyReturnButton" type="button" hidden>Return buddy here</button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="hero-side">
+          <div class="side-head">
+            <h2>Fleet snapshot</h2>
+            <span class="status-pill" id="connectedCount">Loading…</span>
+          </div>
+          <div class="fleet-stat"><span>Verified identities</span><strong id="signedCount">—</strong></div>
+          <div class="fleet-stat"><span>Gateways online</span><strong id="gatewayCount">—</strong></div>
+          <div class="fleet-stat"><span>Agents working</span><strong id="workingCount">—</strong></div>
+          <div class="fleet-stat"><span>Selected monitor</span><strong id="selectedMonitor">—</strong></div>
+          <div class="fleet-stat"><span>Cloud retention</span><strong>Off</strong></div>
+          <div class="fleet-stat"><span>Plug-and-monitor</span><strong>Passive + isolated</strong></div>
+        </aside>
+      </section>
+
+      <div class="section-head" id="agents">
+        <div>
+          <h2>Agents</h2>
+          <p>Connect, monitor, and message verified agents without taking over their active work.</p>
+        </div>
+        <div class="section-tools">
+          <button class="ghost-btn" id="manageAgentsButton">Manage</button>
+          <button class="ghost-btn" id="addAgentButton">+ Import agents</button>
+        </div>
+      </div>
+
+      <section class="gateway-guide" aria-labelledby="gatewayGuideTitle"><div><h2 id="gatewayGuideTitle">Connect your computer to Mesh</h2><p>Use Hermes, OpenCode, OpenClaw, Open WebUI or an OpenAI-compatible API. Your agents and models stay on their host. One gateway is active per account.</p></div><ol><li><strong>1. Choose your platform</strong><span>Generate a setup prompt for the computer you want to connect.</span></li><li><strong>2. Give it to your authorized agent</strong><span>Your agent installs and configures the connector, discovers its team and becomes the initial Scrum Master.</span></li><li><strong>3. Work from Mesh</strong><span>Inspect Mission Control, run tasks in Factory, or copy an agent’s API relay setup for PyCharm and other IDEs. Change Scrum Master whenever needed.</span></li></ol><button class="primary-btn" id="connectGatewayGuide">Connect a computer</button></section>
+      <form class="fleet-discovery" id="fleetFilters" role="search" aria-label="Find agents">
+        <label class="fleet-search">Search agents<input id="fleet-search" type="search" placeholder="Name, role, model or runtime" autocomplete="off" aria-describedby="fleetFilterHelp" /></label>
+        <label>Connection<select id="fleetConnection"><option value="all">All connections</option><option value="connected">Gateway live</option><option value="not-connected">Not connected</option></select></label>
+        <button class="ghost-btn" id="clearFleetFilters" type="button" disabled>Clear filters</button>
+        <p id="fleetFilterHelp">Connection state does not establish whether native work has stopped.</p>
+      </form>
+      <p class="fleet-results" id="fleetResultCount" role="status">Loading agents…</p>
+      <p class="fleet-selection-notice" id="fleetSelectedHidden" hidden>Selected agent is outside these filters. Its current monitor remains open. <button class="ghost-btn compact" id="revealSelectedAgent" type="button">Clear filters</button></p>
+      <div class="empty-stream fleet-empty" id="fleetEmpty" hidden></div>
+      <section class="agent-grid" id="agentGrid" aria-live="polite"></section>
+
+      <div class="mobile-monitor-bar" id="mobileMonitorBar">
+        <button class="active" data-mobile-view="stream">Conversation</button>
+        <button data-mobile-view="telemetry">Telemetry</button>
+      </div>
+
+      <section class="dashboard" id="dashboard">
+        <div class="panel" id="streamPanel">
+          <div class="panel-head">
+            <h3>Mesh terminal</h3>
+            <span id="eventStreamLabel">Select an agent</span>
+          </div>
+
+          <div class="observability-toolbar">
+            <input id="eventSearch" type="search" placeholder="Search events…" />
+            <select id="severityFilter" aria-label="Severity filter">
+              <option value="all">All severity</option>
+              <option value="info">Info</option>
+              <option value="warn">Warn</option>
+              <option value="error">Error</option>
+            </select>
+            <select id="channelFilter" aria-label="Activity channel filter">
+              <option value="all">All activity</option>
+              <option value="telegram">Telegram</option>
+              <option value="mesh">Mesh</option>
+              <option value="system">System & tools</option>
+            </select>
+            <button class="ghost-btn compact" id="requestTaskSnapshot">Task snapshot</button>
+            <button class="ghost-btn compact" id="requestTerminalSnapshot">Terminal snapshot</button>
+          </div>
+
+          <div class="mesh-terminal-stream" id="eventList" role="log" aria-live="polite" aria-label="Mesh terminal activity">
+            <div class="empty-stream">Choose <strong>Monitor live</strong> on an agent to attach the browser to its ephemeral terminal stream.</div>
+          </div>
+
+          <form class="composer" id="messageComposer">
+            <button class="voice" id="attachButton" type="button" aria-label="Attach file" title="Attach file">📎</button>
+            <button class="voice" id="voiceButton" type="button" aria-label="Push to talk" title="Push to talk">🎙</button>
+            <input id="messageInput" type="text" placeholder="Select a connected agent to message…" autocomplete="off" />
+            <button class="send" type="submit">Send</button>
+            <input id="fileInput" type="file" hidden />
+          </form>
+          <div id="attachmentTray" class="attachment-tray" hidden></div>
+          <div class="voice-status-row">
+            <span id="voiceStatus" class="voice-status">Voice ready check pending</span>
+            <label class="speak-toggle">
+              <input type="checkbox" id="speakRepliesToggle">
+              <span>Speak agent replies</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="panel" id="telemetryPanel">
+          <div class="panel-head">
+            <h3>Heartbeat & telemetry</h3>
+            <span id="telemetryLabel">No monitor selected</span>
+          </div>
+
+          <div class="telemetry-grid" id="telemetryGrid">
+            <div class="metric"><span>CPU</span><strong>—</strong></div>
+            <div class="metric"><span>RAM</span><strong>—</strong></div>
+            <div class="metric"><span>Disk</span><strong>—</strong></div>
+            <div class="metric"><span>Heartbeat</span><strong>—</strong></div>
+          </div>
+
+          <div class="terminal" id="liveTerminal">
+            <div class="muted">$ waiting for a live gateway…</div>
+            <div>Messaging is policy-bounded; arbitrary remote shell remains disabled.</div>
+          </div>
+        </div>
+      </section>
+
+
+      <footer class="footer">
+        <span>ProgreTech Mesh · {{ version }} · ProgreTech LLC</span>
+        <span>Environment: {{ environment }}</span>
+      <small class="store-source-link"><a href="https://store.progretech.com/products/mesh">Want to have your own version of this webapp? — we can help</a></small></footer>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Mobile navigation">
+    <button class="active">Home</button>
+    <button id="mobileAgentsButton">Agents</button>
+    <button id="mobileRoomsButton">Rooms</button>
+    <button data-later="profile">Profile</button>
+  </nav>
+
+  <div class="modal-backdrop" id="agentModal" hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="agentModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Signed identity</div>
+          <h2 id="agentModalTitle">Add signed agent</h2>
+        </div>
+        <button class="icon-btn" id="closeAgentModal" aria-label="Close">×</button>
+      </div>
+
+      <form id="agentEnrollmentForm" class="enrollment-form">
+        <details>
+          <summary>Import prepared signed identities</summary>
+          <p>Import public identity bundles prepared on your agent host. Review the names, then verify and enroll them in this account. Private keys stay on the host.</p>
+          <label>Public identity bundle JSON<input id="preparedIdentityFile" type="file" accept="application/json,.json" /></label>
+          <ul id="preparedIdentityList"></ul>
+          <button type="button" class="primary-btn" id="enrollPreparedIdentities" disabled>Verify and enroll imported identities</button>
+          <p id="preparedIdentityStatus" role="status"></p>
+        </details>
+        <label>Select identified agents from gateway<select id="gatewayAgentPicker"><option value="">Add an independent agent</option></select></label>
+        <p id="gatewayPickerStatus" role="status">Choose one agent at a time. Each receives its own PEM and CodeSeal identity.</p>
+        <input name="gateway_id" type="hidden"><input name="gateway_candidate_id" type="hidden">
+        <label>Agent name<input name="name" required placeholder="e.g. Atlas" maxlength="80" /></label>
+        <label>Agent role<input name="role" placeholder="Development agent" maxlength="120" /></label>
+        <ol class="enrollment-help"><li>Choose a name and role. Each independently running agent needs its own Ed25519 identity.</li><li>Import its PUBLIC key and signed CodeSeal evidence below, or generate a new identity and seal here.</li><li>Save the private key on the agent’s machine, then enroll and use Connect agent to copy its connection instructions.</li></ol>
+        <label>Agent identity ID<input name="agent_id" placeholder="Filled from signed evidence" maxlength="80" /></label>
+        <label>Ed25519 public identity key (PEM)<textarea name="public_key" required placeholder="-----BEGIN PUBLIC KEY-----"></textarea></label>
+        <p class="enrollment-help">This identifies the agent cryptographically. It is public, unlike the matching private key, which stays with your agent and proves possession on connection. Never paste a private key here.</p>
+        <label>Signed CodeSeal evidence JSON<textarea name="codeseal_evidence" placeholder="Paste the manifest, registry_signature and registry_public_key from CodeSeal"></textarea></label>
+        <input name="codeseal_key" type="hidden" />
+        <details><summary>Need an identity or CodeSeal key?</summary>
+          <p>Generate a new identity only for a new agent. Download its private key immediately and place it on that agent. A CodeSeal seal is a registry-signed record bound to the public key, not a password or a made-up CS- string.</p>
+          <button type="button" class="ghost-btn" id="generateAgentIdentity">Generate identity & download private key</button>
+          <label>CodeSeal personal API token (optional)<input id="codeSealApiToken" type="password" autocomplete="off" placeholder="Leave blank for automatic issuance" /></label>
+          <p>Leave the token blank to use the configured automatic issuer. You can also <a href="https://codeseal.progretech.com/account/api-tokens" target="_blank" rel="noopener">use your own CodeSeal account</a>. A supplied token is used for this request only.</p>
+          <button type="button" class="ghost-btn" id="issueAgentSeal">Generate CodeSeal key</button>
+          <p id="agentIdentityStatus" role="status"></p>
+        </details>
+        <div class="modal-actions">
+          <button type="button" class="ghost-btn" id="cancelAgentEnrollment">Cancel</button>
+          <button type="submit" class="primary-btn">Verify & enroll</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="pairModal" hidden>
+    <section class="modal-card connect-agent-card" role="dialog" aria-modal="true" aria-labelledby="pairModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Connect agent</div>
+          <h2 id="pairModalTitle">Send this request to your agent</h2>
+        </div>
+        <button class="icon-btn" id="closePairModal" aria-label="Close">×</button>
+      </div>
+      <p class="modal-copy" id="pairInstructions">
+        Copy the enrollment message and send it through your existing direct chat with the agent.
+        You do not need access to the agent's computer.
+      </p>
+      <div class="connect-status-row">
+        <span class="status-pill waiting" id="pairStatus">Waiting for agent</span>
+        <span class="countdown" id="pairCountdown">Active until cancelled or connected</span>
+      </div>
+      <div class="enrollment-message-box" id="pairCommand" tabindex="0">Generating secure enrollment request…</div>
+      <div class="connect-assurance">
+        <strong>Plug-and-monitor</strong>
+        <span>The agent is instructed not to interrupt, restart, reset, replace, or reconfigure current work or existing channels.</span>
+      </div>
+      <div class="modal-actions split-actions">
+        <button type="button" class="ghost-btn danger-soft" id="cancelEnrollmentButton">Cancel request</button>
+        <div class="modal-action-group">
+          <button type="button" class="ghost-btn" id="copyPairCommand">Copy message</button>
+          <button type="button" class="primary-btn" id="donePairModal">Done</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="identityModal" hidden>
+    <section class="modal-card identity-card" role="dialog" aria-modal="true" aria-labelledby="identityTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Agent identity</div>
+          <h2 id="identityTitle">Identity details</h2>
+        </div>
+        <button class="icon-btn" id="closeIdentityModal" aria-label="Close">×</button>
+      </div>
+      <div id="identityDetails"></div>
+    </section>
+  </div>
+
+
+  <div class="modal-backdrop" id="groupModal" hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Ephemeral group room</div>
+          <h2 id="groupModalTitle">Talk to the team</h2>
+        </div>
+        <button class="icon-btn" id="closeGroupModal" aria-label="Close">×</button>
+      </div>
+
+      <p class="modal-copy">
+        Choose connected agents. Mesh routes this message independently to each local
+        gateway; responses return into the live room and are not stored as cloud history.
+      </p>
+
+      <form id="groupMessageForm" class="enrollment-form">
+        <div id="groupAgentChoices" class="group-choices"></div>
+
+        <label>
+          Message
+          <textarea name="text" required placeholder="Ask Rend, Lyra and Mak to review something together…"></textarea>
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" class="ghost-btn" id="cancelGroupRoom">Cancel</button>
+          <button type="submit" class="primary-btn">Send to selected agents</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+
+  <div class="modal-backdrop" id="buddySettingsModal" hidden>
+    <section class="modal-card buddy-settings-card" role="dialog" aria-modal="true" aria-labelledby="buddySettingsTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Buddy mode</div>
+          <h2 id="buddySettingsTitle">Buddy settings</h2>
+        </div>
+        <button class="icon-btn" id="closeBuddySettings" aria-label="Close">×</button>
+      </div>
+
+      <div class="buddy-settings-grid">
+        <label>Assigned agent
+          <select id="buddyAgentSelect"><option value="">Not assigned</option></select>
+        </label>
+        <label>Background color
+          <input id="buddyBackgroundColor" type="color" value="#ffffff" />
+        </label>
+      </div>
+
+      <div class="buddy-settings-note">Upload up to 10 PNG, JPG, WebP, or GIF sprites. Images are resized into a 126×126 frame in the browser and stored only in this browser profile.</div>
+
+      <div class="buddy-sprite-grid" id="buddySpriteGrid"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="buddyResetDefaults">Reset to Progre</button>
+        <button type="button" class="primary-btn" id="buddySaveSettings">Save</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="{{ url_for('static', filename='js/availability.js', v=build_id) }}" defer></script>
+  <script src="{{ url_for('static', filename='js/runtime-client.js', v=build_id) }}" defer></script>
+<script src="/static/js/avatars.js?v=moxy-teal-20261007" defer></script>  <script src="{{ url_for('static', filename='js/app.js', v='mesh-fleet-v27') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='js/signed-import.mjs', v=build_id) }}"></script>
+  <script src="{{ url_for('static', filename='js/buddy.js', v=build_id) }}" defer></script>
+
+  <dialog id="notificationSettingsDialog" class="mesh-dialog notification-dialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Notifications</span>
+          <h2 id="notificationDialogTitle">Agent notifications</h2>
+          <p class="muted">
+            Choose which meaningful events can create a browser notification on this device.
+          </p>
+        </div>
+        <button class="icon-button" value="cancel" aria-label="Close notification settings">×</button>
+      </div>
+
+      <div class="notification-permission" id="notificationPermissionStatus"></div>
+
+      <div class="notification-category-grid">
+        <label><input type="checkbox" data-notification-category="reply"> Agent replies</label>
+        <label><input type="checkbox" data-notification-category="task_complete"> Task completed</label>
+        <label><input type="checkbox" data-notification-category="approval_required"> Approval required</label>
+        <label><input type="checkbox" data-notification-category="error_blocker"> Error or blocker</label>
+        <label><input type="checkbox" data-notification-category="file_ready"> File ready</label>
+        <label><input type="checkbox" data-notification-category="gateway_offline"> Gateway offline</label>
+        <label><input type="checkbox" data-notification-category="gateway_reconnected"> Gateway reconnected</label>
+        <label><input type="checkbox" data-notification-category="progress"> Progress milestones</label>
+        <label><input type="checkbox" data-notification-category="routine_status"> Routine status</label>
+      </div>
+
+      <p class="privacy-note">
+        Notifications use short operational summaries. Prompt text, terminal output,
+        file contents, and other sensitive payloads are not placed in notifications.
+      </p>
+
+      <div class="dialog-actions">
+        <button class="secondary-button" value="cancel">Close</button>
+        <button type="button" class="primary-button" id="saveNotificationSettings">Save preferences</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <div class="training-backdrop" id="trainingBackdrop" hidden>
+      <div class="training-spotlight" id="trainingSpotlight" aria-hidden="true" hidden></div>
+    <section class="training-card" role="dialog" aria-modal="true" aria-labelledby="trainingTitle">
+      <div class="training-progress">
+        <div class="training-progress-bar"><i id="trainingProgressBar"></i></div>
+        <span id="trainingStepCount">1 / 9</span>
+      </div>
+      <div class="eyebrow"><span class="dot"></span> Guided Training</div>
+      <h2 id="trainingTitle">Welcome to ProgreTech Mesh</h2>
+      <p id="trainingBody"></p>
+      <div class="training-tip" id="trainingTip"></div>
+      <div class="training-actions">
+        <button class="ghost-btn" id="trainingSkip">Exit training</button>
+        <div class="modal-action-group">
+          <button class="ghost-btn" id="trainingBack">Back</button>
+          <button class="primary-btn" id="trainingNext">Next</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+<script src="{{ url_for('static', filename='js/agent-management.js') }}?v={{ build_id }}" defer></script>
+<script src="/static/js/agent-memory.js" defer></script></body>
+</html>

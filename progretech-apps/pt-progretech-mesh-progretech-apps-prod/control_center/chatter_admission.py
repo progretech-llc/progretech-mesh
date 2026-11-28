@@ -1,0 +1,102 @@
+"""Low-priority chatter admission and bounded shared-project teaching context."""
+import os
+import sqlite3
+from pathlib import Path
+import psutil
+from control_center.memory_search import database
+
+GiB = 1024**3
+
+
+def unified_gpu(device):
+    """Read AMDGPU's Fusion flag; unknown devices keep the discrete VRAM guard.
+
+    Linux uapi drm/amdgpu_drm.h: INFO_DEV_INFO=0x16, ids_flags at byte
+    136, AMDGPU_IDS_FLAGS_FUSION=1. This query allocates no GPU memory.
+    """
+    try:
+        import ctypes
+        import fcntl
+        import struct
+        node = next(iter((device/'drm').glob('renderD*')))
+        info = ctypes.create_string_buffer(144)
+        query = struct.pack('=QII16x', ctypes.addressof(info), len(info), 0x16)
+        with open('/dev/dri/'+node.name, 'rb', buffering=0) as render:
+            fcntl.ioctl(render.fileno(), 0x40206445, query)
+        return bool(struct.unpack_from('=Q', info.raw, 136)[0] & 1)
+    except (ImportError, OSError, StopIteration, ValueError):
+        return False
+
+
+def resources(mesh, agents):
+    """Fail closed on missing telemetry; never evict models or alter runtime limits."""
+    try:
+        memory = psutil.virtual_memory()
+        if os.getloadavg()[0] / max(1, os.cpu_count() or 1) > .85:
+            return False, 'Waiting for CPU capacity'
+        if psutil.swap_memory().percent > 20 and memory.available < memory.total*.25:
+            return False, 'Waiting for memory pressure to subside'
+        models = set()
+        for a in agents:
+            try:models.add(mesh.model(a))
+            except ValueError as error:
+                if str(error) != 'local_preload_unavailable':raise
+                # A gateway-managed API model has no Ollama weights to reserve.
+                # Its native provider still owns authentication and rate admission.
+                _, _, chosen = mesh.config(a)
+                if not isinstance(chosen,str) or '/' not in chosen or chosen.startswith('ollama/'):
+                    return False, 'Configured model telemetry unavailable; chatter deferred'
+        resident = {m['name'] for m in mesh.api('ps')['models']} if models else set()
+        installed = {m['name']: m['size'] for m in mesh.api('tags')['models']} if models else {}
+        if any(m not in installed for m in models):
+            return False, 'Waiting for configured local models to be available'
+        # Both models can remain resident between serial turns. Reserve weights,
+        # conservative context headroom, and RAM for native work/desktop.
+        added = sum(installed[m] * 1.3 for m in models if m not in resident)
+        if memory.available < added + max(8*GiB, memory.total*.15) + len(models)*2*GiB:
+            return False, 'Waiting for RAM headroom'
+        for device in (Path('/sys/class/drm').glob('card[0-9]*/device') if models else []):
+            total_file = device/'mem_info_vram_total'
+            if not total_file.is_file(): continue
+            total = int(total_file.read_text())
+            used = int((device/'mem_info_vram_used').read_text())
+            # Ollama can split weights between VRAM and system RAM. Requiring
+            # every non-resident model file to fit wholly in VRAM permanently
+            # blocks otherwise safe serial chatter on smaller GPUs; the RAM
+            # check above already reserves the full weights and context budget.
+            # Scale the fixed reserve down on small graphics devices. A 1 GiB
+            # floor consumes half of a 2 GiB device and can reject the same
+            # admitted request immediately after its model is prepared.
+            reserve = max(min(GiB, total*.125), total*.1)
+            if unified_gpu(device):
+                # An APU's reserved VRAM segment is not its inference limit.
+                # Check its shared GTT budget as well as physical RAM above.
+                total = int((device/'mem_info_gtt_total').read_text())
+                used = int((device/'mem_info_gtt_used').read_text())
+                reserve = added + len(models)*2*GiB + max(8*GiB, total*.1)
+            if total <= 0 or used < 0 or used > total:
+                return False, 'Resource telemetry unavailable; chatter deferred'
+            if total-used < reserve:
+                return False, 'Waiting for GPU memory headroom'
+            busy = device/'gpu_busy_percent'
+            if busy.is_file() and int(busy.read_text()) > 80:
+                return False, 'Waiting for GPU capacity'
+        return True, 'Idle agents and hardware headroom confirmed'
+    except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
+        return False, 'Resource telemetry unavailable; chatter deferred'
+
+
+def teaching(home, author):
+    """Bounded shared reviewed lessons; service does not read private banks."""
+    from control_center.memory_search import memory_store
+    try:
+        store=memory_store(home,author)
+        rows=[]
+        for writer in dict.fromkeys(['codex',author]):
+            found=store.search('factory',scope='project',project_id='ProgreTech',author_id=writer,provenance_type='curated-knowledge-file',limit=2,semantic=True)
+            rows.extend(r for r in found if r.get('scope')=='project' and r.get('status')=='active' and str(r.get('project_id')).lower()=='progretech' and r.get('author_id')==writer and r.get('provenance_type')=='curated-knowledge-file')
+        rows=list({r['memory_id']:r for r in rows}.values())[:4]
+        return [{'id':r['memory_id'],'title':r['title'][:160],'text':r['content'][:700],
+                 'author':r['author_id'],'evidence':(r['provenance_ref'] or '')[:160]} for r in rows], 'Shared Hindsight lessons retrieved' if rows else 'No shared project lessons found'
+    except Exception:
+        return [], 'Shared Hindsight retrieval failed'

@@ -1,0 +1,1 @@
+{"id":"progretech-conversation-sync","name":"ProgreTech conversation sync","description":"Owner-authorized text synchronization with origin-only attachments.","activation":{"onStartup":true},"configSchema":{"type":"object","additionalProperties":false,"properties":{}}}

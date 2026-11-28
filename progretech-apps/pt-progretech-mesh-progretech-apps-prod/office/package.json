@@ -1,0 +1,11 @@
+{
+  "name": "progretech-mesh-office-coordination",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "esbuild engine.ts --bundle --platform=node --format=esm --outfile=engine.mjs --legal-comments=inline"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7"
+  }
+}

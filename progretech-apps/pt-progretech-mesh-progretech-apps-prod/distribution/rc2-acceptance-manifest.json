@@ -1,0 +1,70 @@
+{
+  "product": "ProgreTech Mesh",
+  "candidate": "RC2",
+  "acceptance_model": "bounded-universal-agent-enrollment-with-user-controlled-activation",
+  "human_workstation_access_required": false,
+  "preinstalled_progretech_component_required": false,
+  "reference_agent": "Rend",
+  "reference_entrypoint": "Telegram",
+  "runtime": "OpenClaw",
+  "required_user_actions": [
+    "Open Mesh and create an enrollment request for Rend.",
+    "Copy the complete agent-facing enrollment instruction containing PTM1.",
+    "Send that instruction to Rend through the existing Telegram conversation.",
+    "Respond through Telegram only if Rend's normal security policy explicitly requests owner approval.",
+    "Observe Mesh for connected/passive-monitoring state."
+  ],
+  "forbidden_user_actions": [
+    "SSH into Rend",
+    "RDP or remote desktop into Rend",
+    "open a terminal on Rend",
+    "manually copy a Mesh archive to Rend",
+    "manually install or enable the Mesh plugin",
+    "manually restart OpenClaw for Mesh",
+    "alter Telegram configuration for Mesh"
+  ],
+  "pass_conditions": [
+    "Website enrollment authorization remains active until the user cancels it or the agent successfully redeems it; there is no normal countdown expiry.",
+    "Rend understands the PTM1-directed enrollment as an owner instruction.",
+    "Rend discovers the universal enrollment protocol and OpenClaw adapter.",
+    "Rend downloads and verifies the pinned package himself.",
+    "Rend waits for an idle/safe point before managed plugin installation if runtime reload is required.",
+    "Rend uses existing permissions only.",
+    "The plugin automatically redeems the pending enrollment after installation.",
+    "A local reconnect credential is persisted.",
+    "Rend connects outbound to Mesh.",
+    "Telegram remains operational.",
+    "Telegram-originated activity is observable in Mesh.",
+    "Mesh conversation remains independent from Telegram conversation state.",
+    "Refreshing or disconnecting Mesh does not interrupt Rend's Telegram work.",
+    "Enrollment completes within the 5-minute target or stops with a bounded blocker; it never explores beyond the 10-minute hard stop.",
+    "A previously enrolled agent with a valid reconnect credential reconnects without protocol/catalog discovery or reinstall.",
+    "An installed agent missing only its reconnect credential can re-authorize with a active PTM1 authorization without runtime discovery or reinstall.",
+    "Reloading/reopening the PWA does not silently replace an active enrollment request for the same agent.",
+    "An in-place upgrade reuses an authenticated existing Mesh local signaling listener instead of failing EADDRINUSE or terminating the prior listener."
+  ],
+  "artifact_pins": {
+    "openclaw_adapter_version": "0.7.9",
+    "openclaw_adapter_sha256": "09f9159cb391eeda37df9d66e8e48f61491bafaa89cd7bc0349fba410e7ebd1e",
+    "bootstrap_helper_sha256": "7a309839f409cc67199536b28c08e7659c777c9b1b584e76f668db45b9b877d6"
+  },
+  "claims_not_yet_proven_until_live_test": [
+    "Rend can perform the complete self-bootstrap with current real permissions.",
+    "OpenClaw passive hooks expose all desired activity without side effects.",
+    "Mesh conversation isolation is correct under sequential live usage.",
+    "OpenClaw managed installation can complete on Rend without a workstation-side approval path."
+  ],
+  "website_prompt_is_bootstrap": true,
+  "steps": [
+    "Generate a fresh complete website enrollment instruction containing one PTM1 envelope.",
+    "Send the complete instruction once through the existing authorized Telegram conversation.",
+    "Agent validates sender authority and decodes PTM1. Before discovery, it checks for an existing compatible Mesh installation/reconnect credential.",
+    "If a valid reconnect credential exists, reconnect immediately. If only the credential is unavailable, re-authorize the existing installation directly with the active authorization.",
+    "Agent matches its known runtime identity against the bounded catalog; only if unknown may it run catalog-declared read-only probes within the strict probe limit.",
+    "Agent selects exactly one available adapter, follows its declared install plan, and retries a failed step at most once only when a declared recovery action exists.",
+    "Agent performs the declared hot-safe managed install during the enrollment turn without waiting for generic idle; Mesh never automatically restarts the runtime. If an explicit reload/restart is required, the agent stops with activation_reload_required.",
+    "Agent uses only the decoded PTM1 Mesh endpoint and the adapter-declared handoff/status paths; it never substitutes a local runtime gateway or guessed endpoint.",
+    "Enrollment target is 5 minutes with a 10-minute hard stop and smallest-blocker reporting.",
+    "If the stable Mesh local signaling port is already occupied during upgrade, authenticate the existing listener. Reuse it only when Mesh ownership is proven; otherwise stop with port_conflict."
+  ]
+}

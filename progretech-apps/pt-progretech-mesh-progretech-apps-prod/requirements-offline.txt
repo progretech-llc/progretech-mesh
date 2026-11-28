@@ -1,0 +1,6 @@
+# Build-time only: released installers contain these and their dependencies.
+Flask==3.1.2
+PySide6==6.10.2
+PyInstaller==6.19.0
+crewai==1.15.23
+llama-cpp-python==0.3.16

@@ -1,0 +1,225 @@
+{
+  "catalog": "progretech-mesh-agent-adapters",
+  "version": 3,
+  "adapters": [
+    {
+      "id": "openclaw",
+      "status": "available",
+      "runtime_match": {
+        "executable_hints": [
+          "openclaw"
+        ],
+        "package_hints": [
+          "openclaw"
+        ],
+        "minimum_version": "2026.9.3",
+        "names": [
+          "openclaw",
+          "OpenClaw"
+        ],
+        "identification_probes": [
+          {
+            "command": "openclaw --version",
+            "read_only": true,
+            "expected_contains": "OpenClaw"
+          }
+        ],
+        "probe_policy": "Use only when runtime identity is not already known. Do not scan filesystem or enumerate plugins to identify the runtime."
+      },
+      "package": {
+        "package_id": "progretech-mesh-openclaw",
+        "version": "0.10.5-portable-host.2",
+        "sha256": "4b1e2557ea4d7ce8bb763728e15e6c8a19acfa6ebad376bc1951816f060779bc",
+        "format": "tgz"
+      },
+      "installation": {
+        "strategy": "agent-managed",
+        "requires_runtime_restart": false,
+        "restart_policy": "never-automatic; report activation_reload_required if runtime explicitly requires reload/restart",
+        "preinstalled_component_required": false,
+        "owner_workstation_access_required": false,
+        "hot_safe_managed_install_during_enrollment": true,
+        "stable_listener_handoff": "If the declared local signaling port is occupied by an authenticated prior ProgreTech Mesh adapter, reuse it during hot upgrade; never kill/rebind it. Unknown owner => port_conflict."
+      },
+      "capabilities": {
+        "passive_observation": true,
+        "independent_mesh_conversation": true,
+        "file_transfer": "separate-mesh-gateway"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/openclaw/install-plan",
+        "helper_path": "/api/enrollment/adapters/openclaw/bootstrap",
+        "helper_sha256": "ed584d1d3fc0f970c2b2375d89cd43ec59595145711b0c53113f305affbd89d4",
+        "preinstalled_component_required": false,
+        "owner_workstation_access_required": false,
+        "optional_accelerator": true,
+        "description": "Optional agent-fetched helper advertised by Mesh. It is not preinstalled and is not an enrollment prerequisite."
+      },
+      "post_install": {
+        "pending_enrollment_handoff": true,
+        "automatic_activation_redeem": true,
+        "credential_persistence": true,
+        "automatic_outbound_reconnect": true,
+        "second_owner_instruction_required": false,
+        "fast_reconnect_first": true,
+        "reauthorize_without_reinstall": true
+      },
+      "lifecycle": {
+        "idempotent_same_version": true,
+        "automatic_reconnect": true,
+        "bounded_exponential_backoff_seconds": [
+          2,
+          4,
+          8,
+          16,
+          32,
+          60
+        ],
+        "credential_expiry_stops_mesh_only": true,
+        "server_revocation_stops_mesh_only": true,
+        "reenrollment_after_revocation": true,
+        "downgrade_default": "reject",
+        "failed_install_preserves_existing_runtime": true,
+        "mesh_disconnect_does_not_stop_agent": true,
+        "ownership_aware_port_reuse": true
+      }
+    },
+    {
+      "id": "generic-local-agent",
+      "status": "planned",
+      "runtime_match": {
+        "executable_hints": [],
+        "package_hints": [],
+        "names": [],
+        "identification_probes": []
+      },
+      "installation": {
+        "strategy": "agent-managed",
+        "requires_runtime_restart": "runtime-dependent",
+        "restart_policy": "idle-only-if-required"
+      },
+      "capabilities": {
+        "passive_observation": "adapter-dependent",
+        "independent_mesh_conversation": "adapter-dependent"
+      }
+    },
+    {
+      "id": "hermes",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "Hermes",
+          "hermes"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    },
+    {
+      "id": "opencode",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "OpenCode",
+          "opencode"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    },
+    {
+      "id": "openwebui",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "Open WebUI",
+          "openwebui"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    },
+    {
+      "id": "openai",
+      "status": "available",
+      "runtime_match": {
+        "names": [
+          "Ollama",
+          "OpenAI-compatible",
+          "llama.cpp"
+        ],
+        "identification_probes": [],
+        "probe_policy": "Use the owner-selected platform and its native configuration or authenticated models endpoint. Do not scan unrelated files or try multiple adapters."
+      },
+      "installation": {
+        "strategy": "owner-authorized-standalone-connector",
+        "requires_runtime_restart": false
+      },
+      "capabilities": {
+        "native_roster": true,
+        "factory": true,
+        "openai_relay": true,
+        "observation_scope": "Mesh-owned jobs; external sessions remain unobserved"
+      },
+      "self_bootstrap": {
+        "plan_path": "/api/enrollment/adapters/platform/install-plan",
+        "helper_path": "/api/enrollment/adapters/platform/bootstrap"
+      }
+    }
+  ],
+  "contract": {
+    "preinstalled_progretech_component_required": false,
+    "owner_workstation_access_required": false,
+    "selection": "Match known runtime identity to runtime_match.names first. If unknown, use only catalog-declared read-only identification probes (max one per available adapter, max three total). Select exactly one status=available adapter; otherwise stop.",
+    "recursive_runtime_inspection_allowed": false,
+    "public_web_search_allowed": false,
+    "multi_adapter_trial_allowed": false,
+    "time_budget_seconds": {
+      "target": 300,
+      "hard_stop": 600
+    },
+    "existing_installation_fast_path": "If a compatible adapter and valid reconnect credential already exist, reconnect immediately. If adapter exists but credential is unavailable, re-authorize only; do not rediscover runtime or reinstall."
+  }
+}

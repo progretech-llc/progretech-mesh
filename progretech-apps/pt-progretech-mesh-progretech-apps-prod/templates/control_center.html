@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark"><title>{{ agent.name }} · ProgreTech Control Center</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/control-center.css') }}">
+  <script src="{{ url_for('static', filename='js/runtime-client.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/control-center.js') }}" defer></script>
+<link rel="stylesheet" href="/static/analytics/analytics-consent.css"><script defer src="/static/analytics/analytics-consent.js"></script></head>
+<body>
+<div class="app cc-app" id="controlCenter" data-saved-profile='{{ agent.saved_profile|tojson|forceescape }}' data-agent-id="{{ agent.id }}" data-connected="{{ 'true' if agent.connected and agent.verified else 'false' }}">
+  <header class="topbar"><a class="brand" href="/"><div class="brand-mark" aria-hidden="true"></div><div class="brand-copy"><strong>ProgreTech Mesh</strong><span>ProgreTech Control Center</span></div></a><a class="ghost-btn" href="/">← Agent fleet</a></header>
+  <main class="cc-main">
+    <section class="cc-hero"><div><div class="eyebrow">AGENT PROFILE</div><h1>{{ agent.name }}</h1><p>{{ agent.role or 'Role not reported' }}</p></div><div><span class="cc-badge">{{ 'Linked · verified' if agent.verified else 'Verification required' }}</span><p id="ccConnection">{{ 'Gateway connected' if agent.connected else 'Gateway offline' }}</p><p id="ccRuntime" role="status"></p><button id="ccRefresh" type="button" class="primary-btn">Load agent settings</button></div></section>
+    <p id="ccStatus" class="cc-notice" role="status" aria-live="polite">Review requirements and data permissions before enabling controls. No microphone or camera starts automatically.</p>
+    <div class="cc-grid">
+      <section class="panel"><h2>Minimum Requirements</h2><ul>
+        <li>A signed-in Mesh owner and a linked, verified agent with a connected gateway.</li>
+        <li>A compatible local control provider with an explicit binding to this agent. Linking alone does not install or authorize workstation controls.</li>
+        <li>Allow profile storage to save settings. Allow inventory to discover this agent’s configured models and role.</li>
+        <li>Voice preview needs a working TTS provider and speaker. Listening needs a microphone and voice service; vision needs a camera or configured visual source.</li>
+        <li>Declare whether this agent lives on a workstation to reveal device controls. Each feature also needs its local capability and permission.</li>
+      </ul><p class="cc-muted">There is no universal GPU or RAM minimum for Mesh controls. Model memory, quantization, context length and media workloads determine hardware needs.</p></section>
+      <section class="panel"><h2>Permissions &amp; data</h2><p>Profile details and permissions are saved on the agent’s host. Mesh also saves your profile configuration to your account. Live requests and responses remain ephemeral.</p><p>Inventory responses expose model names and role metadata. System and device responses expose host resources and device names. Preview text is sent to the host and played on its speaker. Microphone and vision controls affect the configured host source.</p><p class="cc-muted">Provider credentials stay local. Never enter keys, tokens or passwords in this profile. Browser microphone permission for Mesh chat is separate from workstation listening.</p><p class="cc-muted">Revoking a grant blocks future requests; it does not stop a service already running. Stop voice before revoking microphone access.</p></section>
+    </div>
+    <section class="panel"><div class="cc-section-head"><h2>Agent setup</h2><span class="cc-badge">Settings apply to {{ agent.name }}</span></div>
+      <form id="ccProfile">
+        <div class="cc-grid">
+          <div><label>Role / responsibility<input name="role" maxlength="160" placeholder="Requirements and research"></label>
+            <label>Models available to this agent <span class="cc-muted">(one per line, user supplied)</span><textarea name="models" rows="4" placeholder="ollama/model-name"></textarea></label>
+            <label>Does this agent live on a workstation?<select name="workstation"><option value="unknown">Not specified yet</option><option value="yes">Yes — reveal workstation controls</option><option value="no">No — agent controls only</option></select></label>
+            <label>Stack<select name="stack"><option value="custom">My own stack</option><option value="progretech">Using ProgreTech’s stack</option></select></label>
+          </div>
+          <div><h3>Agent voice</h3><label>TTS provider<select name="provider"><option value="kokoro">Kokoro</option><option value="piper">Piper</option><option value="custom">My own TTS provider</option></select></label>
+            <label>Voice profile<select name="voice"><option value="am_onyx">am_onyx</option><option value="am_adam">am_adam</option><option value="am_michael">am_michael</option><option value="af_heart">af_heart</option><option value="af_alloy">af_alloy</option><option value="current">Current Piper voice</option></select></label>
+            <div id="ccCustomVoice" hidden><label>Your provider ID<input name="customProvider" maxlength="48" pattern="[a-z0-9][a-z0-9_-]{0,47}" placeholder="my-tts"></label><label>Your voice ID<input name="customVoice" maxlength="64" placeholder="agent-voice"></label><p class="cc-muted">Supply details for your stack. Preview is available only when the local provider explicitly supports this TTS provider; credentials remain on the host.</p></div>
+            <label>Pitch in semitones<input name="pitch" type="number" min="-6" max="6" step="0.5" value="4" required></label>
+            <button id="ccDefaults" type="button" class="ghost-btn">Use Rend’s voice defaults</button>
+            <p class="cc-muted">Saving adjusts this agent’s preview profile. Continuous speech needs a runtime that consumes per-agent profiles; the legacy Rend voice service uses shared settings.</p>
+          </div>
+        </div>
+        <fieldset class="cc-permissions"><legend>Allow this agent’s control center to…</legend>
+          <label><input type="checkbox" name="permission" value="profile">Store this profile and grants on the agent host</label>
+          <label><input type="checkbox" name="permission" value="inventory">Read role, models, skills, mailbox status and runtime inventory</label>
+          <label><input type="checkbox" name="permission" value="speaker">Play voice previews on the host speaker</label>
+          <label><input type="checkbox" name="permission" value="workstation">Inspect and change shared workstation devices</label>
+          <label><input type="checkbox" name="permission" value="microphone">Start / stop the workstation voice service</label>
+          <label><input type="checkbox" name="permission" value="camera">Inspect vision status and request one observation</label>
+        </fieldset>
+        <button type="submit" class="primary-btn">Save agent setup & permissions</button>
+      </form>
+    </section>
+    <section class="panel"><h2>Role & model access</h2><p>Discovered configuration and user-supplied details are shown separately. Installed host models do not prove this agent can use them.</p><div id="ccInventory">Allow inventory and load agent settings to discover this agent’s runtime configuration.</div></section>
+    <section class="panel"><h2>Voice preview</h2><form id="ccPreview"><label>Preview text<input name="text" maxlength="300" value="Hello. I’m ready to help." required></label><button type="submit" data-capability="voice.preview" data-grant="speaker" disabled>Play saved voice on host</button></form><p class="cc-muted">Preview uses the last saved profile and plays through the shared host speaker.</p><pre class="cc-result" id="ccPreviewResult">No preview requested.</pre></section>
+    <section class="panel"><h2>Agent tools</h2><div class="cc-controls"><button data-action="skills.list" data-capability="skills.list" data-grant="inventory" disabled>Agent skills</button><button data-action="mail.status" data-capability="mail.status" data-grant="inventory" disabled>Agent mailbox status</button></div><pre class="cc-result" id="ccAgentResult">No tool inspection requested. Mailbox checks expose connection status; mailbox contents are not requested.</pre></section>
+    <section class="panel" id="ccWorkstation" hidden><h2>Workstation controls</h2><p>These controls affect the workstation shared by agents on that host. Each action is checked against {{ agent.name }}’s saved grants and the provider’s advertised capabilities.</p>
+      <div class="cc-controls"><button data-action="host.system" data-capability="host.system" data-grant="workstation" disabled>System resources</button><button data-action="models.list" data-capability="models.list" data-grant="inventory" disabled>Installed host models</button><button data-action="audio.get" data-capability="audio.get" data-grant="workstation" disabled>Audio devices</button><button data-action="voice.get" data-capability="voice.get" data-grant="workstation" disabled>Voice status</button><button data-action="voice.start" data-capability="voice.start" data-grant="microphone" data-confirm="Start the shared workstation voice service and microphone listening?" disabled>Start listening</button><button data-action="voice.stop" data-capability="voice.stop" data-grant="microphone" data-confirm="Stop the shared workstation voice service?" disabled>Stop listening</button><button data-action="vision.get" data-capability="vision.get" data-grant="camera" disabled>Vision status</button></div>
+      <form id="ccAudio"><h3>Shared audio routing</h3><label>Microphone source ID<input name="source" maxlength="256" placeholder="Load Audio devices to inspect source IDs"></label><label>Speaker sink ID<input name="sink" maxlength="256" placeholder="Load Audio devices to inspect sink IDs"></label><button type="submit" data-capability="audio.set" data-grant="workstation" disabled>Save shared audio devices</button></form>
+      <form id="ccVision"><label>Vision question<input name="prompt" maxlength="500" value="What is visible?"></label><button type="submit" data-capability="vision.analyze" data-grant="camera" disabled>Capture & analyze once</button></form><pre id="ccHostResult" class="cc-result">No workstation action requested.</pre>
+      <h3>Orchestration &amp; runtimes</h3><div class="cc-controls"><button data-action="orchestration.status" data-capability="orchestration.status" data-grant="inventory" disabled>Orchestration</button><button data-action="harness.status" data-capability="harness.status" data-grant="inventory" disabled>OpenHarness</button><button data-action="grid.status" data-capability="grid.status" data-grant="inventory" disabled>Grid</button><button data-action="vllm.status" data-capability="vllm.status" data-grant="inventory" disabled>vLLM readiness</button></div>
+      <h3>Shared office chatter</h3><div class="cc-controls"><button data-action="chatter.get" data-capability="chatter.get" data-grant="speaker" disabled>Chatter status</button><button data-action="chatter.test" data-capability="chatter.test" data-grant="speaker" data-confirm="Play an office chatter test on the shared workstation speaker?" disabled>Play chatter test</button></div><form id="ccChatter"><label><input type="checkbox" name="enabled">Enable shared spoken updates</label><label><input type="checkbox" name="quiet" checked>Quiet mode</label><button type="submit" data-capability="chatter.settings" data-grant="speaker" disabled>Save shared chatter settings</button></form>
+    </section>
+    <section class="panel"><div class="cc-section-head"><h2>Use Progretech’s stack</h2><span class="cc-badge">Reference checked September 30, 2026</span></div><p>Clone Rend’s structure using your own paths, identities and credentials. Selecting this stack does not install software or grant permissions.</p>
+      <div class="cc-table-wrap"><table><thead><tr><th>Layer</th><th>Rend’s verified reference</th><th>What you need</th></tr></thead><tbody>
+        <tr><th>Hardware</th><td>AMD Ryzen AI MAX+ 395 / Radeon 8060S; approximately 121 GiB usable RAM.</td><td>A host sized for your models. This is Rend’s hardware, not a measured minimum. A microphone, speaker and visual source are needed for those features.</td></tr>
+        <tr><th>Models</th><td>Rend, Lyra, Mak: qwen3-coder-next:q4_K_M. Progre / Designer: qwen3-coder:30b. Fast: qwen3.5:2b. Architect: qwen2:72b-instruct-q4_K_M. Reviewer: llama3.3:70b-instruct-q4_K_M.</td><td>OpenClaw role bindings and an accessible Ollama provider. Configure your own primary / fallback models; load inventory to verify access.</td></tr>
+        <tr><th>Memory / vision models</th><td>Configured provider entries include nomic-embed-text:latest and moondream:latest.</td><td>Model files and tested runtime integrations; configuration alone does not prove readiness.</td></tr>
+        <tr><th>Audio</th><td>Kokoro, am_onyx, +4 semitones; qualified Piper alternative; Speech Dispatcher fallback. PipeWire / PulseAudio routing.</td><td>Installed TTS provider, working speaker and microphone routing, and a compatible voice service. Experimental Qwen TTS, Chatterbox and VibeVoice are not qualified defaults.</td></tr>
+        <tr><th>Video / images</th><td>Bounded vision observations; image tooling exists. Video generation is not qualified.</td><td>A configured visual source and permission for each observation. Do not assume video generation is ready.</td></tr>
+        <tr><th>Stack & tools</th><td>OpenClaw agent runtime; Ollama inference; Grid routing; OpenHarness CLI workers; Git / gh; local role-scoped MemPalace; Mesh gateway and loopback control provider.</td><td>Separate agent identities and workspaces, owner-approved tools, local credentials and explicit Mesh-to-runtime bindings. vLLM is not a working default.</td></tr>
+      </tbody></table></div>
+      <ol><li>Create separate runtime identities and workspaces for each agent; assign roles and primary models.</li><li>Install and verify your model and media providers. Keep keys and reconnect credentials on the host.</li><li>Link each agent to Mesh and bind its enrolled ID to its runtime in the local provider.</li><li>Load this profile, supply missing details, select workstation status, and grant only the controls you want.</li><li>Save and test a voice preview; verify system and device status before enabling listening or vision.</li></ol>
+    </section>
+  <a href="/agents/{{ agent.id }}/task-board">Task Board</a> <button data-agent-memory="{{ agent.id }}" data-memory-name="{{ agent.name }}">Memory search</button></main><footer class="footer">ProgreTech Control Center · {{ agent.name }} · Agent-local settings, owner-bound control</footer>
+</div>
+<script src="/static/js/agent-memory.js" defer></script></body></html>
